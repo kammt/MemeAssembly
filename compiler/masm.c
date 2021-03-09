@@ -4,6 +4,7 @@
 #include <string.h> //String functions
 
 char version_string[] = "v0.1";
+char release_date[] = "unknown";
 
 /**
  * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art and exits the program
@@ -54,6 +55,14 @@ void printHelpPage() {
     printf("  masm (-v | --version)\t\t\t\t\tDisplays version information\n");
 }
 
+void printVersionInformation() {
+    printInformationHeader();
+    printf("\n------------Version Information------------\n");
+    printf("Version: %s\n", version_string);
+    printf("Release date: %s", release_date);
+    printf("\n-------------------------------------------\n");
+}
+
 /**
  * Parses the command-line arguments specified.
  * @param argc the number of arguments
@@ -63,10 +72,10 @@ void printHelpPage() {
 int interpretArguments(int argc, char* argv[]) {
     char help1[] = "-h", help2[] = "--help";
     char compile1[] = "-c", compile2[] = "--compile";
+    char version1[] = "-v", version2[] = "--version";
 
     if (argc > 1) {
-        if (strcmp(argv[1], help1) == 0 || strcmp(argv[1], help2) == 0)
-        {
+        if (strcmp(argv[1], help1) == 0 || strcmp(argv[1], help2) == 0){
             printHelpPage();
             return 0;
         } else if (strcmp(argv[1], compile1) == 0 || strcmp(argv[1], compile2) == 0) {
@@ -88,14 +97,17 @@ int interpretArguments(int argc, char* argv[]) {
             }
             return 0;
         } else if(argc == 2) {
-            if(fopen(argv[1], "r") == NULL) {
-                    printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
-                    return 1;
+            if (strcmp(argv[1], version1) == 0 || strcmp(argv[1], version2) == 0) {
+                printVersionInformation();
+                return 0;
+            } else if(fopen(argv[1], "r") == NULL) {
+                printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
+                return 1;
             }
             //TODO compile and run
         }
     }
-    return 1; //There no argument, it cannot be a correct command
+    return 1; //There are no arguments, it cannot be a correct command
 }
 
 int main(int argc, char* argv[]) {
