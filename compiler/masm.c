@@ -3,28 +3,10 @@
 
 #include <string.h> //String functions
 
+#include "compiler.h" //Compiler related functions in a seperate file
+
 char version_string[] = "v0.1";
 char release_date[] = "unknown";
-
-/**
- * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art and exits the program
- */
-void printIllegal() {
-    printf("\n");
-    printf("\n");
-    printf("  __          __   _ _       _   _           _   _       _ _ _                  _ _  \n");
-    printf(" \\ \\        / /  (_| |     | | | |         | | ( )     (_| | |                | | | \n");
-    printf("  \\ \\  /\\  / __ _ _| |_    | |_| |__   __ _| |_|/ ___   _| | | ___  __ _  __ _| | | \n");
-    printf("   \\ \\/  \\/ / _` | | __|   | __| '_ \\ / _` | __| / __| | | | |/ _ \\/ _` |/ _` | | | \n");
-    printf("    \\  /\\  | (_| | | |_ _  | |_| | | | (_| | |_  \\__ \\ | | | |  __| (_| | (_| | |_| \n");
-    printf("     \\/  \\/ \\__,_|_|\\__( )  \\__|_| |_|\\__,_|\\__| |___/ |_|_|_|\\___|\\__, |\\__,_|_(_) \n");
-    printf("                       |/                                           __/ |           \n");
-    printf("                                                                   |___/  \n");
-    printf("____________________________________________________________________________________ \n");
-    printf("\nYour program failed to compile because of errors in your code. Please check your input file and try again.\n");
-    printf(" Exiting....\n");
-    exit(1);
-}
 
 /**
  * Prints an ASCII-Art title and version information.
@@ -93,9 +75,9 @@ int interpretArguments(int argc, char* argv[]) {
                     printf("Command interpretation failed. '%s' is not a valid destination path.\n", argv[3]);
                     return 1;
                 }
-                //TODO compile
+                compile(argv[2], argv[3]);
+                return 0;
             }
-            return 0;
         } else if(argc == 2) {
             if (strcmp(argv[1], version1) == 0 || strcmp(argv[1], version2) == 0) {
                 printVersionInformation();
@@ -104,7 +86,8 @@ int interpretArguments(int argc, char* argv[]) {
                 printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
                 return 1;
             }
-            //TODO compile and run
+            compileAndRun(argv[1]);
+            return 0;
         }
     }
     return 1; //There are no arguments, it cannot be a correct command
