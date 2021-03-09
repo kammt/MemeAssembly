@@ -21,7 +21,7 @@ void printIllegal() {
     printf("                                                                   |___/  \n");
     printf("____________________________________________________________________________________ \n");
     printf("\nYour program failed to compile because of errors in your code. Please check your input file and try again.\n");
-    printf("Exiting....\n");
+    printf(" Exiting....\n");
     exit(1);
 }
 
@@ -69,6 +69,30 @@ int interpretArguments(int argc, char* argv[]) {
         {
             printHelpPage();
             return 0;
+        } else if (strcmp(argv[1], compile1) == 0 || strcmp(argv[1], compile2) == 0) {
+            //Compile-option used. Check if there are enough arguments
+            if(argc != 4) {
+                printf("Command interpretation failed. (-c / --compile) requires 2 additional parameters, but instead got %d\n", argc-2);
+                return 1;
+            } else {
+                //There are enough arguments. Now we need to check if the first is a correct path
+                if(fopen(argv[2], "r") == NULL) {
+                    printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[2]);
+                    return 1;
+                }
+                if(fopen(argv[3], "a") == NULL) {
+                    printf("Command interpretation failed. '%s' is not a valid destination path.\n", argv[3]);
+                    return 1;
+                }
+                //TODO compile
+            }
+            return 0;
+        } else if(argc == 2) {
+            if(fopen(argv[1], "r") == NULL) {
+                    printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
+                    return 1;
+            }
+            //TODO compile and run
         }
     }
     return 1; //There no argument, it cannot be a correct command
