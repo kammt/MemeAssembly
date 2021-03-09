@@ -1,10 +1,5 @@
 #include <stdio.h>
 
-void main() {
-    printIllegal();
-}
-
-
 void printIllegal() {
     printf("\n");
     printf("\n");
@@ -15,5 +10,9 @@ void printIllegal() {
     printf("    \\  /\\  | (_| | | |_ _  | |_| | | | (_| | |_  \\__ \\ | | | |  __| (_| | (_| | |_| \n");
     printf("     \\/  \\/ \\__,_|_|\\__( )  \\__|_| |_|\\__,_|\\__| |___/ |_|_|_|\\___|\\__, |\\__,_|_(_) \n");
     printf("                       |/                                           __/ |           \n");
-    printf("                                                                   |___/                                                                      \n");
+    printf("                                                                   |___/  \n");
+}
+
+void main() {
+    printIllegal();
 }
