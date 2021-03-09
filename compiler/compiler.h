@@ -12,7 +12,7 @@
  */
 void printErrors(char errors[]);
 
-void compileAndRun(char srcFile[]);
-void compile(char srcFile[], char destFile[]);
+void compileAndRun(FILE srcPTR);
+void compile(FILE srcPTR, FILE destPTR);
 
 #endif

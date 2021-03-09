@@ -1,2 +1,4 @@
-compiler/masm
-masm
+compiler/memeasm
+memeasm
+tmp.asm
+example.memeasm

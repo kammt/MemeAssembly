@@ -24,11 +24,12 @@ void printErrors(char errors[]) {
     exit(1);
 }
 
-void compile(char srcFile[], char destFile[]) {
+void compile(FILE srcPTR, FILE destPTR) {
     printf("Compile called");
 }
 
-void compileAndRun(char srcFile[]) {
+void compileAndRun(FILE srcPTR) {
     printf("Compile and run called");
-    compile(srcFile, "tmp");
+    FILE *destPTR = fopen("tmp.asm","a");
+    compile(srcPTR, *destPTR);
 }

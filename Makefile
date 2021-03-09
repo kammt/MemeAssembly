@@ -1,2 +1,2 @@
 all: 
-	gcc -o masm compiler/masm.c compiler/compiler.c
+	gcc -o memeasm compiler/memeasm.c compiler/compiler.c

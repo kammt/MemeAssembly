@@ -31,10 +31,10 @@ void printHelpPage() {
     //https://stackoverflow.com/questions/9725675/is-there-a-standard-format-for-command-line-shell-help-text
     printInformationHeader();
     printf("Usage:\n");
-    printf("  masm path/to/fileName\t\t\t\t\tCompiles and runs the specified file\n");
-    printf("  masm (-c | --compile) path/to/fileName outputFile\tOnly compiles the specified file and saves it as x86-Assembly code\n");
-    printf("  masm (-h | --help)\t\t\t\t\tDisplays this help page\n");
-    printf("  masm (-v | --version)\t\t\t\t\tDisplays version information\n");
+    printf("  memeasm path/to/fileName\t\t\t\t\tCompiles and runs the specified file\n");
+    printf("  memeasm (-c | --compile) path/to/fileName outputFile\tOnly compiles the specified file and saves it as x86-Assembly code\n");
+    printf("  memeasm (-h | --help)\t\t\t\t\tDisplays this help page\n");
+    printf("  memeasm (-v | --version)\t\t\t\t\tDisplays version information\n");
 }
 
 void printVersionInformation() {
@@ -67,27 +67,34 @@ int interpretArguments(int argc, char* argv[]) {
                 return 1;
             } else {
                 //There are enough arguments. Now we need to check if the first is a correct path
-                if(fopen(argv[2], "r") == NULL) {
+                FILE *srcPTR = fopen(argv[2], "r");
+                FILE *destPTR = fopen(argv[3], "a");
+
+                if(srcPTR == NULL) {
                     printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[2]);
                     return 1;
                 }
-                if(fopen(argv[3], "a") == NULL) {
+                if(destPTR == NULL) {
                     printf("Command interpretation failed. '%s' is not a valid destination path.\n", argv[3]);
                     return 1;
                 }
-                compile(argv[2], argv[3]);
+                compile(*srcPTR, *destPTR);
                 return 0;
             }
         } else if(argc == 2) {
             if (strcmp(argv[1], version1) == 0 || strcmp(argv[1], version2) == 0) {
                 printVersionInformation();
                 return 0;
-            } else if(fopen(argv[1], "r") == NULL) {
-                printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
+            } else {
+                FILE *srcPTR = fopen(argv[1], "r");
+                if(srcPTR == NULL) {
+                    printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
+                } else {
+                    compileAndRun(*srcPTR);
+                    return 0;
+                }
                 return 1;
             }
-            compileAndRun(argv[1]);
-            return 0;
         }
     }
     return 1; //There are no arguments, it cannot be a correct command
@@ -97,7 +104,7 @@ int main(int argc, char* argv[]) {
     //printIllegal();
     int result = interpretArguments(argc, argv);
     if(result == 1) {
-        printf("Error! No arguments specified or unknown parameters. Type masm -h to open the help page. \n Exiting...\n");
+        printf("Error! No arguments specified or unknown parameters. Type memeasm -h to open the help page. \n Exiting...\n");
     }
     
 }
