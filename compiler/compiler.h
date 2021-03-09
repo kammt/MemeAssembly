@@ -6,13 +6,9 @@
 
 #include <string.h> //String functions
 
-/**
- * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art, lists all errors and exits the program
- * @param errors a String listing all compiler errors
- */
-void printErrors(char errors[]);
+int interpretLine(char line[], int lineNum, FILE *destPTR);
 
-void compileAndRun(FILE srcPTR);
-void compile(FILE srcPTR, FILE destPTR);
+void compileAndRun(FILE *srcPTR);
+void compile(FILE *srcPTR, FILE *destPTR);
 
 #endif

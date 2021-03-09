@@ -2,3 +2,5 @@ compiler/memeasm
 memeasm
 tmp.asm
 example.memeasm
+tmp
+tmp.o

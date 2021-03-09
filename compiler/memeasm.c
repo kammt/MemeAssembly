@@ -32,8 +32,8 @@ void printHelpPage() {
     printInformationHeader();
     printf("Usage:\n");
     printf("  memeasm path/to/fileName\t\t\t\t\tCompiles and runs the specified file\n");
-    printf("  memeasm (-c | --compile) path/to/fileName outputFile\tOnly compiles the specified file and saves it as x86-Assembly code\n");
-    printf("  memeasm (-h | --help)\t\t\t\t\tDisplays this help page\n");
+    printf("  memeasm (-c | --compile) path/to/fileName outputFile\t\tOnly compiles the specified file and saves it as x86-Assembly code\n");
+    printf("  memeasm (-h | --help)\t\t\t\t\t\tDisplays this help page\n");
     printf("  memeasm (-v | --version)\t\t\t\t\tDisplays version information\n");
 }
 
@@ -68,7 +68,7 @@ int interpretArguments(int argc, char* argv[]) {
             } else {
                 //There are enough arguments. Now we need to check if the first is a correct path
                 FILE *srcPTR = fopen(argv[2], "r");
-                FILE *destPTR = fopen(argv[3], "a");
+                FILE *destPTR = fopen(argv[3], "w");
 
                 if(srcPTR == NULL) {
                     printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[2]);
@@ -78,7 +78,8 @@ int interpretArguments(int argc, char* argv[]) {
                     printf("Command interpretation failed. '%s' is not a valid destination path.\n", argv[3]);
                     return 1;
                 }
-                compile(*srcPTR, *destPTR);
+                printInformationHeader();
+                compile(srcPTR, destPTR);
                 return 0;
             }
         } else if(argc == 2) {
@@ -90,7 +91,8 @@ int interpretArguments(int argc, char* argv[]) {
                 if(srcPTR == NULL) {
                     printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
                 } else {
-                    compileAndRun(*srcPTR);
+                    printInformationHeader();
+                    compileAndRun(srcPTR);
                     return 0;
                 }
                 return 1;
