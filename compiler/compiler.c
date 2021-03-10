@@ -59,6 +59,9 @@ int interpretDraw25(char *token, int lineNum, FILE *destPTR) {
 
             if(token == NULL) {
                 fprintf(destPTR, "\tadd eax, 25\n"); //Command successful, write it to the file
+                //If there was a jump command in that line, we now have to reverse its side effects
+                if(upgradeJumpDefined == lineNum) upgradeJumpDefined = 0;
+                if(pictureJumpDefined == lineNum) pictureJumpDefined = 0;
                 return 0;
             } else {
                 printf(RED "Error in line %d: Expected end of line after 'or draw 25', but instead got '%s'" RESET, lineNum, token);
@@ -558,7 +561,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
 
     //Now that we traversed the entire file, we still need to check if jumps were defined without markers
     if(pictureJumpDefined != 0 && pictureMarkerDefined == 0) {
-        printf(RED "Error in line %d: 'Coporate needs you to find the difference between ...' was used, but 'they're the same picture' wasn't defined anywhere" RESET, pictureJumpDefined);
+        printf(RED "Error in line %d: 'coporate needs you to find the difference between ...' was used, but 'they're the same picture' wasn't defined anywhere" RESET, pictureJumpDefined);
         printErrorMessage();
     } else if(upgradeJumpDefined != 0 && upgradeMarkerDefined == 0) {
         printf(RED "Error in line %d: 'fuck go back' used, but no 'upgrade' marker was found" RESET, upgradeJumpDefined); 
