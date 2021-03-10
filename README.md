@@ -49,7 +49,6 @@ they're the same picture
 ## Installation instructions
 To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
 ```
-make
 sudo make install
 ```
 The compiler can now be called by using the *memeasm* command
@@ -72,6 +71,7 @@ MemeAssembly stands out from the crowd, since it:
 - provides a simple command to make your entire program crash
 - doesn't force you to make 'understandable' code by commenting it, since comments aren't supported anyway and would cause the compiler to crash
 - removes the pain of working with negative numbers by outright not supporting them
+
 But most important of all: **Memes**
 
 ## Badge of honor
