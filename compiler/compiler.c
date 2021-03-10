@@ -122,25 +122,16 @@ int isValidDigit(char *token) {
  * @return 0 if it's valid, 1 otherwise
  */
 int isValidValue(char *token, int onlyRegister) {
+    removeLineBreak(token);
     if(strcmp(token, "eax") == 0 || strcmp(token, "ax") == 0) {
         return 0;
-    } else if(strcmp(token, "eax\n") == 0 || strcmp(token, "ax\n") == 0) {
-        return 0;
-    } else if(strcmp(token, "ebx") == 0 || strcmp(token, "bx") == 0) {
-        return 0;
-    } else if(strcmp(token, "ebx\n") == 0 || strcmp(token, "bx\n") == 0) {
-        return 0;
-    } else if(strcmp(token, "ecx\n") == 0 || strcmp(token, "cx\n") == 0) {
+    }else if(strcmp(token, "ebx") == 0 || strcmp(token, "bx") == 0) {
         return 0;
     } else if(strcmp(token, "ecx") == 0 || strcmp(token, "cx") == 0) {
         return 0;
     } else if(strcmp(token, "edx") == 0 || strcmp(token, "dx") == 0) {
         return 0;
-    } else if(strcmp(token, "edx\n") == 0 || strcmp(token, "dx\n") == 0) {
-        return 0;
     } else if(strcmp(token, "ebp") == 0 || strcmp(token, "esp") == 0 || strcmp(token, "edi") == 0 || strcmp(token, "esi") == 0) {
-        return 0;
-    } else if(strcmp(token, "ebp\n") == 0 || strcmp(token, "esp\n") == 0 || strcmp(token, "edi\n") == 0 || strcmp(token, "esi\n") == 0) {
         return 0;
     } else if(onlyRegister == 0 && isValidDigit(token) == 0) {
         return 0;
@@ -206,7 +197,8 @@ int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(strcmp(token, "go") == 0) {
         token = strtok(NULL, " ");
-        if(strcmp(token, "back") == 0 || strcmp(token, "back\n") == 0) {
+        removeLineBreak(token);
+        if(strcmp(token, "back") == 0) {
             if(upgradeMarkerDefined == 1) {
                 return writeLine(destPTR, "jmp", "marker\n", token, lineNum);
                 return 0;
@@ -235,7 +227,8 @@ int interpretGuessIllDie(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(strcmp(token, "I'll") == 0) {
         token = strtok(NULL, " ");
-        if(strcmp(token, "die") == 0 || strcmp(token, "die\n") == 0) {
+        removeLineBreak(token);
+        if(strcmp(token, "die") == 0) {
             return writeLine(destPTR, "mov", "eax, [0x0000]\n", token, lineNum);
             return 0;
         } else {
@@ -290,8 +283,7 @@ int interpretSneak100(char *token, int lineNum, FILE *destPTR) {
     if(strcmp(token, "100") == 0) {
         token = strtok(NULL, " ");
         if(isValidValue(token, 1) == 0) {
-            char arguments[30];
-            removeLineBreak(token);
+            char arguments[10];
             strcpy(arguments, token);
             strcat(arguments, ", ");
             strcat(arguments, token);
@@ -331,7 +323,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
                 upgradeMarkerDefined = 1;
                 return writeLine(destPTR, "marker:", "\n", token, lineNum);
             } else {
-                printf(RED "Error in line %d: 'Upgrade' jump marker can only be defined once" RESET, lineNum);
+                printf(RED "Error in line %d: 'upgrade' jump marker can only be defined once" RESET, lineNum);
                 return 1;
             }
         } else if(strcmp(token, "fuck") == 0) {
