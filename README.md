@@ -45,7 +45,7 @@ Once that's done, open a terminal and use one of the following commands:
 Furthermore, you can use *memeasm (-h | --help)* to open a help page and *memeasm (-v | --version)* to print some version information
     
 ## Why code in MemeAssembly, anyway?
-![Developers GIF](https://media.tenor.com/images/02fea7f02da34ea33c58a38d57fd5c5f/tenor.gif)
+![Developers GIF](https://media.tenor.com/images/02fea7f02da34ea33c58a38d57fd5c5f/tenor.gif)\
 Put simply, MemeAssembly brings back the good 'old days of coding. Can you even remember all the commands that your 'shiny new' programming language has to offer? Are you overwhelmed and confused by all the ways a modern programming language can be used for? Well look no further than MemeAssembly!
 MemeAssembly stands out from the crowd, since it:
 - only supports a tiny fraction of instructions
@@ -54,5 +54,8 @@ MemeAssembly stands out from the crowd, since it:
 - provides a simple command to make your entire program crash
 - But most important of all: **Memes**
 
-But whoever dares to write their code in MemeASM shall be rewarded by being able to place this badge of honor in their GitHub ReadMe:
-![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)
+## Badge of honor
+Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
+![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)\
+To do so, insert this code block into your ReadMe file: \
+```![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)```
