@@ -1,5 +1,5 @@
 # MemeAssembly
-A highly advanced x86-Assembly based programming language using only memes as commands
+Or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.
 
 ## Commands overview
 - stonks [value] - pushes a value to the stack
@@ -12,7 +12,7 @@ A highly advanced x86-Assembly based programming language using only memes as co
 - perfectly balanced as all things should be - restore balance to your code by randomly deleting half the commands at compile-time
 
 ## Code examples
-Before continuing, please keep in mind that these examples only represent a tiny fraction of what can be done with MemeAssembler. Are you ready to experience the infinite possibilities of MemeAssembler? Here we go:
+Before continuing, please keep in mind that these examples only represent a tiny fraction of what can be done with MemeAssembly. Are you ready to experience the infinite possibilities of MemeAssembly? Here we go:
 1. Move the number 12 to the stack, pop that number back to ebx, perform a logical and on eax and ebx and then crash with a segmentation fault:
 ```
 stonks 12
@@ -29,7 +29,7 @@ fuck go back
 3. 
 
 ## Installation instructions
-To correctly use MemeAssembler, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
+To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
 ```
 make
 sudo make install
@@ -39,8 +39,8 @@ The compiler can now be called by using the *memeasm* command
 ## Compiling and running your code
 First, do what a developer does best: code! Keep in mind that it is recommended to save your code in a .memeasm file. 
 Once that's done, open a terminal and use one of the following commands:
-- *memeasm (-c | --compile) sourceFile destinationFile* - only compiles the specified file
-- *memeasm sourceFile* - compiles and runs the specified file
+- ```memeasm (-c | --compile) sourceFile destinationFile``` - only compiles the specified file
+- ```memeasm sourceFile``` - compiles and runs the specified file
 
 Furthermore, you can use *memeasm (-h | --help)* to open a help page and *memeasm (-v | --version)* to print some version information
     
@@ -55,4 +55,4 @@ MemeAssembly stands out from the crowd, since it:
 - But most important of all: **Memes**
 
 But whoever dares to write their code in MemeASM shall be rewarded by being able to place this badge of honor in their GitHub ReadMe:
-![Made with MemeAssembler Badge](https://img.shields.io/badge/made%20with-MemeAssembler-blue)
+![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)
