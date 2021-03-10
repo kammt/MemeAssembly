@@ -21,15 +21,14 @@
 void printErrorMessage() {
     printf("\n");
     printf("\n");
-    printf("  __          __   _ _       _   _           _   _       _ _ _                  _ _  \n");
+    printf(YEL "  __          __   _ _       _   _           _   _       _ _ _                  _ _  \n");
     printf(" \\ \\        / /  (_| |     | | | |         | | ( )     (_| | |                | | | \n");
     printf("  \\ \\  /\\  / __ _ _| |_    | |_| |__   __ _| |_|/ ___   _| | | ___  __ _  __ _| | | \n");
     printf("   \\ \\/  \\/ / _` | | __|   | __| '_ \\ / _` | __| / __| | | | |/ _ \\/ _` |/ _` | | | \n");
     printf("    \\  /\\  | (_| | | |_ _  | |_| | | | (_| | |_  \\__ \\ | | | |  __| (_| | (_| | |_| \n");
     printf("     \\/  \\/ \\__,_|_|\\__( )  \\__|_| |_|\\__,_|\\__| |___/ |_|_|_|\\___|\\__, |\\__,_|_(_) \n");
     printf("                       |/                                           __/ |           \n");
-    printf("                                                                   |___/  \n");
-    printf("____________________________________________________________________________________ \n");
+    printf("                                                                   |___/  \n" RESET);
     printf("\nYour program failed to compile because of errors in your code. Please check your input file and try again.\n");
     printf(" Exiting....\n");
     exit(1);
@@ -229,7 +228,37 @@ int interpretGuessIllDie(char *token, int lineNum, FILE *destPTR) {
         printf(RED "Error in line %d: Expected 'I'll' after 'fuck'" RESET, lineNum);
         return 1;
     }    
-}    
+}   
+
+/**
+ * Called when the first keyword is 'bitconeeeeeeect'. It checks if it is a valid 'bitconeeeeeeect' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretBitconnect(char *token, int lineNum, FILE *destPTR) {
+    token = strtok(NULL, " ");
+    if(isValidValue(token) == 0) {
+        char firstToken[128]; //Save the first token for later
+        strcpy(firstToken, token);
+        strcat(firstToken, ", ");
+
+        token = strtok(NULL, " ");
+        if(isValidValue(token) == 0) {
+            strcat(firstToken, token);
+            strcat(firstToken, "\n");
+            return writeLine(destPTR, "and", firstToken, token, lineNum);
+            return 0;
+        } else {
+            printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+            return 1;
+        }
+    } else {
+        printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+        return 1;
+    }    
+}
 
 /**
  * Attempts to interpret the command in this line. If successful, it writes the command to the destination file
@@ -255,7 +284,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         } else if (strcmp(token, "guess") == 0) {
             return interpretGuessIllDie(token, lineNum, destPTR);   
         } else if (strcmp(token, "bitconeeeeeeect") == 0){
-            
+            return interpretBitconnect(token, lineNum, destPTR);
         } else {            
             printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
             return 1;
