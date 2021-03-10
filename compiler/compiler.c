@@ -15,6 +15,9 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
+int upgradeMarkerDefined = 0; //Is set to 1 if 'upgrade' is defined somewhere. That way, the compiler can check if it is defined multiple times or 'fuck go back' is used without it
+int perfectlyBalanced = 0; //Is set to 1 if 'perfectly balanced as all things should be' is defined somewhere
+
 /**
  * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art and exits the program
  */
@@ -83,6 +86,15 @@ int writeLine(FILE *destPTR, char keyword[], char arguments[], char *token, int 
         printf(RED "Error in line %d: Expected end of line after command, but instead got '%s'" RESET, lineNum, token);
         return 1;
     }
+}
+
+/**
+ * Removes the \n from a string if it is present at the end of the string
+ * @param token the token
+ */
+void removeLineBreak(char *token) {
+    if(token[strlen(token)-1] = '\n')
+    token[strlen(token)-1] = '\0';
 }
 
 /**
@@ -195,8 +207,13 @@ int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
     if(strcmp(token, "go") == 0) {
         token = strtok(NULL, " ");
         if(strcmp(token, "back") == 0 || strcmp(token, "back\n") == 0) {
-            return writeLine(destPTR, "jmp", "marker", token, lineNum);
-            return 0;
+            if(upgradeMarkerDefined == 1) {
+                return writeLine(destPTR, "jmp", "marker\n", token, lineNum);
+                return 0;
+            } else {
+                printf(RED "Error in line %d: 'fuck go back' used, but no 'upgrade' marker was found" RESET, lineNum);
+                return 1;
+            }
         } else {
             printf(RED "Error in line %d: Expected 'back' after 'go'" RESET, lineNum);
             return 1;
@@ -274,6 +291,7 @@ int interpretSneak100(char *token, int lineNum, FILE *destPTR) {
         token = strtok(NULL, " ");
         if(isValidValue(token, 1) == 0) {
             char arguments[30];
+            removeLineBreak(token);
             strcpy(arguments, token);
             strcat(arguments, ", ");
             strcat(arguments, token);
@@ -309,7 +327,13 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         } else if(strcmp(token, "not") == 0) {
             return interpretNotStonks(token, lineNum, destPTR);                
         } else if(strcmp(token, "upgrade") == 0 || strcmp(token, "upgrade\n") == 0) {
-            return writeLine(destPTR, "marker:", "\n", token, lineNum);
+            if(upgradeMarkerDefined == 0) {
+                upgradeMarkerDefined = 1;
+                return writeLine(destPTR, "marker:", "\n", token, lineNum);
+            } else {
+                printf(RED "Error in line %d: 'Upgrade' jump marker can only be defined once" RESET, lineNum);
+                return 1;
+            }
         } else if(strcmp(token, "fuck") == 0) {
             return interpretJumpMarker(token, lineNum, destPTR);   
         } else if (strcmp(token, "guess") == 0) {
@@ -335,7 +359,6 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     //Variables
     char line[128];
     int lineNum = 1;
-    //https://www.programiz.com/c-programming/c-file-input-output
     fprintf(destPTR, "section .text\n");
     fprintf(destPTR, "global main\n");
     fprintf(destPTR, "main:\n");
@@ -375,4 +398,5 @@ void compileAndRun(FILE *srcPTR) {
     printf(YEL "Running file...\n" RESET);
     fflush( stdout );
     execv ("tmp", NULL);
+    //TODO delete temporary files
 }
