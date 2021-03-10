@@ -16,6 +16,11 @@
 #define RESET "\x1B[0m"
 
 int upgradeMarkerDefined = 0; //Is set to 1 if 'upgrade' is defined somewhere. That way, the compiler can check if it is defined multiple times or 'fuck go back' is used without it
+int upgradeJumpDefined = 0; //Is set to the line in which 'fuck go back' is in. This is so that the jump marker can be defined under that line without throwing an error
+
+int pictureMarkerDefined = 0; //Is set to 1 if 'they're the same picture' is defined somewhere. That way, the compiler can check if it is defined multiple times or 'fuck go back' is used without it
+int pictureJumpDefined = 0; //Is set to the line in which 'coporate needs you to find...' is in. This is so that the jump marker can be defined under that line without throwing an error
+
 int perfectlyBalanced = 0; //Is set to 1 if 'perfectly balanced as all things should be' is defined somewhere
 
 /**
@@ -175,7 +180,6 @@ int interpretNotStonks(char *token, int lineNum, FILE *destPTR) {
             return 1;
         }  if(isValidValue(token, 1) == 0) {
             return writeLine(destPTR, "pop", token, token, lineNum);
-            return 0;
         } else {
             printf(RED "Error in line %d: Expected register after 'not stonks', but got %s" RESET, lineNum, token);
             return 1;
@@ -198,13 +202,8 @@ int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
     if(strcmp(token, "go") == 0) {
         token = strtok(NULL, " ");
         if(strcmp(token, "back") == 0) {
-            if(upgradeMarkerDefined == 1) {
-                return writeLine(destPTR, "jmp", "marker\n", token, lineNum);
-                return 0;
-            } else {
-                printf(RED "Error in line %d: 'fuck go back' used, but no 'upgrade' marker was found" RESET, lineNum);
-                return 1;
-            }
+            upgradeJumpDefined = lineNum;
+            return writeLine(destPTR, "jmp", "upgrade", token, lineNum);
         } else {
             printf(RED "Error in line %d: Expected 'back' after 'go'" RESET, lineNum);
             return 1;
@@ -214,6 +213,42 @@ int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
         return 1;
     }    
 }
+
+/**
+ * Called when the first keyword is 'they're'. It checks if it is a valid 'they're the same picture' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretSamePicture(char *token, int lineNum, FILE *destPTR) {
+    token = strtok(NULL, " ");
+    if(strcmp(token, "the") == 0) {
+        token = strtok(NULL, " ");
+        if(strcmp(token, "same") == 0) {
+            token = strtok(NULL, " ");
+            if(strcmp(token, "picture") == 0) {
+                if(pictureMarkerDefined == 0) {
+                    pictureMarkerDefined = 1;
+                    return writeLine(destPTR, "samePicture:", "", token, lineNum);
+                } else {
+                    printf(RED "Error in line %d: 'they're the same picture' cannot be defined twice" RESET, lineNum);
+                    return 1;
+                }
+            } else {
+                printf(RED "Error in line %d: Expected 'picture' after 'same'" RESET, lineNum);
+                return 1;
+            }    
+        } else {
+            printf(RED "Error in line %d: Expected 'same' after 'the'" RESET, lineNum);
+            return 1;
+        }
+    } else {
+        printf(RED "Error in line %d: Expected 'the' after 'they're'" RESET, lineNum);
+        return 1;
+    }    
+}
+
 
 /**
  * Called when the first keyword is 'guess'. It checks if it is a valid 'guess I'll die' command and if so writes it to the file
@@ -349,6 +384,85 @@ int interpretMov(char *token, int lineNum, FILE *destPTR) {
     }    
 }
 
+/**
+ * Called when the first keyword is 'corporate'. It checks if it is a valid 'corporate needs you to find...' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretCmp(char *token, int lineNum, FILE *destPTR) {
+    char arguments[30];
+
+    token = strtok(NULL, " ");
+    if(strcmp(token, "needs") == 0) {
+        token = strtok(NULL, " ");
+        if(strcmp(token, "you") == 0) {
+            token = strtok(NULL, " ");
+            if(strcmp(token, "to") == 0) {
+                token = strtok(NULL, " ");
+                if(strcmp(token, "find") == 0) {
+                    token = strtok(NULL, " ");
+                    if(strcmp(token, "the") == 0) {
+                        token = strtok(NULL, " ");
+                        if(strcmp(token, "difference") == 0) {
+                            token = strtok(NULL, " ");
+                            if(strcmp(token, "between") == 0) {
+                                token = strtok(NULL, " ");
+                                if(isValidValue(token, 0) == 0) {
+                                    strcpy(arguments, token);
+                                    token = strtok(NULL, " ");
+                                    if(strcmp(token, "and") == 0) {
+                                        token = strtok(NULL, " ");
+                                        if(isValidValue(token, 0) == 0) {
+                                            strcat(arguments, ", ");
+                                            strcat(arguments, token);
+                                            strcat(arguments, "\n\tje samePicture");
+                                            pictureJumpDefined = lineNum;
+                                            return writeLine(destPTR, "cmp", arguments, token, lineNum);
+                                        } else {
+                                            printf(RED "Error in line %d: Expected value of register, but instead got %s" RESET, lineNum, token);
+                                            return 1;
+                                        }    
+                                    } else {
+                                        printf(RED "Error in line %d: Expected 'and' after parameter" RESET, lineNum);
+                                        return 1;
+                                    }                                        
+                                } else {
+                                    printf(RED "Error in line %d: Expected value of register, but instead got %s" RESET, lineNum, token);
+                                    return 1;
+                                }
+                            } else {
+                                printf(RED "Error in line %d: Expected 'between' after 'difference'" RESET, lineNum);
+                                return 1;
+                            } 
+                        } else {
+                            printf(RED "Error in line %d: Expected 'difference' after 'the'" RESET, lineNum);
+                            return 1;
+                        }                            
+                        
+                    } else {
+                        printf(RED "Error in line %d: Expected 'the' after 'find'" RESET, lineNum);
+                        return 1;
+                    }
+                } else {
+                    printf(RED "Error in line %d: Expected 'find' after 'to'" RESET, lineNum);
+                    return 1;
+                }
+            } else {
+                printf(RED "Error in line %d: Expected 'to' after 'you'" RESET, lineNum);
+                return 1;
+            }
+        } else {
+            printf(RED "Error in line %d: Expected 'you,' after 'needs'" RESET, lineNum);
+            return 1;
+        }
+    } else {
+        printf(RED "Error in line %d: Expected 'needs' after 'coporate'" RESET, lineNum);
+        return 1;
+    }    
+}
+
 
 /**
  * Attempts to interpret the command in this line. If successful, it writes the command to the destination file
@@ -373,7 +487,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         } else if(strcmp(token, "upgrade") == 0 || strcmp(token, "upgrade\n") == 0) {
             if(upgradeMarkerDefined == 0) {
                 upgradeMarkerDefined = 1;
-                return writeLine(destPTR, "marker:", "", token, lineNum);
+                return writeLine(destPTR, "upgrade:", "", token, lineNum);
             } else {
                 printf(RED "Error in line %d: 'upgrade' jump marker can only be defined once" RESET, lineNum);
                 return 1;
@@ -402,6 +516,10 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
                 printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
                 return 1;
             }
+        } else if (strcmp(token, "they're") == 0) {
+            return interpretSamePicture(token, lineNum, destPTR);   
+        } else if (strcmp(token, "corporate") == 0) {
+            return interpretCmp(token, lineNum, destPTR);   
         } else if (isValidValue(token, 1) == 0){
             return interpretMov(token, lineNum, destPTR);
         } else {            
@@ -437,6 +555,17 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     fprintf(destPTR, "\n\tret");
     fclose(srcPTR);
     fclose(destPTR);
+
+    //Now that we traversed the entire file, we still need to check if jumps were defined without markers
+    if(pictureJumpDefined != 0 && pictureMarkerDefined == 0) {
+        printf(RED "Error in line %d: 'Coporate needs you to find the difference between ...' was used, but 'they're the same picture' wasn't defined anywhere" RESET, pictureJumpDefined);
+        printErrorMessage();
+    } else if(upgradeJumpDefined != 0 && upgradeMarkerDefined == 0) {
+        printf(RED "Error in line %d: 'fuck go back' used, but no 'upgrade' marker was found" RESET, upgradeJumpDefined); 
+        printErrorMessage();
+    }
+
+
     printf(GRN "File compiled successfully!" RESET);
     printf("\n");
 }

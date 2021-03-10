@@ -12,6 +12,8 @@ Or MemeASM for short, is a highly advanced x86-Assembly based programming langua
 - upvote [register] - adds 1 to the specified register
 - downvote [register] - subtracts 1 from the specified register
 - [destination] is great, but I want [register/value] - move a value into a register
+- they're the same picture - A jump marker for the command below
+- Corporate needs you to find the difference between [register/value] and [register/value] - compares both arguments and jumps to "they're the same picture" if both values are equal
 - perfectly balanced as all things should be - restore balance to your code by randomly deleting half the commands at compile-time
 
 ## Code examples
@@ -29,7 +31,20 @@ upgrade
 sneak 100 eax
 fuck go back
 ```
-3. 
+3. Subtract 25 from 69:
+```
+ebx is great, but I want 69
+sneak 100 eax
+guess I'll die or draw 25
+
+upgrade
+downvote ebx
+downvote eax
+corporate needs you to find the difference between eax and 0
+fuck go back
+
+they're the same picture
+```
 
 ## Installation instructions
 To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
@@ -47,7 +62,7 @@ Once that's done, open a terminal and use one of the following commands:
 
 Furthermore, you can use *memeasm (-h | --help)* to open a help page and *memeasm (-v | --version)* to print some version information
     
-## Why code in MemeAssembly, anyway?
+## Why code in MemeAssembly anyway?
 ![Developers GIF](https://media.tenor.com/images/02fea7f02da34ea33c58a38d57fd5c5f/tenor.gif)\
 Put simply, MemeAssembly brings back the good 'old days of coding. Can you even remember all the commands that your 'shiny new' programming language has to offer? Are you overwhelmed and confused by all the ways a modern programming language can be used for? Well look no further than MemeAssembly!
 MemeAssembly stands out from the crowd, since it:
@@ -55,7 +70,9 @@ MemeAssembly stands out from the crowd, since it:
 - only supports registers and immediates
 - completely refuses to provide storage functionality
 - provides a simple command to make your entire program crash
-- But most important of all: **Memes**
+- doesn't force you to make 'understandable' code by commenting it, since comments aren't supported anyway and would cause the compiler to crash
+- removes the pain of working with negative numbers by outright not supporting them
+But most important of all: **Memes**
 
 ## Badge of honor
 Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
