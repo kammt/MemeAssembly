@@ -297,6 +297,58 @@ int interpretSneak100(char *token, int lineNum, FILE *destPTR) {
     }    
 }  
 
+/**
+ * Called when the first keyword is a register. It checks if it is a valid 'this is great, but I want this' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretMov(char *token, int lineNum, FILE *destPTR) {
+    char arguments[20];
+    strcpy(arguments, token);
+
+    token = strtok(NULL, " ");
+    if(strcmp(token, "is") == 0) {
+        token = strtok(NULL, " ");
+        if(strcmp(token, "great,") == 0) {
+            token = strtok(NULL, " ");
+            if(strcmp(token, "but") == 0) {
+                token = strtok(NULL, " ");
+                if(strcmp(token, "I") == 0) {
+                    token = strtok(NULL, " ");
+                    if(strcmp(token, "want") == 0) {
+                        token = strtok(NULL, " ");
+                        if(isValidValue(token, 0) == 0) {
+                            strcat(arguments, ", ");
+                            strcat(arguments, token);
+                            return writeLine(destPTR, "mov", arguments, token, lineNum);
+                        } else {
+                            printf(RED "Error in line %d: Expected value of register, but instead got %s" RESET, lineNum, token);
+                            return 1;
+                        }
+                    } else {
+                        printf(RED "Error in line %d: Expected 'want' after 'I'" RESET, lineNum);
+                        return 1;
+                    }
+                } else {
+                    printf(RED "Error in line %d: Expected 'I' after 'but'" RESET, lineNum);
+                    return 1;
+                }
+            } else {
+                printf(RED "Error in line %d: Expected 'but' after 'great,'" RESET, lineNum);
+                return 1;
+            }
+        } else {
+            printf(RED "Error in line %d: Expected 'great,' after 'is'" RESET, lineNum);
+            return 1;
+        }
+    } else {
+        printf(RED "Error in line %d: Expected 'is' after register name" RESET, lineNum);
+        return 1;
+    }    
+}
+
 
 /**
  * Attempts to interpret the command in this line. If successful, it writes the command to the destination file
@@ -350,7 +402,9 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
                 printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
                 return 1;
             }
-        }else {            
+        } else if (isValidValue(token, 1) == 0){
+            return interpretMov(token, lineNum, destPTR);
+        } else {            
             printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
             return 1;
         }

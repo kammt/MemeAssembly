@@ -11,6 +11,7 @@ Or MemeASM for short, is a highly advanced x86-Assembly based programming langua
 - sneak 100 [register] - sets a register to zero
 - upvote [register] - adds 1 to the specified register
 - downvote [register] - subtracts 1 from the specified register
+- [destination] is great, but I want [register/value] - move a value into a register
 - perfectly balanced as all things should be - restore balance to your code by randomly deleting half the commands at compile-time
 
 ## Code examples
