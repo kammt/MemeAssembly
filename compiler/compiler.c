@@ -36,14 +36,54 @@ void writeLine(FILE *destPTR, char keyword[], char arguments[]){
     fprintf(destPTR, "\t%s %s", keyword, arguments);
 }
 
+int isValidDigit(char *token) {
+    int j = 0;
+    while(j<strlen(token)){
+        if(token[j] >= '0' && token[j] <= '9')
+            j++;
+        else
+            return 1;
+    }
+    return 0;
+}
+
+int isValidValue(char *token) {
+    if(strcmp(token, "eax") == 0 || strcmp(token, "ax") == 0) {
+        return 0;
+    } else if(strcmp(token, "eax\n") == 0 || strcmp(token, "ax\n") == 0) {
+        return 0;
+    } else if(strcmp(token, "ebx") == 0 || strcmp(token, "bx") == 0) {
+        return 0;
+    } else if(strcmp(token, "ebx\n") == 0 || strcmp(token, "bx\n") == 0) {
+        return 0;
+    } else if(strcmp(token, "ecx\n") == 0 || strcmp(token, "cx\n") == 0) {
+        return 0;
+    } else if(strcmp(token, "ecx") == 0 || strcmp(token, "cx") == 0) {
+        return 0;
+    } else if(strcmp(token, "edx") == 0 || strcmp(token, "dx") == 0) {
+        return 0;
+    } else if(strcmp(token, "edx\n") == 0 || strcmp(token, "dx\n") == 0) {
+        return 0;
+    } else if(strcmp(token, "ebp") == 0 || strcmp(token, "esp") == 0 || strcmp(token, "edi") == 0 || strcmp(token, "esi") == 0) {
+        return 0;
+    } else if(strcmp(token, "ebp\n") == 0 || strcmp(token, "esp\n") == 0 || strcmp(token, "edi\n") == 0 || strcmp(token, "esi\n") == 0) {
+        return 0;
+    } else if(isValidDigit(token) == 0) {
+        return 0;
+    } else return 1;       
+}
+
 int interpretStonks(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(token == NULL){
         printf(RED "Error in line %d: Expected value or register after 'stonks'" RESET, lineNum);
         return 1;
-    } else {
+    } else if(isValidValue(token) == 0) {
         writeLine(destPTR, "push", token);
         return 0;
+    } else {
+        printf(RED "Error in line %d: Expected value or register after 'stonks', but got %s" RESET, lineNum, token);
+        return 1;
     }
 }
 
