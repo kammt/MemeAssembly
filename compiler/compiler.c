@@ -93,8 +93,9 @@ int writeLine(FILE *destPTR, char keyword[], char arguments[], char *token, int 
  * @param token the token
  */
 void removeLineBreak(char *token) {
-    if(token[strlen(token)-1] = '\n')
-    token[strlen(token)-1] = '\0';
+    if(token[strlen(token)-1] == '\n') {
+        token[strlen(token)-1] = '\0';
+    }
 }
 
 /**
