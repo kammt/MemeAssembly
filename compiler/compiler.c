@@ -48,7 +48,7 @@ int interpretDraw25(char *token, int lineNum, FILE *destPTR) {
             token = strtok(NULL, " ");
 
             if(token == NULL) {
-                fprintf(destPTR, "\tadd eax, 25"); //Command successful, write it to the file
+                fprintf(destPTR, "\tadd eax, 25\n"); //Command successful, write it to the file
                 return 0;
             } else {
                 printf(RED "Error in line %d: Expected end of line after 'or draw 25', but instead got '%s'" RESET, lineNum, token);
@@ -205,6 +205,30 @@ int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
 }
 
 /**
+ * Called when the first keyword is 'guess'. It checks if it is a valid 'guess I'll die' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretGuessIllDie(char *token, int lineNum, FILE *destPTR) {
+    token = strtok(NULL, " ");
+    if(strcmp(token, "I'll") == 0) {
+        token = strtok(NULL, " ");
+        if(strcmp(token, "die") == 0 || strcmp(token, "die\n") == 0) {
+            return writeLine(destPTR, "mov", "eax, [0x0000]", token, lineNum);
+            return 0;
+        } else {
+            printf(RED "Error in line %d: Expected 'die' after 'I'll'" RESET, lineNum);
+            return 1;
+        }
+    } else {
+        printf(RED "Error in line %d: Expected 'I'll' after 'fuck'" RESET, lineNum);
+        return 1;
+    }    
+}    
+
+/**
  * Attempts to interpret the command in this line. If successful, it writes the command to the destination file
  * @param line the line to be interpreted
  * @param lineNum the current Line number
@@ -225,7 +249,9 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
             return writeLine(destPTR, "marker:", "\n", token, lineNum);
         } else if(strcmp(token, "fuck") == 0) {
             return interpretJumpMarker(token, lineNum, destPTR);   
-        }else {
+        } else if (strcmp(token, "guess") == 0) {
+            return interpretGuessIllDie(token, lineNum, destPTR);   
+        } else {
             printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
             return 1;
         }
