@@ -254,7 +254,9 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
             return interpretJumpMarker(token, lineNum, destPTR);   
         } else if (strcmp(token, "guess") == 0) {
             return interpretGuessIllDie(token, lineNum, destPTR);   
-        } else {
+        } else if (strcmp(token, "bitconeeeeeeect") == 0){
+            
+        } else {            
             printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
             return 1;
         }
