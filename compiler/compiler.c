@@ -146,6 +146,83 @@ int isValidValue(char *token, int onlyRegister) {
     } else return 1;       
 }
 
+
+int compileWithPattern(char *token, char commandPattern[60], char translationPattern[], int lineNum) {
+    int probing = 1; //Is set to 0 if the first tokens match. This is so that if compilation fails at the first token, there is no error message
+    char result[50] = "";
+
+    char *savePTRcommand;
+    
+    char commandPatternTMP[60];
+    strcpy(commandPatternTMP, commandPattern);
+    char *commandToken = strtok_r(commandPatternTMP, " ", &savePTRcommand);
+
+    int argCnt = 0; //A counter for the number of arguments
+    char arguments[3][10]; //A command can have a maximum of three arguments with itself a maximum of 10 characters
+
+    while (token != NULL && commandToken != NULL)
+    {
+        //Step 1: figure out if we need to compare the exact wording (for a keyword e.g. a command) or if it has to be a valid value (e.g. a register)
+        if(strcmp(commandToken, "r") == 0) { //token has to be a register
+            if(isValidValue(token, 1) != 0) {
+                if(probing == 0) printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+                return 1; 
+            }
+            strcpy(arguments[argCnt], token);
+            argCnt++;
+            probing = 0;
+        } else if(strcmp(commandToken, "v") == 0) { //token has to be a value or a register
+            if(isValidValue(token, 0) != 0) {
+                if(probing == 0) printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+                return 1; 
+            }
+            strcpy(arguments[argCnt], token);
+            argCnt++;
+            probing = 0;
+        } else {
+            if(strcmp(token, commandToken) != 0) {
+                if(probing == 0) printf(RED "Error in line %d: Expected %s, but got %s" RESET, lineNum, commandToken, token);
+                return 1; 
+            }
+            probing = 0;
+        }
+
+        //All looks good, now onto the next token
+        commandToken = strtok_r(NULL, " ", &savePTRcommand);
+        token = strtok(NULL, " ");
+    }
+
+    /**Either the line or the command pattern have reached their end. We now have to check what caused the problem
+     * - if both are NULL, then there is no problem!
+     * - if the commandToken is NULL, then we should have been at the end of the line. Check if the rest is equal to 'or draw 25'. If not, send an error
+     * - if the token is NULL, then it is too short, send an error
+     */
+    if(token == NULL && commandToken == NULL) {
+        /** All looks good. Now we traverse over the implementation pattern character by character. 
+         * If the character is a number between 0 and 2, we append the respective arguments to the result string
+         * If it is a regular character, we just append the character
+         */
+
+        for (int i = 0; i < strlen(translationPattern); i++) {
+            //Get the character
+            char character = translationPattern[i];
+            //Character is a number between 0 and 2?
+            if(character >= '0' && character <= '2') { 
+                //Convert to an integer
+                int index = character - '0';
+                //Append the argument
+                strncat(result, arguments[index], 50);
+            } else strncat(result, &character, 50);
+        }
+        printf(result);
+        return 0;
+    } else if(commandToken == NULL) {
+
+    } else {
+
+    }
+}
+
 /**
  * Called when the first keyword is 'stonks'. It checks if it is a valid stonks command and if so writes it to the file
  * @param token The supplied token
@@ -476,59 +553,45 @@ int interpretCmp(char *token, int lineNum, FILE *destPTR) {
  */
 int interpretLine(char line[], int lineNum, FILE *destPTR) {
     removeLineBreak(line);
+    char commandPatterns[12][60] = {
+        "stonks v",
+        "not stonks r",
+        "upgrade",
+        "fuck go back",
+        "guess I'll die",
+        "bitconeeeeeeect r v",
+        "sneak 100 r",
+        "upvote r",
+        "downvote r",
+        "they're the same picture",
+        "corporate needs you to find the difference between v and v",
+        "r is great, but I want v"
+    };
+
+    char translationPatterns[12][60] = {
+        "push 0",
+        "pop 0",
+        "upgradeMarker:",
+        "jmp upgradeMarker",
+        "mov eax, [0x0000]",
+        "and 0, 1",
+        "xor 0, 0",
+        "inc 0",
+        "dec 0",
+        "samePicture:",
+        "cmp 0, 1\n\tje samePicture",
+        "mov 0, 1"
+    };
+
     char *token = strtok(line, " ");
     if(token != NULL) {
-        //printf("Got token: ");
-        //printf(token);
-
-        if(strcmp(token, "\n") == 0) {
-            printf("Info: line %d is empty, skipping\n", lineNum);
-        } else if(strcmp(token, "stonks") == 0) {
-            return interpretStonks(token, lineNum, destPTR);
-        } else if(strcmp(token, "not") == 0) {
-            return interpretNotStonks(token, lineNum, destPTR);                
-        } else if(strcmp(token, "upgrade") == 0 || strcmp(token, "upgrade\n") == 0) {
-            if(upgradeMarkerDefined == 0) {
-                upgradeMarkerDefined = 1;
-                return writeLine(destPTR, "upgrade:", "", token, lineNum);
-            } else {
-                printf(RED "Error in line %d: 'upgrade' jump marker can only be defined once" RESET, lineNum);
-                return 1;
-            }
-        } else if(strcmp(token, "fuck") == 0) {
-            return interpretJumpMarker(token, lineNum, destPTR);   
-        } else if (strcmp(token, "guess") == 0) {
-            return interpretGuessIllDie(token, lineNum, destPTR);   
-        } else if (strcmp(token, "bitconeeeeeeect") == 0){
-            return interpretBitconnect(token, lineNum, destPTR);
-        } else if (strcmp(token, "sneak") == 0){
-            return interpretSneak100(token, lineNum, destPTR);
-        } else if (strcmp(token, "upvote") == 0){
-            token = strtok(NULL, " ");
-            if(isValidValue(token, 1) == 0) {
-                return writeLine(destPTR, "inc", token, token, lineNum);
-            } else {
-                printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
-                return 1;
-            }
-        } else if (strcmp(token, "downvote") == 0){
-            token = strtok(NULL, " ");
-            if(isValidValue(token, 1) == 0) {
-                return writeLine(destPTR, "dec", token, token, lineNum);
-            } else {
-                printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
-                return 1;
-            }
-        } else if (strcmp(token, "they're") == 0) {
-            return interpretSamePicture(token, lineNum, destPTR);   
-        } else if (strcmp(token, "corporate") == 0) {
-            return interpretCmp(token, lineNum, destPTR);   
-        } else if (isValidValue(token, 1) == 0){
-            return interpretMov(token, lineNum, destPTR);
-        } else {            
-            printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
-            return 1;
+        int result;
+        for (int i = 0; i < 12; i++)
+        {
+            result = compileWithPattern(token, commandPatterns[i], translationPatterns[i], lineNum);
+            if(result == 0) break;
         }
+        return result;
 
     }
 }
