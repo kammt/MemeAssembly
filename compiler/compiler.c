@@ -32,21 +32,80 @@ void printErrorMessage() {
     exit(1);
 }
 
-void writeLine(FILE *destPTR, char keyword[], char arguments[]){
-    fprintf(destPTR, "\t%s %s", keyword, arguments);
+/**
+ * Called when the keyword is 'or'. It checks if it is a valid or draw 25 command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretDraw25(char *token, int lineNum, FILE *destPTR) {
+    token = strtok(NULL, " ");
+    if(strcmp(token, "draw") == 0) {
+
+        token = strtok(NULL, " "); 
+        if(strcmp(token, "25\n") == 0 || strcmp(token, "25") == 0) {
+            token = strtok(NULL, " ");
+
+            if(token == NULL) {
+                fprintf(destPTR, "\tadd eax, 25"); //Command successful, write it to the file
+                return 0;
+            } else {
+                printf(RED "Error in line %d: Expected end of line after 'or draw 25', but instead got '%s'" RESET, lineNum, token);
+                return 1;
+            }   
+
+        } else {
+            printf(RED "Error in line %d: Expected 25 after 'draw'" RESET, lineNum);
+            return 1;
+        }
+
+    } else {
+        printf(RED "Error in line %d: Expected 'draw' after 'or'" RESET, lineNum);
+        return 1;
+    }
 }
 
+int writeLine(FILE *destPTR, char keyword[], char arguments[], char *token, int lineNum){
+    //First, we check two scenarios:
+    //1. There are other invalid tokens after the supplied command. This should cause an error
+    //2. There is 'or draw 25' after this command
+    
+    token = strtok(NULL, " "); //Attempt to get the next token
+    if(token == NULL) {
+        fprintf(destPTR, "\t%s %s", keyword, arguments); //write the command and leave
+        return 0;
+    } else if(strcmp(token, "or") == 0) {
+        return interpretDraw25(token, lineNum, destPTR);
+    } else {
+        printf(RED "Error in line %d: Expected end of line after command, but instead got '%s'" RESET, lineNum, token);
+        return 1;
+    }
+}
+
+/**
+ * Checks whether the supplied token is a valid decimal digit,
+ * @param token The supplied token
+ * @return 0 if it's a valid number, 1 otherwise
+ */
 int isValidDigit(char *token) {
     int j = 0;
     while(j<strlen(token)){
         if(token[j] >= '0' && token[j] <= '9')
             j++;
-        else
+        else if(token[j] == '\n') {
+            return 0;
+        } else
             return 1;
     }
     return 0;
 }
 
+/**
+ * Checks whether the supplied token is a valid decimal digit or x86 register keyword
+ * @param token The supplied token
+ * @return 0 if it's valid, 1 otherwise
+ */
 int isValidValue(char *token) {
     if(strcmp(token, "eax") == 0 || strcmp(token, "ax") == 0) {
         return 0;
@@ -73,13 +132,20 @@ int isValidValue(char *token) {
     } else return 1;       
 }
 
+/**
+ * Called when the first keyword is 'stonks'. It checks if it is a valid stonks command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
 int interpretStonks(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(token == NULL){
         printf(RED "Error in line %d: Expected value or register after 'stonks'" RESET, lineNum);
         return 1;
     } else if(isValidValue(token) == 0) {
-        writeLine(destPTR, "push", token);
+        return writeLine(destPTR, "push", token, token, lineNum);
         return 0;
     } else {
         printf(RED "Error in line %d: Expected value or register after 'stonks', but got %s" RESET, lineNum, token);
@@ -87,6 +153,13 @@ int interpretStonks(char *token, int lineNum, FILE *destPTR) {
     }
 }
 
+/**
+ * Called when the first keyword is 'not'. It checks if it is a valid not stonks command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
 int interpretNotStonks(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(strcmp(token, "stonks") == 0) {
@@ -94,9 +167,12 @@ int interpretNotStonks(char *token, int lineNum, FILE *destPTR) {
         if(token == NULL){
             printf(RED "Error in line %d: Expected value or register after 'not stonks'" RESET, lineNum);
             return 1;
-        } else {
-            writeLine(destPTR, "pop", token);
+        }  if(isValidValue(token) == 0) {
+            return writeLine(destPTR, "pop", token, token, lineNum);
             return 0;
+        } else {
+            printf(RED "Error in line %d: Expected value or register after 'not stonks', but got %s" RESET, lineNum, token);
+            return 1;
         }
     } else {
         printf(RED "Error in line %d: Expected 'stonks' after 'not'" RESET, lineNum);
@@ -104,12 +180,19 @@ int interpretNotStonks(char *token, int lineNum, FILE *destPTR) {
     }        
 }
 
+/**
+ * Called when the first keyword is 'fuck'. It checks if it is a valid 'fuck go back' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
 int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(strcmp(token, "go") == 0) {
         token = strtok(NULL, " ");
         if(strcmp(token, "back") == 0 || strcmp(token, "back\n") == 0) {
-            writeLine(destPTR, "jmp", "marker");
+            return writeLine(destPTR, "jmp", "marker", token, lineNum);
             return 0;
         } else {
             printf(RED "Error in line %d: Expected 'back' after 'go'" RESET, lineNum);
@@ -139,7 +222,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         } else if(strcmp(token, "not") == 0) {
             return interpretNotStonks(token, lineNum, destPTR);                
         } else if(strcmp(token, "upgrade") == 0 || strcmp(token, "upgrade\n") == 0) {
-            writeLine(destPTR, "marker:", "\n");
+            return writeLine(destPTR, "marker:", "\n", token, lineNum);
         } else if(strcmp(token, "fuck") == 0) {
             return interpretJumpMarker(token, lineNum, destPTR);   
         }else {
@@ -150,6 +233,11 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
     }
 }
 
+/**
+ * Attempts to convert the source file to an x86 Assembly file
+ * @param srcPTR a pointer to the source file to be compiled
+ * @param destPTR a pointer to the destination file. If nonexistent, it will be created
+ */
 void compile(FILE *srcPTR, FILE *destPTR) {
     //Variables
     char line[128];
@@ -173,6 +261,10 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     printf("\n");
 }
 
+/**
+ * Compiles, links and runs the specified memeasm-file
+ * @param srcPTR a pointer to the source file to be compiled
+ */
 void compileAndRun(FILE *srcPTR) {
     FILE *destPTR = fopen("tmp.asm","w");
     compile(srcPTR, destPTR);
