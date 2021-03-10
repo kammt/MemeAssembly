@@ -3,6 +3,7 @@
         "stdio.h": "c",
         "stdlib.h": "c",
         "string.h": "c",
-        "types.h": "c"
+        "types.h": "c",
+        "sstream": "c"
     }
 }
