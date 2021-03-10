@@ -3,6 +3,9 @@
 
 #include <string.h> //String functions
 
+#include <sys/types.h>
+#include <unistd.h>
+
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
 #define YEL   "\x1B[33m"
@@ -216,7 +219,7 @@ int interpretGuessIllDie(char *token, int lineNum, FILE *destPTR) {
     if(strcmp(token, "I'll") == 0) {
         token = strtok(NULL, " ");
         if(strcmp(token, "die") == 0 || strcmp(token, "die\n") == 0) {
-            return writeLine(destPTR, "mov", "eax, [0x0000]", token, lineNum);
+            return writeLine(destPTR, "mov", "eax, [0x0000]\n", token, lineNum);
             return 0;
         } else {
             printf(RED "Error in line %d: Expected 'die' after 'I'll'" RESET, lineNum);
@@ -269,8 +272,9 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     char line[128];
     int lineNum = 1;
     //https://www.programiz.com/c-programming/c-file-input-output
-    fprintf(destPTR, "global _start\n");
-    fprintf(destPTR, "_start:\n");
+    fprintf(destPTR, "section .text\n");
+    fprintf(destPTR, "global main\n");
+    fprintf(destPTR, "main:\n");
 
     //printf("Source file opened for reading, starting line-by-line analysis\n");
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
@@ -281,6 +285,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
         lineNum++;
     }
 
+    fprintf(destPTR, "\tret");
     fclose(srcPTR);
     fclose(destPTR);
     printf(GRN "File compiled successfully!" RESET);
@@ -294,7 +299,16 @@ void compile(FILE *srcPTR, FILE *destPTR) {
 void compileAndRun(FILE *srcPTR) {
     FILE *destPTR = fopen("tmp.asm","w");
     compile(srcPTR, destPTR);
+
+    printf(YEL "Calling nasm...\n" RESET);
+    fflush( stdout );
     system("nasm -f elf32 -o tmp.o tmp.asm");
-    system("ld -m elf_i386 -o tmp tmp.o");
-    system("./tmp");
+
+    printf(YEL "Linking...\n" RESET);
+    fflush( stdout );
+    system("gcc tmp.o -g -o tmp -m32 -fno-pie -no-pie");
+    
+    printf(YEL "Running file...\n" RESET);
+    fflush( stdout );
+    execv ("tmp", NULL);
 }

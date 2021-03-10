@@ -5,6 +5,9 @@
 
 #include "compiler.h" //Compiler related functions in a seperate file
 
+#define BLU   "\x1B[34m"
+#define RESET "\x1B[0m"
+
 char version_string[] = "v0.1";
 char release_date[] = "unknown";
 
@@ -12,14 +15,14 @@ char release_date[] = "unknown";
  * Prints an ASCII-Art title and version information.
  */
 void printInformationHeader() {
-    printf("  __  __                                                     _     _       \n");
+    printf(BLU"  __  __                                                     _     _       \n");
     printf(" |  \\/  |                       /\\                          | |   | |      \n");
     printf(" | \\  / | ___ _ __ ___   ___   /  \\   ___ ___  ___ _ __ ___ | |__ | |_   _ \n");
     printf(" | |\\/| |/ _ \\ '_ ` _ \\ / _ \\ / /\\ \\ / __/ __|/ _ \\ '_ ` _ \\| '_ \\| | | | |\n");
     printf(" | |  | |  __/ | | | | |  __// ____ \\\\__ \\__ \\  __/ | | | | | |_) | | |_| |\n");
     printf(" |_|  |_|\\___|_| |_| |_|\\___/_/    \\_\\___/___/\\___|_| |_| |_|_.__/|_|\\__, |\n");
-    printf("  A Meme-based programming language.                                  __/ |\n");
-    printf("                                                                     |___/ \n\n");
+    printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
+    printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
     printf("This is the MemeAssembly compiler %s, created by Tobias Kamm.\n\n", version_string);
 }

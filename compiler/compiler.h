@@ -6,8 +6,6 @@
 
 #include <string.h> //String functions
 
-int interpretLine(char line[], int lineNum, FILE *destPTR);
-
 void compileAndRun(FILE *srcPTR);
 void compile(FILE *srcPTR, FILE *destPTR);
 
