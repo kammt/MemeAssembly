@@ -106,9 +106,10 @@ int isValidDigit(char *token) {
 /**
  * Checks whether the supplied token is a valid decimal digit or x86 register keyword
  * @param token The supplied token
+ * @param onlyRegister 1 if the value is only allowed to be a x86 register
  * @return 0 if it's valid, 1 otherwise
  */
-int isValidValue(char *token) {
+int isValidValue(char *token, int onlyRegister) {
     if(strcmp(token, "eax") == 0 || strcmp(token, "ax") == 0) {
         return 0;
     } else if(strcmp(token, "eax\n") == 0 || strcmp(token, "ax\n") == 0) {
@@ -129,7 +130,7 @@ int isValidValue(char *token) {
         return 0;
     } else if(strcmp(token, "ebp\n") == 0 || strcmp(token, "esp\n") == 0 || strcmp(token, "edi\n") == 0 || strcmp(token, "esi\n") == 0) {
         return 0;
-    } else if(isValidDigit(token) == 0) {
+    } else if(onlyRegister == 0 && isValidDigit(token) == 0) {
         return 0;
     } else return 1;       
 }
@@ -146,7 +147,7 @@ int interpretStonks(char *token, int lineNum, FILE *destPTR) {
     if(token == NULL){
         printf(RED "Error in line %d: Expected value or register after 'stonks'" RESET, lineNum);
         return 1;
-    } else if(isValidValue(token) == 0) {
+    } else if(isValidValue(token, 0) == 0) {
         return writeLine(destPTR, "push", token, token, lineNum);
         return 0;
     } else {
@@ -169,11 +170,11 @@ int interpretNotStonks(char *token, int lineNum, FILE *destPTR) {
         if(token == NULL){
             printf(RED "Error in line %d: Expected value or register after 'not stonks'" RESET, lineNum);
             return 1;
-        }  if(isValidValue(token) == 0) {
+        }  if(isValidValue(token, 1) == 0) {
             return writeLine(destPTR, "pop", token, token, lineNum);
             return 0;
         } else {
-            printf(RED "Error in line %d: Expected value or register after 'not stonks', but got %s" RESET, lineNum, token);
+            printf(RED "Error in line %d: Expected register after 'not stonks', but got %s" RESET, lineNum, token);
             return 1;
         }
     } else {
@@ -239,15 +240,14 @@ int interpretGuessIllDie(char *token, int lineNum, FILE *destPTR) {
  */
 int interpretBitconnect(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
-    if(isValidValue(token) == 0) {
+    if(isValidValue(token, 1) == 0) {
         char firstToken[128]; //Save the first token for later
         strcpy(firstToken, token);
         strcat(firstToken, ", ");
 
         token = strtok(NULL, " ");
-        if(isValidValue(token) == 0) {
+        if(isValidValue(token, 0) == 0) {
             strcat(firstToken, token);
-            strcat(firstToken, "\n");
             return writeLine(destPTR, "and", firstToken, token, lineNum);
             return 0;
         } else {
@@ -255,10 +255,41 @@ int interpretBitconnect(char *token, int lineNum, FILE *destPTR) {
             return 1;
         }
     } else {
-        printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+        printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
         return 1;
     }    
 }
+
+
+/**
+ * Called when the first keyword is 'sneak'. It checks if it is a valid 'sneak 100' command and if so writes it to the file
+ * @param token The supplied token
+ * @param lineNum The current line Number in the source file
+ * @param destPTR a pointer to the destination file
+ * @return 0 if successfully compiled, 1 otherwise
+ */
+int interpretSneak100(char *token, int lineNum, FILE *destPTR) {
+    token = strtok(NULL, " ");
+    if(strcmp(token, "100") == 0) {
+        token = strtok(NULL, " ");
+        if(isValidValue(token, 1) == 0) {
+            char arguments[30];
+            strcpy(arguments, token);
+            strcat(arguments, ", ");
+            strcat(arguments, token);
+            strcat(arguments, "\n");
+            return writeLine(destPTR, "xor", arguments, token, lineNum);
+            return 0;
+        } else {
+            printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+            return 1;
+        }
+    } else {
+        printf(RED "Error in line %d: Expected '100' after 'sneak'" RESET, lineNum);
+        return 1;
+    }    
+}  
+
 
 /**
  * Attempts to interpret the command in this line. If successful, it writes the command to the destination file
@@ -285,6 +316,8 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
             return interpretGuessIllDie(token, lineNum, destPTR);   
         } else if (strcmp(token, "bitconeeeeeeect") == 0){
             return interpretBitconnect(token, lineNum, destPTR);
+        } else if (strcmp(token, "sneak") == 0){
+            return interpretSneak100(token, lineNum, destPTR);
         } else {            
             printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
             return 1;
@@ -316,7 +349,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
         lineNum++;
     }
 
-    fprintf(destPTR, "\tret");
+    fprintf(destPTR, "\n\tret");
     fclose(srcPTR);
     fclose(destPTR);
     printf(GRN "File compiled successfully!" RESET);

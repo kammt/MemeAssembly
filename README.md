@@ -8,3 +8,4 @@ A highly advanced x86-Assembly based programming language using only memes as co
 - [comand] or draw 25 - the compiler will completely disregard the command before and instead add 25 to the register *eax*
 - guess I'll die - crashes the program with a segmentation fault
 - bitconeeeeeeect [destination] [register/value] - performs a logical and
+- sneak 100 [register] - sets a register to zero
