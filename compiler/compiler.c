@@ -123,7 +123,6 @@ int isValidDigit(char *token) {
  * @return 0 if it's valid, 1 otherwise
  */
 int isValidValue(char *token, int onlyRegister) {
-    removeLineBreak(token);
     if(strcmp(token, "eax") == 0 || strcmp(token, "ax") == 0) {
         return 0;
     }else if(strcmp(token, "ebx") == 0 || strcmp(token, "bx") == 0) {
@@ -198,7 +197,6 @@ int interpretJumpMarker(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(strcmp(token, "go") == 0) {
         token = strtok(NULL, " ");
-        removeLineBreak(token);
         if(strcmp(token, "back") == 0) {
             if(upgradeMarkerDefined == 1) {
                 return writeLine(destPTR, "jmp", "marker\n", token, lineNum);
@@ -228,7 +226,6 @@ int interpretGuessIllDie(char *token, int lineNum, FILE *destPTR) {
     token = strtok(NULL, " ");
     if(strcmp(token, "I'll") == 0) {
         token = strtok(NULL, " ");
-        removeLineBreak(token);
         if(strcmp(token, "die") == 0) {
             return writeLine(destPTR, "mov", "eax, [0x0000]\n", token, lineNum);
             return 0;
@@ -310,6 +307,7 @@ int interpretSneak100(char *token, int lineNum, FILE *destPTR) {
  * @return 0 if successful, 1 otherwise
  */
 int interpretLine(char line[], int lineNum, FILE *destPTR) {
+    removeLineBreak(line);
     char *token = strtok(line, " ");
     if(token != NULL) {
         //printf("Got token: ");
