@@ -78,7 +78,7 @@ int writeLine(FILE *destPTR, char keyword[], char arguments[], char *token, int 
     
     token = strtok(NULL, " "); //Attempt to get the next token
     if(token == NULL) {
-        fprintf(destPTR, "\t%s %s", keyword, arguments); //write the command and leave
+        fprintf(destPTR, "\t%s %s\n", keyword, arguments); //write the command and leave
         return 0;
     } else if(strcmp(token, "or") == 0) {
         return interpretDraw25(token, lineNum, destPTR);
@@ -285,7 +285,6 @@ int interpretSneak100(char *token, int lineNum, FILE *destPTR) {
             strcpy(arguments, token);
             strcat(arguments, ", ");
             strcat(arguments, token);
-            strcat(arguments, "\n");
             return writeLine(destPTR, "xor", arguments, token, lineNum);
             return 0;
         } else {
@@ -322,7 +321,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         } else if(strcmp(token, "upgrade") == 0 || strcmp(token, "upgrade\n") == 0) {
             if(upgradeMarkerDefined == 0) {
                 upgradeMarkerDefined = 1;
-                return writeLine(destPTR, "marker:", "\n", token, lineNum);
+                return writeLine(destPTR, "marker:", "", token, lineNum);
             } else {
                 printf(RED "Error in line %d: 'upgrade' jump marker can only be defined once" RESET, lineNum);
                 return 1;
@@ -335,7 +334,23 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
             return interpretBitconnect(token, lineNum, destPTR);
         } else if (strcmp(token, "sneak") == 0){
             return interpretSneak100(token, lineNum, destPTR);
-        } else {            
+        } else if (strcmp(token, "upvote") == 0){
+            token = strtok(NULL, " ");
+            if(isValidValue(token, 1) == 0) {
+                return writeLine(destPTR, "inc", token, token, lineNum);
+            } else {
+                printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+                return 1;
+            }
+        } else if (strcmp(token, "downvote") == 0){
+            token = strtok(NULL, " ");
+            if(isValidValue(token, 1) == 0) {
+                return writeLine(destPTR, "dec", token, token, lineNum);
+            } else {
+                printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+                return 1;
+            }
+        }else {            
             printf(RED "Error in line %d: Unknown token: %s" RESET, lineNum, token);
             return 1;
         }
