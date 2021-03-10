@@ -115,8 +115,8 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     char line[128];
     int lineNum = 1;
     //https://www.programiz.com/c-programming/c-file-input-output
-    fprintf(destPTR, "global _main\n");
-    fprintf(destPTR, "_main:\n");
+    fprintf(destPTR, "global _start\n");
+    fprintf(destPTR, "_start:\n");
 
     //printf("Source file opened for reading, starting line-by-line analysis\n");
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
