@@ -314,7 +314,9 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         //printf("Got token: ");
         //printf(token);
 
-        if(strcmp(token, "stonks") == 0) {
+        if(strcmp(token, "\n") == 0) {
+            printf("Info: line %d is empty, skipping\n", lineNum);
+        } else if(strcmp(token, "stonks") == 0) {
             return interpretStonks(token, lineNum, destPTR);
         } else if(strcmp(token, "not") == 0) {
             return interpretNotStonks(token, lineNum, destPTR);                
