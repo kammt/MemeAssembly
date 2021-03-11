@@ -33,9 +33,6 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     startTranslation(srcPTR, destPTR);
     startSemanticAnalysis();
 
-    //The file pointer now points at the end of the source file. We now reset it
-    rewind(srcPTR);
-
     printf(GRN "File compiled successfully!" RESET);
     printf("\n");
 }
