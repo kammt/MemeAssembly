@@ -5,7 +5,6 @@
 
 #include "log.h" //Printing to the console
 
-
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
 #define YEL   "\x1B[33m"
@@ -14,6 +13,23 @@
 #define CYN   "\x1B[36m"
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
+
+/**
+ * translate.c:
+ * This file concerns the translation of MemeASM code into x86-Assembly. It uses an array of commandPatterns and their respective TranslationPatterns, which are defined below
+ * For each line, it attempts to match every commandPattern with the line supplied. If the first tokens don't match, it moves on to the next possible command.
+ * If the first word matches, it will try to match all other tokens. If this fails, an error is thrown.
+ * The consequence of this design choice is that all commands have to start with a different keyword, or else the translator might choose to parse the wrong pattern.
+ * 
+ * Adding a new command:
+ * 1. Increase the array size of both commandPatterns and translationPatterns by one entry
+ * 2. Add the command pattern to the end of the array. r stands for an expected register, v for a register or decimal number
+ *    For example, the pattern "my awesome command r" would correctly translate the input 'my awesome command eax', but would throw an error if e.g. 'my cool command ebx' is passed to it
+ * 3. Define a translation pattern. The numbers 0 to 2 are placeholders which will be replaced with the first, second of third parameter of the commandPattern
+ *    Example: the translation pattern "push 0" with the command pattern and input above will be converted to 'push eax'
+ *    Note: The numbers 0-2 can be used if they don't store any parameters. Since the command above only has one parameter, I could use the numbers 1 and 2 without them being replaced
+ * Warning: the command and translation patterns have to be at the same position in their respective arrays or the translation will fail!
+ */
 
 
 char commandPatterns[12][60] = {

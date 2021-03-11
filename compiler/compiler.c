@@ -19,6 +19,12 @@
 #define RESET "\x1B[0m"
 
 /**
+ * compiler.c:
+ * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
+ */
+
+
+/**
  * Attempts to convert the source file to an x86 Assembly file
  * @param srcPTR a pointer to the source file to be compiled
  * @param destPTR a pointer to the destination file. If nonexistent, it will be created
