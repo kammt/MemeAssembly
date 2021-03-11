@@ -58,10 +58,10 @@ The compiler can now be called by using the *memeasm* command
 ## Compiling and running your code
 First, do what a developer does best: code! Keep in mind that it is recommended to save your code in a .memeasm file. 
 Once that's done, open a terminal and use one of the following commands:
-- ```memeasm (-c | --compile) sourceFile destinationFile``` - only compiles the specified file
-- ```memeasm sourceFile``` - compiles and runs the specified file
+- ```memeasm (-c | --compile) [-v | -vv] sourceFile destinationFile``` - only compiles the specified file
+- ```memeasm [-v | -vv] sourceFile``` - compiles and runs the specified file
 
-Furthermore, you can use *memeasm (-h | --help)* to open a help page and *memeasm (-v | --version)* to print some version information
+-v enables information logs and -vv debug logs. Furthermore, you can use *memeasm (-h | --help)* to open a help page.
     
 ## Why code in MemeAssembly anyway?
 ![Developers GIF](https://media.tenor.com/images/02fea7f02da34ea33c58a38d57fd5c5f/tenor.gif)\
