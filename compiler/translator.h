@@ -1,5 +1,5 @@
-#ifndef TRANSLATE_H
-#define TRANSLATE_H
+#ifndef TRANSLATOR_H
+#define TRANSLATOR_H
 
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function

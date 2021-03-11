@@ -1,5 +1,5 @@
-#ifndef ANALYSE_H
-#define ANALYSE_H
+#ifndef ANALYSER_H
+#define ANALYSER_H
 
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function

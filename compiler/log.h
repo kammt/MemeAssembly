@@ -4,8 +4,6 @@
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
-#include <string.h> //String functions
-
 void setLogLevel(int newLogLevel);
 
 void printInformationHeader();

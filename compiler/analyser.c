@@ -6,7 +6,7 @@
 #include "log.h" //Printing to the console
 
 /**
- * analyse.c
+ * analyser.c
  * This file concerns the semantic analysis of the generated code after translation. Specifically, it checks if jumps like 'fuck go back' were
  * defined without their respective jump marker, 'upgrade' in this case.
  */

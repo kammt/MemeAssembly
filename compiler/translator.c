@@ -6,7 +6,7 @@
 #include "log.h" //Printing to the console
 
 /**
- * translate.c:
+ * translator.c:
  * This file concerns the translation of MemeASM code into x86-Assembly. It uses an array of commandPatterns and their respective TranslationPatterns, which are defined below
  * For each line, it attempts to match every commandPattern with the line supplied. If the first tokens don't match, it moves on to the next possible command.
  * If the first word matches, it will try to match all other tokens. If this fails, an error is thrown.

@@ -3,9 +3,9 @@
 
 #include <string.h> //String functions
 
-#include "translate.h" //Translation to Assembly
-#include "analyse.h" //Semantic analysis
-#include "log.h" //Semantic analysis
+#include "translator.h" //Translation to Assembly
+#include "analyser.h" //Semantic analysis
+#include "log.h" //Writing to the command line with log levels
 
 #include <sys/types.h>
 #include <unistd.h>
