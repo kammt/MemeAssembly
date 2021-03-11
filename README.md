@@ -31,9 +31,9 @@ upgrade
 sneak 100 eax
 fuck go back
 ```
-3. Subtract 25 from 69:
+3. Subtract 25 from 64:
 ```
-ebx is great, but I want 69
+ebx is great, but I want 64
 sneak 100 eax
 guess I'll die or draw 25
 
