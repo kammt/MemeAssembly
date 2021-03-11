@@ -18,10 +18,16 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
+int logLevel = 3; //Default value
+
+void setLogLevel(int newLogLevel) {
+    logLevel = newLogLevel;
+}
+
 /**
  * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art and exits the program
  */
-void printErrorMessage() {
+void printErrorASCII() {
     printf("\n");
     printf("\n");
     printf(YEL "  __          __   _ _       _   _           _   _       _ _ _                  _ _  \n");
@@ -38,13 +44,52 @@ void printErrorMessage() {
 }
 
 /**
+ * A success message. Will always be printed
+ * @param message the message
+ */
+void printSuccessMessage(char message[]) {
+    printf(GRN "%s \n" RESET, message);
+}
+
+/**
+ * A status message. Will always be printed
+ * @param message the message
+ */
+void printStatusMessage(char message[]) {
+    printf(YEL "%s \n" RESET, message);
+    fflush( stdout );   
+}
+
+/**
+ * An information message. Will only be printed if -v or -vv is active
+ * @param message the message
+ */
+void printInfoMessage(char message[]) {
+    if(logLevel >= 2) {
+        printf("%s \n", message);
+        fflush( stdout );  
+    }
+}
+
+/**
+ * A debug message. Will only be printed if -vv is active
+ * @param message the message
+ */
+void printDebugMessage(char message[], char *variable) {
+    if(logLevel == 3) {
+        printf("%s %s \n", message, variable);
+        fflush( stdout );  
+    }
+}
+
+/**
  * Prints a simple semantic error message
  * @param message the error message
  * @param lineNum the line number
  */
 void printSemanticError(char message[], int lineNum) {
     printf(RED "Semantic Error in line %d: %s", lineNum, message);
-    printErrorMessage();
+    printErrorASCII();
 }
 
 /**
@@ -55,7 +100,7 @@ void printSemanticError(char message[], int lineNum) {
  */
 void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
     printf(RED "Semantic Error in line %d: %s (already defined in line %d)", lineNum, message, originalDefinition);
-    printErrorMessage();
+    printErrorASCII();
 }
 
 /**
