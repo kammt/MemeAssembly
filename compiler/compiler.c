@@ -147,7 +147,17 @@ int isValidValue(char *token, int onlyRegister) {
 }
 
 
-int compileWithPattern(char *token, char commandPattern[60], char translationPattern[], int lineNum) {
+/**
+ * Attempts to compile the specified line with a pattern. It automatically saves arguments and inserts them into a translationPattern after translation
+ * @param token A token pointing at the first word in the line
+ * @param commandPattern a String showing the pattern of a command. Use r for a register value or v for a decimal value or register. Example: 'stonks v' or 'not stonks r'
+ * @param translationPattern a String showing how the command should be translated to x86 Assembly. Use the numbers 0 to 2 as placeholders for the arguments in order of their appearance in the command. Example: 'push 0'
+ * @param lineNum an integer holding the current line Number
+ * @param destPTR a pointer pointing to the destination file
+ * 
+ * @return 0 if successful, 1 if there is a syntax error and -1 if this probably isn't the command at all.
+ */
+int compileWithPattern(char *token, char commandPattern[60], char translationPattern[], int lineNum, FILE *destPTR) {
     int probing = 1; //Is set to 0 if the first tokens match. This is so that if compilation fails at the first token, there is no error message
     char result[50] = "";
 
@@ -165,24 +175,32 @@ int compileWithPattern(char *token, char commandPattern[60], char translationPat
         //Step 1: figure out if we need to compare the exact wording (for a keyword e.g. a command) or if it has to be a valid value (e.g. a register)
         if(strcmp(commandToken, "r") == 0) { //token has to be a register
             if(isValidValue(token, 1) != 0) {
-                if(probing == 0) printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
-                return 1; 
+                if(probing == 0) {
+                    printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+                    return 1;
+                } else return -1; 
             }
+            //Token is a valid register, set it as argument
             strcpy(arguments[argCnt], token);
             argCnt++;
             probing = 0;
         } else if(strcmp(commandToken, "v") == 0) { //token has to be a value or a register
             if(isValidValue(token, 0) != 0) {
-                if(probing == 0) printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
-                return 1; 
+                if(probing == 0) {
+                    printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+                    return 1;
+                } else return -1; 
             }
+            //Token is a valid value/register, set it as argument
             strcpy(arguments[argCnt], token);
             argCnt++;
             probing = 0;
         } else {
             if(strcmp(token, commandToken) != 0) {
-                if(probing == 0) printf(RED "Error in line %d: Expected %s, but got %s" RESET, lineNum, commandToken, token);
-                return 1; 
+                if(probing == 0) {
+                    printf(RED "Error in line %d: Expected %s, but got %s" RESET, lineNum, commandToken, token);
+                    return 1;
+                } else return -1; 
             }
             probing = 0;
         }
@@ -210,16 +228,28 @@ int compileWithPattern(char *token, char commandPattern[60], char translationPat
             if(character >= '0' && character <= '2') { 
                 //Convert to an integer
                 int index = character - '0';
-                //Append the argument
-                strncat(result, arguments[index], 50);
-            } else strncat(result, &character, 50);
+                //Check if there is an argument with that number. If not, just write the number to the file
+                if(index < argCnt) {
+                    //Append the argument
+                    strncat(result, arguments[index], 50);
+                    continue;
+                }
+            }
+            strncat(result, &character, 50);
         }
-        printf(result);
+        fprintf(destPTR, "\t%s\n", result);
         return 0;
     } else if(commandToken == NULL) {
-
+        int result = compileWithPattern(token, "or draw 25", "add eax, 25", lineNum, destPTR);
+        if(result == -1) {
+            //It isn't or draw 25, so it's an invalid character. Throw an error
+            printf(RED "Error in line %d: Expected end of line, but got %s" RESET, lineNum, token);
+            return 1;
+        } else return result;
     } else {
-
+        //token is NULL, but commandToken isn't
+        printf(RED "Error in line %d: Expected %s, but got end of line" RESET, lineNum, commandToken);
+        return 1; 
     }
 }
 
@@ -564,7 +594,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         "upvote r",
         "downvote r",
         "they're the same picture",
-        "corporate needs you to find the difference between v and v",
+        "corporate needs you to find the difference between r and v",
         "r is great, but I want v"
     };
 
@@ -573,7 +603,7 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         "pop 0",
         "upgradeMarker:",
         "jmp upgradeMarker",
-        "mov eax, [0x0000]",
+        "mov eax, [789]",
         "and 0, 1",
         "xor 0, 0",
         "inc 0",
@@ -588,12 +618,19 @@ int interpretLine(char line[], int lineNum, FILE *destPTR) {
         int result;
         for (int i = 0; i < 12; i++)
         {
-            result = compileWithPattern(token, commandPatterns[i], translationPatterns[i], lineNum);
-            if(result == 0) break;
+            result = compileWithPattern(token, commandPatterns[i], translationPatterns[i], lineNum, destPTR);
+            if(result != -1) break; //-1 is returned if this is not the correct command pattern. If it either returned 0 or 1, then it was the correct command pattern. Return the result.
+        }
+        
+        if(result == -1) {
+            //No command was found
+            printf(RED "Error in line %d: No command was found matching first token '%s'" RESET, lineNum, token);
+            return 1;
         }
         return result;
-
     }
+    //If we got here, then the line is empty. Just ignore that line
+    return 0;
 }
 
 /**
