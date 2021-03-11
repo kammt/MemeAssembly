@@ -11,4 +11,7 @@
  */
 void printErrorMessage();
 
+void printSemanticError(char message[], int lineNum);
+void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition);
+
 #endif

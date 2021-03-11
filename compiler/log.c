@@ -36,3 +36,24 @@ void printErrorMessage() {
     printf(" Exiting....\n");
     exit(1);
 }
+
+/**
+ * Prints a simple semantic error message
+ * @param message the error message
+ * @param lineNum the line number
+ */
+void printSemanticError(char message[], int lineNum) {
+    printf(RED "Semantic Error in line %d: %s", lineNum, message);
+    printErrorMessage();
+}
+
+/**
+ * Prints a semantic error message concerning multiple definitions
+ * @param message the error message
+ * @param lineNum the line number
+ * @param originalDefinition the line Number in which the original definition was
+ */
+void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
+    printf(RED "Semantic Error in line %d: %s (already defined in line %d)", lineNum, message, originalDefinition);
+    printErrorMessage();
+}

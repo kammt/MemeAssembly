@@ -5,16 +5,6 @@
 
 #include "log.h" //Printing to the console
 
-#define RED   "\x1B[31m"
-#define GRN   "\x1B[32m"
-#define YEL   "\x1B[33m"
-#define BLU   "\x1B[34m"
-#define MAG   "\x1B[35m"
-#define CYN   "\x1B[36m"
-#define WHT   "\x1B[37m"
-#define RESET "\x1B[0m"
-
-
 /**
  * analyse.c
  * This file concerns the semantic analysis of the generated code after translation. Specifically, it checks if jumps like 'fuck go back' were
@@ -46,8 +36,7 @@ void startSemanticAnalysis() {
             case 2: //'Upgrade'
                 if(upgradeMarkerDefined == 0) upgradeMarkerDefined = lineNum;
                 else {
-                    printf(RED "Semantic Error in line %d: 'upgrade' jump marker can only be defined once (already defined in line %d)" RESET, lineNum, upgradeMarkerDefined);
-                    printErrorMessage();
+                    printSemanticErrorWithExtraLineNumber("'upgrade' jump marker can only be defined once", lineNum, upgradeJumpDefined);
                 }
                 break;
             case 3: //'fuck go back'
@@ -56,8 +45,7 @@ void startSemanticAnalysis() {
             case 9: //'they're the same picture'
                 if(pictureMarkerDefined == 0) pictureMarkerDefined = lineNum;
                 else {
-                    printf(RED "Semantic Error in line %d: 'they're the same picture' jump marker can only be defined once (already defined in line %d)" RESET, lineNum, pictureMarkerDefined);
-                    printErrorMessage();
+                    printSemanticErrorWithExtraLineNumber("'they're the same picture' jump marker can only be defined once", lineNum, pictureMarkerDefined);
                 }
                 break;    
             case 10: //'coporate needs you to find the difference...'
@@ -72,10 +60,8 @@ void startSemanticAnalysis() {
 
     //Now that we traversed the entire file, we still need to check if jumps were defined without markers
     if(pictureJumpDefined != 0 && pictureMarkerDefined == 0) {
-        printf(RED "Semantic Error in line %d: 'coporate needs you to find the difference between ...' was used, but 'they're the same picture' wasn't defined anywhere" RESET, pictureJumpDefined);
-        printErrorMessage();
+        printSemanticError("'coporate needs you to find the difference between ...' was used, but 'they're the same picture' wasn't defined anywhere", lineNum);
     } else if(upgradeJumpDefined != 0 && upgradeMarkerDefined == 0) {
-        printf(RED "Semantic Error in line %d: 'fuck go back' was used, but no 'upgrade' jump marker was found" RESET, upgradeJumpDefined); 
-        printErrorMessage();
+        printSemanticError("'fuck go back' was used, but no 'upgrade' jump marker was found", lineNum);
     }
 }  
