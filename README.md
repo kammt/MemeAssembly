@@ -7,15 +7,15 @@ Syntax  | Usage
 ```stonks [value]``` | Pushes a value to the stack
 ``` not stonks [destination]``` | Pops a value from the stack<br/>
 ```upgrade [other commands] fuck go back``` | Defines a marker and jumps back to that marker at a later point
-```[comand] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
+```[command] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
 ```guess I'll die``` | Crashes the program with a segmentation fault
 ```bitconeeeeeeect [destination] [register/value]``` | Performs a logical and
 ```sneak 100 [register]``` | Sets a register to zero
 ```upvote [register]``` | Adds 1 to the specified register
 ```downvote [register]``` | Subtracts 1 from the specified register
 ```[destination] is great, but I want [register/value]``` | Move a value into a register
-```they're the same picture``` | A jump marker for the command below
 ```ah shit, here we go again``` | Jumps back to the beginning of your code
+```they're the same picture``` | A jump marker for the command below
 ```corporate needs you to find the difference between [register/value] and [register/value]``` | Compares both arguments and jumps to "they're the same picture" if both values are equal
 ```perfectly balanced as all things should be``` | Restore balance to your code by randomly deleting half the commands at compile-time
 

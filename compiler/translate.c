@@ -29,37 +29,37 @@ FILE *analyzerPointer;
 
 
 char commandPatterns[14][60] = {
-        "stonks v",
-        "not stonks r",
-        "upgrade",
-        "fuck go back",
-        "guess I'll die",
-        "bitconeeeeeeect r v",
-        "sneak 100 r",
-        "upvote r",
-        "downvote r",
-        "they're the same picture",
-        "corporate needs you to find the difference between r and v",
-        "r is great, but I want v",
-        "ah shit, here we go again",
-        "or draw 25"
+    "stonks v",
+    "not stonks r",
+    "upgrade",
+    "fuck go back",
+    "guess I'll die",
+    "bitconeeeeeeect r v",
+    "sneak 100 r",
+    "upvote r",
+    "downvote r",
+    "they're the same picture",
+    "corporate needs you to find the difference between r and v",
+    "r is great, but I want v",
+    "ah shit, here we go again",
+    "or draw 25"
     };
 
     char translationPatterns[14][60] = {
-        "push 0",
-        "pop 0",
-        "upgradeMarker:",
-        "jmp upgradeMarker",
-        "mov eax, [789]",
-        "and 0, 1",
-        "xor 0, 0",
-        "inc 0",
-        "dec 0",
-        "samePicture:",
-        "cmp 0, 1\n\tje samePicture",
-        "mov 0, 1",
-        "jmp main",
-        "add eax, 25"
+    "push 0",
+    "pop 0",
+    "upgradeMarker:",
+    "jmp upgradeMarker",
+    "mov eax, [789]",
+    "and 0, 1",
+    "xor 0, 0",
+    "inc 0",
+    "dec 0",
+    "samePicture:",
+    "cmp 0, 1\n\tje samePicture",
+    "mov 0, 1",
+    "jmp main",
+    "add eax, 25"
     };
 
 /**
