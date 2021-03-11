@@ -15,6 +15,7 @@ Syntax  | Usage
 ```downvote [register]``` | Subtracts 1 from the specified register
 ```[destination] is great, but I want [register/value]``` | Move a value into a register
 ```they're the same picture``` | A jump marker for the command below
+```Ah shit, here we go again``` | Jumps back to the beginning of your code
 ```corporate needs you to find the difference between [register/value] and [register/value]``` | Compares both arguments and jumps to "they're the same picture" if both values are equal
 ```perfectly balanced as all things should be``` | Restore balance to your code by randomly deleting half the commands at compile-time
 
