@@ -19,7 +19,6 @@
  * 3. Define a translation pattern. The numbers 0 to 2 are placeholders which will be replaced with the first, second of third parameter of the commandPattern
  *    Example: the translation pattern "push 0" with the command pattern and input above will be converted to 'push eax'
  *    Note: The numbers 0-2 can be used if they don't store any parameters. Since the command above only has one parameter, I could use the numbers 1 and 2 without them being replaced
- * 4. Increase the values marked in the functions compileWithPattern() and translateLine()
  * Warning: the command and translation patterns have to be at the same position in their respective arrays or the translation will fail!
  */
 
@@ -28,7 +27,7 @@ FILE *destPointer;
 FILE *analyzerPointer;
 
 
-char commandPatterns[14][60] = {
+char commandPatterns[15][60] = {
     "stonks v",
     "not stonks r",
     "upgrade",
@@ -42,10 +41,11 @@ char commandPatterns[14][60] = {
     "corporate needs you to find the difference between r and v",
     "r is great, but I want v",
     "ah shit, here we go again",
+    "parry v you filthy casual r",
     "or draw 25"
-    };
+};
 
-    char translationPatterns[14][60] = {
+char translationPatterns[15][60] = {
     "push 0",
     "pop 0",
     "upgradeMarker:",
@@ -59,8 +59,11 @@ char commandPatterns[14][60] = {
     "cmp 0, 1\n\tje samePicture",
     "mov 0, 1",
     "jmp main",
+    "sub 1, 0",
     "add eax, 25"
-    };
+};
+
+int commandArraySize = sizeof(translationPatterns) / sizeof(translationPatterns[0]);    
 
 /**
  * Removes the \n from a string if it is present at the end of the string
@@ -224,7 +227,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
     if(token == NULL && commandToken == NULL) {
         generateASM(lineNum, opcode, argCnt, arguments);
     } else if(commandToken == NULL) {
-        int result = compileWithPattern(token, lineNum, 13); //## Increase this opcode by 1 when adding a new command
+        int result = compileWithPattern(token, lineNum, commandArraySize-1);
         if(result == -1) {
             //It isn't or draw 25, so it's an invalid character. Throw an error
             printUnexpectedCharacterError("end of line", token, lineNum);
@@ -253,7 +256,7 @@ int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
     char *token = strtok(line, " ");
     if(token != NULL) {
         int result;
-        for (int i = 0; i < 13; i++) //##increase this number when adding a new command
+        for (int i = 0; i < commandArraySize-1; i++)
         {
             result = compileWithPattern(token, lineNum, i);
             if(result != -1) break; //-1 is returned if this is not the correct command pattern. If it either returned 0 or 1, then it was the correct command pattern. Return the result.

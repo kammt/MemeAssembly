@@ -5,7 +5,7 @@ Or MemeASM for short, is a highly advanced x86-Assembly based programming langua
 Syntax  | Usage
 ------------- | -------------
 ```stonks [value]``` | Pushes a value to the stack
-``` not stonks [destination]``` | Pops a value from the stack<br/>
+``` not stonks [destination]``` | Pops a value from the stack
 ```upgrade [other commands] fuck go back``` | Defines a marker and jumps back to that marker at a later point
 ```[command] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
 ```guess I'll die``` | Crashes the program with a segmentation fault
@@ -13,6 +13,7 @@ Syntax  | Usage
 ```sneak 100 [register]``` | Sets a register to zero
 ```upvote [register]``` | Adds 1 to the specified register
 ```downvote [register]``` | Subtracts 1 from the specified register
+```parry [value/register] you filthy casual [destination]``` | Subtracts the specified value from a register
 ```[destination] is great, but I want [register/value]``` | Move a value into a register
 ```ah shit, here we go again``` | Jumps back to the beginning of your code
 ```they're the same picture``` | A jump marker for the command below
