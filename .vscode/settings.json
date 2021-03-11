@@ -4,6 +4,8 @@
         "stdlib.h": "c",
         "string.h": "c",
         "types.h": "c",
-        "sstream": "c"
+        "sstream": "c",
+        "unistd.h": "c",
+        "translate.h": "c"
     }
 }
