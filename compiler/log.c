@@ -19,9 +19,26 @@
 #define RESET "\x1B[0m"
 
 int logLevel = 1; //Default value
+char version_string[] = "v0.1";
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
+}
+
+/**
+ * Prints an ASCII-Art title and version information.
+ */
+void printInformationHeader() {
+    printf(BLU"  __  __                                                     _     _       \n");
+    printf(" |  \\/  |                       /\\                          | |   | |      \n");
+    printf(" | \\  / | ___ _ __ ___   ___   /  \\   ___ ___  ___ _ __ ___ | |__ | |_   _ \n");
+    printf(" | |\\/| |/ _ \\ '_ ` _ \\ / _ \\ / /\\ \\ / __/ __|/ _ \\ '_ ` _ \\| '_ \\| | | | |\n");
+    printf(" | |  | |  __/ | | | | |  __// ____ \\\\__ \\__ \\  __/ | | | | | |_) | | |_| |\n");
+    printf(" |_|  |_|\\___|_| |_| |_|\\___/_/    \\_\\___/___/\\___|_| |_| |_|_.__/|_|\\__, |\n");
+    printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
+    printf("                                                                     |___/ \n\n"RESET);
+    printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
+    printf("This is the MemeAssembly compiler %s, created by Tobias Kamm.\n\n", version_string);
 }
 
 /**
