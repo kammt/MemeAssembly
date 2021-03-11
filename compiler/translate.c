@@ -148,7 +148,9 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10]) {
         appendStr[1] = '\0';
         strncat(result, appendStr, 50);
     }
+    printDebugMessage("Writing ASM to file:", result);
     fprintf(destPointer, "\t%s\n", result);
+    printDebugMessage("Writing Opcode to file...", "");
     fprintf(analyzerPointer, "%d\n", opcode);
     return 0;     
 }
@@ -180,11 +182,13 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
 
     while (token != NULL && commandToken != NULL)
     {
+        printDebugMessage("commandToken: ", commandToken);
+        printDebugMessage("token:", token);
         //Step 1: figure out if we need to compare the exact wording (for a keyword e.g. a command) or if it has to be a valid value (e.g. a register)
         if(strcmp(commandToken, "r") == 0) { //token has to be a register
             if(isValidValue(token, 1) != 0) {
                 if(probing == 0) {
-                    printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+                    printSyntaxError("Expected register, but got", token, lineNum);
                     return 1;
                 } else return -1; 
             }
@@ -195,7 +199,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         } else if(strcmp(commandToken, "v") == 0) { //token has to be a value or a register
             if(isValidValue(token, 0) != 0) {
                 if(probing == 0) {
-                    printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+                    printSyntaxError("Expected value or register, but got", token, lineNum);
                     return 1;
                 } else return -1; 
             }
@@ -206,7 +210,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         } else {
             if(strcmp(token, commandToken) != 0) {
                 if(probing == 0) {
-                    printf(RED "Error in line %d: Expected %s, but got %s" RESET, lineNum, commandToken, token);
+                    printUnexpectedCharacterError(commandToken, token, lineNum);
                     return 1;
                 } else return -1; 
             }
@@ -229,12 +233,12 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         int result = compileWithPattern(token, lineNum, 12);
         if(result == -1) {
             //It isn't or draw 25, so it's an invalid character. Throw an error
-            printf(RED "Error in line %d: Expected end of line, but got %s" RESET, lineNum, token);
+            printUnexpectedCharacterError("end of line", token, lineNum);
             return 1;
         } else return result;
     } else {
         //token is NULL, but commandToken isn't
-        printf(RED "Error in line %d: Expected %s, but got end of line" RESET, lineNum, commandToken);
+        printUnexpectedCharacterError(commandToken, "end of line", lineNum);
         return 1; 
     }
 }
@@ -263,7 +267,7 @@ int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
 
         if(result == -1) {
             //No command was found
-            printf(RED "Error in line %d: No command was found matching first token '%s'" RESET, lineNum, token);
+            printSyntaxError("No command was found matching first token", token, lineNum);
             return 1;
         }
         return result;
@@ -283,6 +287,7 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
     analyzerPointer = fopen("opcodes", "w");
     srcPointer = srcPTR;
     destPointer = destPTR;
+    printDebugMessage("opcodes-File opened for writing", "");
 
     char line[128];
     int lineNum = 1;
@@ -292,15 +297,18 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
     fprintf(destPTR, "global main\n");
     fprintf(destPTR, "main:\n");
 
-    //printf("Source file opened for reading, starting line-by-line analysis\n");
+    printInfoMessage("Source file opened for reading, starting line-by-line analysis");
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
-        if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorMessage();
+        printDebugMessage("Starting analysis of", line);
+        if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorASCII();
         lineNum++;
+        printDebugMessage("Done, moving on to next line", "\n");
     }
 
     //Finally, insert a ret-statement
     fprintf(destPTR, "\n\tret");
 
+    printInfoMessage("\nDone, closing all files...\n");
     //Close all files
     fclose(srcPTR);
     fclose(destPTR);

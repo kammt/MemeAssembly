@@ -18,10 +18,16 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
+int logLevel = 1; //Default value
+
+void setLogLevel(int newLogLevel) {
+    logLevel = newLogLevel;
+}
+
 /**
  * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art and exits the program
  */
-void printErrorMessage() {
+void printErrorASCII() {
     printf("\n");
     printf("\n");
     printf(YEL "  __          __   _ _       _   _           _   _       _ _ _                  _ _  \n");
@@ -36,3 +42,83 @@ void printErrorMessage() {
     printf(" Exiting....\n");
     exit(1);
 }
+
+/**
+ * A success message. Will always be printed
+ * @param message the message
+ */
+void printSuccessMessage(char message[]) {
+    printf(GRN "%s \n" RESET, message);
+}
+
+/**
+ * A status message. Will always be printed
+ * @param message the message
+ */
+void printStatusMessage(char message[]) {
+    printf(YEL "%s \n" RESET, message);
+    fflush( stdout );   
+}
+
+/**
+ * An information message. Will only be printed if -v or -vv is active
+ * @param message the message
+ */
+void printInfoMessage(char message[]) {
+    if(logLevel >= 2) {
+        printf("%s \n", message);
+        fflush( stdout );  
+    }
+}
+
+/**
+ * A debug message. Will only be printed if -vv is active
+ * @param message the message
+ */
+void printDebugMessage(char message[], char *variable) {
+    if(logLevel == 3) {
+        printf("%s %s \n", message, variable);
+        fflush( stdout );  
+    }
+}
+
+/**
+ * Prints a simple semantic error message
+ * @param message the error message
+ * @param lineNum the line number
+ */
+void printSemanticError(char message[], int lineNum) {
+    printf(RED "Semantic Error in line %d: %s", lineNum, message);
+    printErrorASCII();
+}
+
+/**
+ * Prints a semantic error message concerning multiple definitions
+ * @param message the error message
+ * @param lineNum the line number
+ * @param originalDefinition the line Number in which the original definition was
+ */
+void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
+    printf(RED "Semantic Error in line %d: %s (already defined in line %d)", lineNum, message, originalDefinition);
+    printErrorASCII();
+}
+
+/**
+ * Prints an error message concerning a wrong token
+ * @param expected what the compiler wanted
+ * @param got what the token actually was
+ * @param lineNum the line number
+ */
+void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
+    printf(RED "Syntax Error in line %d: Expected %s, but got %s", lineNum, expected, got);
+}
+
+/**
+ * Prints a generic syntax error
+ * @param message the error message
+ * @param got the token that the compiler received. It will be inserted at the end of the message, so formatting must match.
+ * @param lineNum the line number
+ */
+void printSyntaxError(char message[], char got[], int lineNum) {
+    printf(RED "Syntax Error in line %d: %s '%s'", lineNum, message, got);
+}    
