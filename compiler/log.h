@@ -6,6 +6,8 @@
 
 #include <string.h> //String functions
 
+void setLogLevel(int newLogLevel);
+
 /**
  * Called if there is an error in the specified file. It prints a "Wait, that's illegal!" ASCII-Art and exits the program
  */

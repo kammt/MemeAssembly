@@ -18,7 +18,7 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
-int logLevel = 3; //Default value
+int logLevel = 1; //Default value
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
