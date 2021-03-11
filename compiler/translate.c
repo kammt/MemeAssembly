@@ -302,7 +302,7 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
         printDebugMessage("Starting analysis of", line);
         if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorASCII();
         lineNum++;
-        printDebugMessage("Done, moving on to next line", " ");
+        printDebugMessage("Done, moving on to next line", "\n");
     }
 
     //Finally, insert a ret-statement

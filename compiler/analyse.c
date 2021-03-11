@@ -30,28 +30,32 @@ void startSemanticAnalysis() {
     int lineNum = 1;
     while(fgets(line, 5, analyzerPTR) != NULL) {
         int opcode = (int) strtol(line, (char **) NULL, 10);
-        //printf("Analysing opcode %d\n", opcode);
 
         switch (opcode){
             case 2: //'Upgrade'
+                printDebugMessage("Opcode is 'upgrade'-marker", line);
                 if(upgradeMarkerDefined == 0) upgradeMarkerDefined = lineNum;
                 else {
                     printSemanticErrorWithExtraLineNumber("'upgrade' jump marker can only be defined once", lineNum, upgradeJumpDefined);
                 }
                 break;
             case 3: //'fuck go back'
+                printDebugMessage("Opcode is 'fuck go back'", line);
                 upgradeJumpDefined = lineNum;
                 break;
             case 9: //'they're the same picture'
+                printDebugMessage("Opcode is 'they're the same picture'-marker", line);
                 if(pictureMarkerDefined == 0) pictureMarkerDefined = lineNum;
                 else {
                     printSemanticErrorWithExtraLineNumber("'they're the same picture' jump marker can only be defined once", lineNum, pictureMarkerDefined);
                 }
                 break;    
             case 10: //'coporate needs you to find the difference...'
+                printDebugMessage("Opcode is compare-statement", line);
                 pictureJumpDefined = lineNum;
                 break;    
             default:
+                printDebugMessage("Opcode is not relevant, moving on...", line);
                 break;
         }
         lineNum++;
