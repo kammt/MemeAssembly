@@ -31,8 +31,12 @@
  * Warning: the command and translation patterns have to be at the same position in their respective arrays or the translation will fail!
  */
 
+FILE *srcPointer;
+FILE *destPointer;
+FILE *analyzerPointer;
 
-char commandPatterns[12][60] = {
+
+char commandPatterns[13][60] = {
         "stonks v",
         "not stonks r",
         "upgrade",
@@ -44,10 +48,11 @@ char commandPatterns[12][60] = {
         "downvote r",
         "they're the same picture",
         "corporate needs you to find the difference between r and v",
-        "r is great, but I want v"
+        "r is great, but I want v",
+        "or draw 25"
     };
 
-    char translationPatterns[12][60] = {
+    char translationPatterns[13][60] = {
         "push 0",
         "pop 0",
         "upgradeMarker:",
@@ -59,7 +64,8 @@ char commandPatterns[12][60] = {
         "dec 0",
         "samePicture:",
         "cmp 0, 1\n\tje samePicture",
-        "mov 0, 1"
+        "mov 0, 1",
+        "add eax, 25"
     };
 
 /**
@@ -111,6 +117,41 @@ int isValidValue(char *token, int onlyRegister) {
         return 0;
     } else return 1;       
 }
+
+
+int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10]) {
+    char result[50] = "";
+    char translationPattern[60];
+
+    strcpy(translationPattern, translationPatterns[opcode]);
+    /** All looks good. Now we traverse over the implementation pattern character by character. 
+    * If the character is a number between 0 and 2, we append the respective arguments to the result string
+    * If it is a regular character, we just append the character
+    */
+
+    for (int i = 0; i < strlen(translationPattern); i++) {
+        //Get the character
+        char character = translationPattern[i];
+        //Character is a number between 0 and 2?
+        if(character >= '0' && character <= '2') { 
+            //Convert to an integer
+            int index = character - '0';
+            //Check if there is an argument with that number. If not, just write the number to the file
+            if(index < argCnt) {
+                //Append the argument
+                strncat(result, arguments[index], 50);
+                continue;
+            }
+        }
+        char appendStr[2];
+        appendStr[0] = character;
+        appendStr[1] = '\0';
+        strncat(result, appendStr, 50);
+    }
+    fprintf(destPointer, "\t%s\n", result);
+    fprintf(analyzerPointer, "%d\n", opcode);
+    return 0;     
+}
       
 
 /**
@@ -119,24 +160,23 @@ int isValidValue(char *token, int onlyRegister) {
  * @param commandPattern a String showing the pattern of a command. Use r for a register value or v for a decimal value or register. Example: 'stonks v' or 'not stonks r'
  * @param translationPattern a String showing how the command should be translated to x86 Assembly. Use the numbers 0 to 2 as placeholders for the arguments in order of their appearance in the command. Example: 'push 0'
  * @param lineNum an integer holding the current line Number
- * @param destPTR a pointer pointing to the destination file
- * @param analyzerPTR a pointer to a file to which the opcodes will be written to. This file will be used for semantic analysis later.
  * @param opcode the opcode of the current command
  * 
  * @return 0 if successful, 1 if there is a syntax error and -1 if this probably isn't the command at all.
  */
-int compileWithPattern(char *token, char commandPattern[60], char translationPattern[], int lineNum, FILE *destPTR, FILE *analyzerPTR, int opcode) {
+int compileWithPattern(char *token, int lineNum, int opcode) {
     int probing = 1; //Is set to 0 if the first tokens match. This is so that if compilation fails at the first token, there is no error message
-    char result[50] = "";
 
+    //A save pointer for strtok_r
     char *savePTRcommand;
     
+    //Copy the commandPattern out of read-only memory and create the first token
     char commandPatternTMP[60];
-    strcpy(commandPatternTMP, commandPattern);
+    strcpy(commandPatternTMP, commandPatterns[opcode]);
     char *commandToken = strtok_r(commandPatternTMP, " ", &savePTRcommand);
 
     int argCnt = 0; //A counter for the number of arguments
-    char arguments[3][10]; //A command can have a maximum of three arguments with itself a maximum of 10 characters
+    char arguments[3][10] = {"", "", ""}; //A command can have a maximum of three arguments with itself a maximum of 10 characters
 
     while (token != NULL && commandToken != NULL)
     {
@@ -184,32 +224,9 @@ int compileWithPattern(char *token, char commandPattern[60], char translationPat
      * - if the token is NULL, then it is too short, send an error
      */
     if(token == NULL && commandToken == NULL) {
-        /** All looks good. Now we traverse over the implementation pattern character by character. 
-         * If the character is a number between 0 and 2, we append the respective arguments to the result string
-         * If it is a regular character, we just append the character
-         */
-
-        for (int i = 0; i < strlen(translationPattern); i++) {
-            //Get the character
-            char character = translationPattern[i];
-            //Character is a number between 0 and 2?
-            if(character >= '0' && character <= '2') { 
-                //Convert to an integer
-                int index = character - '0';
-                //Check if there is an argument with that number. If not, just write the number to the file
-                if(index < argCnt) {
-                    //Append the argument
-                    strncat(result, arguments[index], 50);
-                    continue;
-                }
-            }
-            strncat(result, &character, 50);
-        }
-        fprintf(destPTR, "\t%s\n", result);
-        fprintf(analyzerPTR, "%d\n", opcode);
-        return 0;
+        generateASM(lineNum, opcode, argCnt, arguments);
     } else if(commandToken == NULL) {
-        int result = compileWithPattern(token, "or draw 25", "add eax, 25", lineNum, destPTR, analyzerPTR, 69);
+        int result = compileWithPattern(token, lineNum, 12);
         if(result == -1) {
             //It isn't or draw 25, so it's an invalid character. Throw an error
             printf(RED "Error in line %d: Expected end of line, but got %s" RESET, lineNum, token);
@@ -233,13 +250,14 @@ int compileWithPattern(char *token, char commandPattern[60], char translationPat
  */
 int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
     removeLineBreak(line);
+    destPTR = destPTR;
 
     char *token = strtok(line, " ");
     if(token != NULL) {
         int result;
         for (int i = 0; i < 12; i++)
         {
-            result = compileWithPattern(token, commandPatterns[i], translationPatterns[i], lineNum, destPTR, analyzerPTR, i);
+            result = compileWithPattern(token, lineNum, i);
             if(result != -1) break; //-1 is returned if this is not the correct command pattern. If it either returned 0 or 1, then it was the correct command pattern. Return the result.
         }
 
@@ -261,8 +279,11 @@ int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
  * @param destPTR a pointer to the destination file. If nonexistent, it will be created
  */
 void startTranslation(FILE *srcPTR, FILE *destPTR) {
-    //Variables
-    FILE *analyzerPTR = fopen("opcodes", "w");
+    //Assign file pointers to file-wide variables
+    analyzerPointer = fopen("opcodes", "w");
+    srcPointer = srcPTR;
+    destPointer = destPTR;
+
     char line[128];
     int lineNum = 1;
 
@@ -273,14 +294,15 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
 
     //printf("Source file opened for reading, starting line-by-line analysis\n");
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
-        if(translateLine(line, lineNum, destPTR, analyzerPTR) == 1) printErrorMessage();
+        if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorMessage();
         lineNum++;
     }
 
     //Finally, insert a ret-statement
     fprintf(destPTR, "\n\tret");
-    //Close both the source and destination file
+
+    //Close all files
     fclose(srcPTR);
     fclose(destPTR);
-    fclose(analyzerPTR);
+    fclose(analyzerPointer);
 }
