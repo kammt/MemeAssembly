@@ -119,7 +119,7 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
  * @param lineNum the line number
  */
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
-    printf(RED "Syntax Error in line %d: Expected %s, but got %s", lineNum, expected, got);
+    printf(RED "Syntax Error in line %d: Expected %s, but got %s" RESET, lineNum, expected, got);
 }
 
 /**
