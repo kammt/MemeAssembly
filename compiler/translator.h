@@ -13,4 +13,6 @@
  */
 void startTranslation(FILE *srcPTR, FILE *destPTR);
 
+void removeLineBreak(char *token);
+
 #endif
