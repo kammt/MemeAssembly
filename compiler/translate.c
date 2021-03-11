@@ -14,11 +14,12 @@
  * 
  * Adding a new command:
  * 1. Increase the array size of both commandPatterns and translationPatterns by one entry
- * 2. Add the command pattern to the end of the array. r stands for an expected register, v for a register or decimal number
+ * 2. Add the command pattern to array, but before "or draw 25". r stands for an expected register, v for a register or decimal number
  *    For example, the pattern "my awesome command r" would correctly translate the input 'my awesome command eax', but would throw an error if e.g. 'my cool command ebx' is passed to it
  * 3. Define a translation pattern. The numbers 0 to 2 are placeholders which will be replaced with the first, second of third parameter of the commandPattern
  *    Example: the translation pattern "push 0" with the command pattern and input above will be converted to 'push eax'
  *    Note: The numbers 0-2 can be used if they don't store any parameters. Since the command above only has one parameter, I could use the numbers 1 and 2 without them being replaced
+ * 4. Increase the values marked in the functions compileWithPattern() and translateLine()
  * Warning: the command and translation patterns have to be at the same position in their respective arrays or the translation will fail!
  */
 
@@ -27,7 +28,7 @@ FILE *destPointer;
 FILE *analyzerPointer;
 
 
-char commandPatterns[13][60] = {
+char commandPatterns[14][60] = {
         "stonks v",
         "not stonks r",
         "upgrade",
@@ -40,10 +41,11 @@ char commandPatterns[13][60] = {
         "they're the same picture",
         "corporate needs you to find the difference between r and v",
         "r is great, but I want v",
+        "ah shit, here we go again",
         "or draw 25"
     };
 
-    char translationPatterns[13][60] = {
+    char translationPatterns[14][60] = {
         "push 0",
         "pop 0",
         "upgradeMarker:",
@@ -56,6 +58,7 @@ char commandPatterns[13][60] = {
         "samePicture:",
         "cmp 0, 1\n\tje samePicture",
         "mov 0, 1",
+        "jmp main",
         "add eax, 25"
     };
 
@@ -221,7 +224,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
     if(token == NULL && commandToken == NULL) {
         generateASM(lineNum, opcode, argCnt, arguments);
     } else if(commandToken == NULL) {
-        int result = compileWithPattern(token, lineNum, 12);
+        int result = compileWithPattern(token, lineNum, 13); //## Increase this opcode by 1 when adding a new command
         if(result == -1) {
             //It isn't or draw 25, so it's an invalid character. Throw an error
             printUnexpectedCharacterError("end of line", token, lineNum);
@@ -250,7 +253,7 @@ int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
     char *token = strtok(line, " ");
     if(token != NULL) {
         int result;
-        for (int i = 0; i < 12; i++)
+        for (int i = 0; i < 13; i++) //##increase this number when adding a new command
         {
             result = compileWithPattern(token, lineNum, i);
             if(result != -1) break; //-1 is returned if this is not the correct command pattern. If it either returned 0 or 1, then it was the correct command pattern. Return the result.
