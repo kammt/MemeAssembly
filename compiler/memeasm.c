@@ -29,7 +29,7 @@ void printHelpPage() {
  * @param argv an array of arguments specified
  * @returns 0 if command was interpreted successfully, 1 otherwise
  */
-int interpretCompile(int argc, char* argv[]) {
+int interpretCompile(int argc, char *argv[]) {
     if(argc != 4 && argc != 5) {
         printf("Command interpretation failed. (-c / --compile) requires 2 additional parameters, but instead got %d\n", argc-2);
         return 1;
@@ -69,7 +69,7 @@ int interpretCompile(int argc, char* argv[]) {
  * @param argv an array of arguments specified
  * @returns 0 if command was interpreted successfully, 1 otherwise
  */
-int interpretCompileAndRun(int argc, char argv[]) {
+int interpretCompileAndRun(int argc, char *argv[]) {
     if(argc == 3) {
         if(strcmp(argv[1], log_info) == 0) {
             setLogLevel(2);
