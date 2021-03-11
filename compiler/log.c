@@ -57,3 +57,23 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
     printf(RED "Semantic Error in line %d: %s (already defined in line %d)", lineNum, message, originalDefinition);
     printErrorMessage();
 }
+
+/**
+ * Prints an error message concerning a wrong token
+ * @param expected what the compiler wanted
+ * @param got what the token actually was
+ * @param lineNum the line number
+ */
+void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
+    printf(RED "Syntax Error in line %d: Expected %s, but got %s", lineNum, expected, got);
+}
+
+/**
+ * Prints a generic syntax error
+ * @param message the error message
+ * @param got the token that the compiler received. It will be inserted at the end of the message, so formatting must match.
+ * @param lineNum the line number
+ */
+void printSyntaxError(char message[], char got[], int lineNum) {
+    printf(RED "Syntax Error in line %d: %s '%s'", lineNum, message, got);
+}    

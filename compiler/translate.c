@@ -184,7 +184,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         if(strcmp(commandToken, "r") == 0) { //token has to be a register
             if(isValidValue(token, 1) != 0) {
                 if(probing == 0) {
-                    printf(RED "Error in line %d: Expected register, but got %s" RESET, lineNum, token);
+                    printSyntaxError("Expected register, but got", token, lineNum);
                     return 1;
                 } else return -1; 
             }
@@ -195,7 +195,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         } else if(strcmp(commandToken, "v") == 0) { //token has to be a value or a register
             if(isValidValue(token, 0) != 0) {
                 if(probing == 0) {
-                    printf(RED "Error in line %d: Expected value or register, but got %s" RESET, lineNum, token);
+                    printSyntaxError("Expected value or register, but got", token, lineNum);
                     return 1;
                 } else return -1; 
             }
@@ -206,7 +206,7 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         } else {
             if(strcmp(token, commandToken) != 0) {
                 if(probing == 0) {
-                    printf(RED "Error in line %d: Expected %s, but got %s" RESET, lineNum, commandToken, token);
+                    printUnexpectedCharacterError(commandToken, token, lineNum);
                     return 1;
                 } else return -1; 
             }
@@ -229,12 +229,12 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
         int result = compileWithPattern(token, lineNum, 12);
         if(result == -1) {
             //It isn't or draw 25, so it's an invalid character. Throw an error
-            printf(RED "Error in line %d: Expected end of line, but got %s" RESET, lineNum, token);
+            printUnexpectedCharacterError("end of line", token, lineNum);
             return 1;
         } else return result;
     } else {
         //token is NULL, but commandToken isn't
-        printf(RED "Error in line %d: Expected %s, but got end of line" RESET, lineNum, commandToken);
+        printUnexpectedCharacterError(commandToken, "end of line", lineNum);
         return 1; 
     }
 }
@@ -263,7 +263,7 @@ int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
 
         if(result == -1) {
             //No command was found
-            printf(RED "Error in line %d: No command was found matching first token '%s'" RESET, lineNum, token);
+            printSyntaxError("No command was found matching first token", token, lineNum);
             return 1;
         }
         return result;
