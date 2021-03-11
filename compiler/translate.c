@@ -148,7 +148,9 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10]) {
         appendStr[1] = '\0';
         strncat(result, appendStr, 50);
     }
+    printDebugMessage("Writing ASM to file:", result);
     fprintf(destPointer, "\t%s\n", result);
+    printDebugMessage("Writing Opcode to file...", "");
     fprintf(analyzerPointer, "%d\n", opcode);
     return 0;     
 }
@@ -180,6 +182,8 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
 
     while (token != NULL && commandToken != NULL)
     {
+        printDebugMessage("commandToken: ", commandToken);
+        printDebugMessage("token:", token);
         //Step 1: figure out if we need to compare the exact wording (for a keyword e.g. a command) or if it has to be a valid value (e.g. a register)
         if(strcmp(commandToken, "r") == 0) { //token has to be a register
             if(isValidValue(token, 1) != 0) {
@@ -283,6 +287,7 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
     analyzerPointer = fopen("opcodes", "w");
     srcPointer = srcPTR;
     destPointer = destPTR;
+    printDebugMessage("opcodes-File opened for writing", "");
 
     char line[128];
     int lineNum = 1;
@@ -292,15 +297,18 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
     fprintf(destPTR, "global main\n");
     fprintf(destPTR, "main:\n");
 
-    //printf("Source file opened for reading, starting line-by-line analysis\n");
+    printInfoMessage("Source file opened for reading, starting line-by-line analysis");
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
-        if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorMessage();
+        printDebugMessage("Starting analysis of", line);
+        if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorASCII();
         lineNum++;
+        printDebugMessage("Done, moving on to next line", " ");
     }
 
     //Finally, insert a ret-statement
     fprintf(destPTR, "\n\tret");
 
+    printInfoMessage("\nDone, closing all files...\n");
     //Close all files
     fclose(srcPTR);
     fclose(destPTR);
