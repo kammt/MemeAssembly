@@ -270,6 +270,7 @@ int translateLine(char line[], int lineNum, FILE *destPTR, int opcodes[]) {
         return result;
     }
     //If we got here, then the line is empty. Just ignore that line
+    opcodes[lineNum-1] = -1;
     printDebugMessage("Line is empty, skipping...", "");
     return 0;
 }

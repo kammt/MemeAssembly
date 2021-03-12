@@ -29,6 +29,7 @@ void startSemanticAnalysis(int opcodes[], int lineCount) {
     for(int i = 0; i < lineCount; i++) {
         int opcode = opcodes[i];
         int lineNum = i + 1;
+        printDebugMessageWithNumber("\nOpcode is", opcode);
 
         switch (opcode){
             case 2: //'Upgrade'
