@@ -147,7 +147,7 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10], int 
         strncat(result, appendStr, 50);
     }
     printDebugMessage("Writing ASM to file:", result);
-    fprintf(destPointer, "\tline_%d: %s\n", lineNum, result);
+    fprintf(destPointer, "\tline_%d: \n\t%s\n", lineNum, result);
     printDebugMessageWithNumber("Writing the following Opcode to array:", opcode);
     opcodes[lineNum - 1] = opcode;
     return 0;     
