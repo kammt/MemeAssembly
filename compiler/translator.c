@@ -24,7 +24,7 @@
 
 FILE *destPointer;
 
-char commandPatterns[15][60] = {
+char commandPatterns[16][60] = {
     "stonks v",
     "not stonks r",
     "upgrade",
@@ -39,10 +39,11 @@ char commandPatterns[15][60] = {
     "r is great, but I want v",
     "ah shit, here we go again",
     "parry v you filthy casual r",
+    "perfectly balanced as all things should be",
     "or draw 25"
 };
 
-char translationPatterns[15][60] = {
+char translationPatterns[16][60] = {
     "push 0",
     "pop 0",
     "upgradeMarker:",
@@ -57,6 +58,7 @@ char translationPatterns[15][60] = {
     "mov 0, 1",
     "jmp main",
     "sub 1, 0",
+    "",
     "add eax, 25"
 };
 
