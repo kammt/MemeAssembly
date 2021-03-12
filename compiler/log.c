@@ -53,6 +53,28 @@ void printErrorASCII() {
 }
 
 /**
+ * Called when the command 'perfectly balanced as all things should be' is used. It prints a Snap ASCII art
+ * @param deletedLines the number of lines that got deleted
+ */
+void printThanosASCII(int deletedLines) {
+    printf("\n");
+    printf("\n");
+    printf(YEL "   _____                 \n");
+    printf("  / ____|         \n");
+    printf(" | (___  _ __   __ _ _ __ \n");
+    printf("  \\___ \\| '_ \\ / _` | '_ \\ \n");
+    printf("  ____) | | | | (_| | |_) | \n");
+    printf(" |_____/|_| |_|\\__,_| .__/  \n");
+    printf("                    | |  \n");
+    printf("                    |_|    \n" RESET);
+    printf(GRN "\nDid you do it?\n" RESET);
+    printf(MAG "Yes\n" RESET);
+    printf(GRN "What did it cost?\n" RESET);
+    printf(MAG "%d lines of code\n" RESET, deletedLines);
+    printf(" Exiting....\n");
+}
+
+/**
  * A success message. Will always be printed
  * @param message the message
  */

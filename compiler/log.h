@@ -10,6 +10,8 @@ void printInformationHeader();
 
 void printErrorASCII();
 
+void printThanosASCII(int deletedLines);
+
 void printSuccessMessage(char message[]);
 void printStatusMessage(char message[]);
 void printInfoMessage(char message[]);
