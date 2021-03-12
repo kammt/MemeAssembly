@@ -3,6 +3,7 @@
 
 #include <string.h> //String functions
 
+#include "preprocessor.h" //Semantic analysis
 #include "translator.h" //Translation to Assembly
 #include "analyser.h" //Semantic analysis
 #include "log.h" //Writing to the command line with log levels
@@ -22,6 +23,8 @@
  * @param destPTR a pointer to the destination file. If nonexistent, it will be created
  */
 void compile(FILE *srcPTR, FILE *destPTR) {
+    printInfoMessage("Starting pre-translation processing...");
+    preprocess(srcPTR);
     printInfoMessage("Starting Assembly-Translation...");
     startTranslation(srcPTR, destPTR);
     printInfoMessage("Starting semantic analysis...");
