@@ -6,6 +6,6 @@
 
 #include <string.h> //String functions
 
-void preprocess(FILE *srcPTR);
+void preprocess(char file[][128], FILE *srcPTR);
 
 #endif

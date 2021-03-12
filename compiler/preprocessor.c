@@ -21,6 +21,7 @@ int perfectlyBalancedFound = 0;
 int confusedStonksFound = 0;
 
 int linesOfCode = 0;
+int numberOfLines = 0;
 char commands[2][60] = {
     "perfectly balanced as all things should be",
     "confused stonks"
@@ -55,7 +56,7 @@ int isCommand(char *token, int index, int lineNum) {
     } else return 1;
 }
 
-void preprocessPerfectlyBalanced() {
+void preprocessPerfectlyBalanced(char file[][128]) {
     printDebugMessage("preprocessPerfectlyBalanced() called", "");
     //For every time 'perfectly balanced ...' is called, we delete half the lines. First, we calculate the number of lines that remain
     //For this, we divide the lines of code by 2 the same number of times the command appeared
@@ -65,22 +66,17 @@ void preprocessPerfectlyBalanced() {
     }
     //Now we calculate the number of lines to be deleted
     int deleteNumberOfLines = linesOfCode - (int) temp;
-    printf("Deleting: %d\n", deleteNumberOfLines);
-
-    int linesToDelete[deleteNumberOfLines];
+    
     int i = 0;
     while(i < deleteNumberOfLines) {
-        int randomLine = (rand() % (linesOfCode)) + 1; //Choose a random line
-        //Check if that line was already generated
-        int alreadyExists = 0;
-        for(int j = 0; j < i; j++) {
-            if(linesToDelete[j] == randomLine) alreadyExists = 1;
-        }
-        if(alreadyExists) continue;
+        int randomLine = (rand() % (numberOfLines-1)) + 1; //Choose a random line
+        //Check if that line was already cleared
+        if(strcmp(file[randomLine], "\n") == 0) continue;
 
-        linesToDelete[i] = randomLine;
+        strcpy(file[randomLine], "\n\0"); //Clear that line
         i++;
-        printf("%d\n", randomLine);
+        printDebugMessage("Line cleared", "");
+        printf("%d", randomLine);
     }
 
     printThanosASCII(deleteNumberOfLines);
@@ -119,22 +115,25 @@ void analyseLine(char *line, int lineNum) {
     }
 }
 
-void preprocess(FILE *srcPTR) {
+void *preprocess(char file[][128], FILE *srcPTR) {
     char line[128];
     int lineNum = 1;
     printInfoMessage("Source file opened for reading, searching line-by-line for commands in need of preprocessing");
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
         printDebugMessage("Starting analysis of", line);
+        strcpy(file[lineNum-1], line); //Copy the line into our internal array
         analyseLine(line, lineNum);
         lineNum++;
         printDebugMessage("Done, moving on to next line", "\n");
     }
+    numberOfLines = lineNum;
+
     printDebugMessage("First Analysis done. Starting preprocessor functions if necessary", "\n");
     srand(time(NULL));
 
-    if(perfectlyBalancedFound >= 1) preprocessPerfectlyBalanced();
+    if(perfectlyBalancedFound >= 1) preprocessPerfectlyBalanced(file);
     if(confusedStonksFound >= 1) preprocessConfusedStonks();
 
-    printDebugMessage("Preprocessing done, rewinding source pointer...", "\n");
-    rewind(srcPTR);
+    fclose(srcPTR);
+    printDebugMessage("Source pointer closed, preprocessing is done.", "\n");
 }
