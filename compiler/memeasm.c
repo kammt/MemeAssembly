@@ -117,5 +117,6 @@ int main(int argc, char* argv[]) {
     int result = interpretArguments(argc, argv);
     if(result == 1) {
         printf("Error! No arguments specified or unknown parameters. Type memeasm -h to open the help page. \n Exiting...\n");
+        exit(EXIT_FAILURE);
     }
 }

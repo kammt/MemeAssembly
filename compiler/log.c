@@ -49,7 +49,7 @@ void printErrorASCII() {
     printf("                                                                   |___/  \n" RESET);
     printf("\nYour program failed to compile because of errors in your code. Please check your input file and try again.\n");
     printf(" Exiting....\n");
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 /**
