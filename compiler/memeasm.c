@@ -30,10 +30,7 @@ void printHelpPage() {
  * @returns 0 if command was interpreted successfully, 1 otherwise
  */
 int interpretCompile(int argc, char *argv[]) {
-    if(argc != 4 && argc != 5) {
-        printf("Command interpretation failed. (-c / --compile) requires 2 additional parameters, but instead got %d\n", argc-2);
-        return 1;
-    } else {
+    if(argc == 4 || argc == 5) {
         if(argc == 5) {
             if(strcmp(argv[2], log_info) == 0) {
                 setLogLevel(2);
@@ -60,6 +57,9 @@ int interpretCompile(int argc, char *argv[]) {
         printInformationHeader();
         compile(srcPTR, destPTR);
         return 0;
+    } else {
+        printf("Command interpretation failed. (-c / --compile) requires 2 additional parameters, but instead got %d\n", argc-2);
+        return 1;
     }
 }
 
