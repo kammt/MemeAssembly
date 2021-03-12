@@ -30,4 +30,4 @@ jobs:
         run: make debug
         
       - name: run the compiler on example.memeasm
-        run: ./memeasm -c -vv .github/workflows/example.memeasm  
+        run: ./memeasm -c -vv .github/workflows/example.memeasm test.asm
