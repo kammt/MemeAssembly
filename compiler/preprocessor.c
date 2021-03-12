@@ -10,15 +10,14 @@
 
 /**
  * preprocessor.c
- * Some commands require to be detected before they are translated. A good example is the "perfectly balanced as all things should be"
- * When the removal of such commands should be truly random, then they have to be determined before translation. That's what this is for.
+ * Some commands require to be detected before they are translated. A good example is the "perfectly balanced as all things should be" command.
+ * When the removal of e.g. half the commands should be truly random, then the lines to-be-removed have to be determined before translation. 
+ * That's what this is for.
  * It 
- * - counts the lines of code
  * - looks for commands requiring preprocessing such as "confused stonks"
  * - Preprocesses them e.g. chooses the lines to be deleted or chooses the jump marker
  */
 int perfectlyBalancedFound = 0;
-int confusedStonksFound = 0;
 
 int linesOfCode = 0;
 int numberOfLines = 0;
@@ -94,19 +93,29 @@ void preprocessPerfectlyBalanced(char file[][128]) {
     printThanosASCII(deleteNumberOfLines);
 }
 
-void preprocessConfusedStonks() {
-    int randomJumps[confusedStonksFound];
 
+/**
+ * Called when 'confused stonks' is used in a line. It chooses a random line and replaces this line with a jump to the random line
+ * (translator.c adds line_n: to the beginning of every line, n being the line number)
+ * @param lineFound the line number in which confused stonks was found
+ * @param file the file array 
+ */
+void preprocessConfusedStonks(int lineFound, char file[][128]) {
     printDebugMessage("preprocessConfusedStonks() called", "");
-    for(int i = confusedStonksFound - 1; i >= 0; i--) {
-        int randomLine = (rand() % (linesOfCode)) + 1;
-        randomJumps[i] = randomLine;
-        printDebugMessage("Choosing random line...", "");
-    }
-    
+    int randomLine = (rand() % (linesOfCode)) + 1;
+    printDebugMessageWithNumber("Injecting jump to line", randomLine);
+
+    char jumpString[15] = "jmp line_";
+    char lineAsString[4];
+    sprintf(lineAsString, "%d", randomLine);
+
+    strcat(jumpString, lineAsString);
+    printDebugMessage(jumpString, "");
+
+    strcpy(file[lineFound - 1], jumpString);
 }
 
-void analyseLine(char *line, int lineNum) {
+void analyseLine(char *line, int lineNum, char file[][128]) {
     removeLineBreak(line);
     char *token = strtok(line, " ");
     if(token != NULL) {
@@ -118,7 +127,7 @@ void analyseLine(char *line, int lineNum) {
                     perfectlyBalancedFound++;
                     break;
                 case 1:
-                    confusedStonksFound++;
+                    preprocessConfusedStonks(lineNum, file);
                     break;
                 }
                 break;
@@ -134,7 +143,7 @@ void *preprocess(char file[][128], FILE *srcPTR) {
     while(fgets(line, sizeof(line), srcPTR) != NULL) {
         printDebugMessage("Starting analysis of", line);
         strcpy(file[lineNum-1], line); //Copy the line into our internal array
-        analyseLine(line, lineNum);
+        analyseLine(line, lineNum, file);
         lineNum++;
         printDebugMessage("Done, moving on to next line", "\n");
     }
@@ -144,7 +153,6 @@ void *preprocess(char file[][128], FILE *srcPTR) {
     srand(time(NULL));
 
     if(perfectlyBalancedFound >= 1) preprocessPerfectlyBalanced(file);
-    if(confusedStonksFound >= 1) preprocessConfusedStonks();
 
     fclose(srcPTR);
     printDebugMessage("Source pointer closed, preprocessing is done.", "\n");

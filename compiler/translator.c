@@ -145,7 +145,7 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10], int 
         strncat(result, appendStr, 50);
     }
     printDebugMessage("Writing ASM to file:", result);
-    fprintf(destPointer, "\t%s\n", result);
+    fprintf(destPointer, "\tline_%d: %s\n", lineNum, result);
     printDebugMessageWithNumber("Writing the following Opcode to array:", opcode);
     opcodes[lineNum - 1] = opcode;
     return 0;     
@@ -251,10 +251,17 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
  */
 int translateLine(char line[], int lineNum, FILE *destPTR, int opcodes[]) {
     removeLineBreak(line);
-    destPTR = destPTR;
+    char tmpLine[128];
+    strcpy(tmpLine, line);
 
-    char *token = strtok(line, " ");
+    char *token = strtok(tmpLine, " ");
     if(token != NULL) {
+        if(strcmp(token, "jmp") == 0) {
+            printDebugMessage("Skipping preprocessor-set jump...", "");
+            fprintf(destPTR, "\tline_%d: %s\n", lineNum, line);
+            return 0;
+        }
+
         int result;
         for (int i = 0; i < commandArraySize-1; i++)
         {
