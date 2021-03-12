@@ -6,6 +6,7 @@
         "types.h": "c",
         "sstream": "c",
         "unistd.h": "c",
-        "translate.h": "c"
+        "translate.h": "c",
+        "functional": "c"
     }
 }
