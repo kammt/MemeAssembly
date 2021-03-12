@@ -104,10 +104,23 @@ void printInfoMessage(char message[]) {
 /**
  * A debug message. Will only be printed if -vv is active
  * @param message the message
+ * @param variable an optional string variable
  */
 void printDebugMessage(char message[], char *variable) {
     if(logLevel == 3) {
         printf("%s %s \n", message, variable);
+        fflush( stdout );  
+    }
+}
+
+/**
+ * A debug message. Will only be printed if -vv is active
+ * @param message the message
+ * @param variable an optional integer variable
+ */
+void printDebugMessageWithNumber(char message[], int variable) {
+    if(logLevel == 3) {
+        printf("%s %d \n", message, variable);
         fflush( stdout );  
     }
 }

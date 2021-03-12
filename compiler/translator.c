@@ -146,7 +146,7 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10], int 
     }
     printDebugMessage("Writing ASM to file:", result);
     fprintf(destPointer, "\t%s\n", result);
-    printDebugMessage("Writing Opcode to array...", "");
+    printDebugMessageWithNumber("Writing the following Opcode to array:", opcode);
     opcodes[lineNum - 1] = opcode;
     return 0;     
 }
@@ -270,6 +270,7 @@ int translateLine(char line[], int lineNum, FILE *destPTR, int opcodes[]) {
         return result;
     }
     //If we got here, then the line is empty. Just ignore that line
+    printDebugMessage("Line is empty, skipping...", "");
     return 0;
 }
 

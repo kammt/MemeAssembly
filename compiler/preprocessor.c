@@ -28,7 +28,13 @@ char commands[2][60] = {
 };
 
 /**
+ * A more minimal version of the compileWithPattern() function in translator.c
+ * It checks if the line matches with the command passed to it
+ * @param token The first token of the line
+ * @param index The array index of the command to be compared against
+ * @param lineNum the line number
  * 
+ * @returns 0 if successful, 1 if there is a syntax error and -1 if the first tokens don't match
  */
 int isCommand(char *token, int index, int lineNum) {
     int probing = 1; //Is set to 0 if the first tokens match. This is so that if compilation fails at the first token, there is no error message
@@ -56,6 +62,11 @@ int isCommand(char *token, int index, int lineNum) {
     } else return 1;
 }
 
+/**
+ * Called when 'perfectly balanced ...' is used at least once. For every occurrence of the command, it halves the number of commands by overwriting
+ * their respective array entries with a line break. After that, it prints a Thanos ASCII
+ * @param file the array containing all lines
+ */
 void preprocessPerfectlyBalanced(char file[][128]) {
     printDebugMessage("preprocessPerfectlyBalanced() called", "");
     //For every time 'perfectly balanced ...' is called, we delete half the lines. First, we calculate the number of lines that remain
@@ -70,15 +81,16 @@ void preprocessPerfectlyBalanced(char file[][128]) {
     int i = 0;
     while(i < deleteNumberOfLines) {
         int randomLine = (rand() % (numberOfLines-1)) + 1; //Choose a random line
+        printDebugMessageWithNumber("Chose random line:", randomLine);
         //Check if that line was already cleared
         if(strcmp(file[randomLine], "\n") == 0) continue;
 
         strcpy(file[randomLine], "\n\0"); //Clear that line
         i++;
-        printDebugMessage("Line cleared", "");
-        printf("%d", randomLine);
+        printDebugMessageWithNumber("Line cleared:", randomLine);
     }
 
+    printDebugMessage("Printing Thanos ASCII...", "");
     printThanosASCII(deleteNumberOfLines);
 }
 
