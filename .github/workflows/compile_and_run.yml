@@ -28,6 +28,10 @@ jobs:
       # Install nasm before compiling
       - name: Install nasm
         run: sudo apt-get install nasm
+        
+      # Install gcc-multilib before compiling
+      - name: Install gcc-multilib
+        run: sudo apt-get install gcc-multilib
 
       # Runs a single command using the runners shell
       - name: Compile the project
