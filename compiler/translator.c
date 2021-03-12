@@ -22,12 +22,9 @@
  * Warning: the command and translation patterns have to be at the same position in their respective arrays or the translation will fail!
  */
 
-FILE *srcPointer;
 FILE *destPointer;
-FILE *analyzerPointer;
 
-
-char commandPatterns[15][60] = {
+char commandPatterns[16][60] = {
     "stonks v",
     "not stonks r",
     "upgrade",
@@ -42,10 +39,11 @@ char commandPatterns[15][60] = {
     "r is great, but I want v",
     "ah shit, here we go again",
     "parry v you filthy casual r",
+    "perfectly balanced as all things should be",
     "or draw 25"
 };
 
-char translationPatterns[15][60] = {
+char translationPatterns[16][60] = {
     "push 0",
     "pop 0",
     "upgradeMarker:",
@@ -60,6 +58,7 @@ char translationPatterns[15][60] = {
     "mov 0, 1",
     "jmp main",
     "sub 1, 0",
+    "",
     "add eax, 25"
 };
 
@@ -116,7 +115,7 @@ int isValidValue(char *token, int onlyRegister) {
 }
 
 
-int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10]) {
+int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10], int opcodes[]) {
     char result[50] = "";
     char translationPattern[60];
 
@@ -146,9 +145,9 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10]) {
         strncat(result, appendStr, 50);
     }
     printDebugMessage("Writing ASM to file:", result);
-    fprintf(destPointer, "\t%s\n", result);
-    printDebugMessage("Writing Opcode to file...", "");
-    fprintf(analyzerPointer, "%d\n", opcode);
+    fprintf(destPointer, "\tline_%d: %s\n", lineNum, result);
+    printDebugMessageWithNumber("Writing the following Opcode to array:", opcode);
+    opcodes[lineNum - 1] = opcode;
     return 0;     
 }
       
@@ -156,14 +155,13 @@ int generateASM(int lineNum, int opcode, int argCnt, char arguments[3][10]) {
 /**
  * Attempts to compile the specified line with a pattern. It automatically saves arguments and inserts them into a translationPattern after translation
  * @param token A token pointing at the first word in the line
- * @param commandPattern a String showing the pattern of a command. Use r for a register value or v for a decimal value or register. Example: 'stonks v' or 'not stonks r'
- * @param translationPattern a String showing how the command should be translated to x86 Assembly. Use the numbers 0 to 2 as placeholders for the arguments in order of their appearance in the command. Example: 'push 0'
  * @param lineNum an integer holding the current line Number
  * @param opcode the opcode of the current command
+ * @param opcodes an array in which the opcode for each line is saved
  * 
  * @return 0 if successful, 1 if there is a syntax error and -1 if this probably isn't the command at all.
  */
-int compileWithPattern(char *token, int lineNum, int opcode) {
+int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
     int probing = 1; //Is set to 0 if the first tokens match. This is so that if compilation fails at the first token, there is no error message
 
     //A save pointer for strtok_r
@@ -225,9 +223,9 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
      * - if the token is NULL, then it is too short, send an error
      */
     if(token == NULL && commandToken == NULL) {
-        generateASM(lineNum, opcode, argCnt, arguments);
+        generateASM(lineNum, opcode, argCnt, arguments, opcodes);
     } else if(commandToken == NULL) {
-        int result = compileWithPattern(token, lineNum, commandArraySize-1);
+        int result = compileWithPattern(token, lineNum, commandArraySize-1, opcodes);
         if(result == -1) {
             //It isn't or draw 25, so it's an invalid character. Throw an error
             printUnexpectedCharacterError("end of line", token, lineNum);
@@ -247,18 +245,27 @@ int compileWithPattern(char *token, int lineNum, int opcode) {
  * @param line the line to be interpreted
  * @param lineNum the current Line number
  * @param destPTR the destination file to be written to
+ * @param opcodes an array in which the opcodes are written to
+ * 
  * @return 0 if successful, 1 otherwise
  */
-int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
+int translateLine(char line[], int lineNum, FILE *destPTR, int opcodes[]) {
     removeLineBreak(line);
-    destPTR = destPTR;
+    char tmpLine[128];
+    strcpy(tmpLine, line);
 
-    char *token = strtok(line, " ");
+    char *token = strtok(tmpLine, " ");
     if(token != NULL) {
+        if(strcmp(token, "jmp") == 0) {
+            printDebugMessage("Skipping preprocessor-set jump...", "");
+            fprintf(destPTR, "\tline_%d: %s\n", lineNum, line);
+            return 0;
+        }
+
         int result;
         for (int i = 0; i < commandArraySize-1; i++)
         {
-            result = compileWithPattern(token, lineNum, i);
+            result = compileWithPattern(token, lineNum, i, opcodes);
             if(result != -1) break; //-1 is returned if this is not the correct command pattern. If it either returned 0 or 1, then it was the correct command pattern. Return the result.
         }
 
@@ -270,34 +277,39 @@ int translateLine(char line[], int lineNum, FILE *destPTR, FILE *analyzerPTR) {
         return result;
     }
     //If we got here, then the line is empty. Just ignore that line
+    opcodes[lineNum-1] = -1;
+    printDebugMessage("Line is empty, skipping...", "");
     return 0;
 }
 
 
 /**
  * Translates the MemeASM File into an x86-Assembly file
- * @param srcPTR a pointer to the source file to be translated
- * @param destPTR a pointer to the destination file. If nonexistent, it will be created
+ * @param file an array containing all lines
+ * @param lineCount the number of lines
+ * @param opcodes an empty array in which the opcodes of each line will be written to
+ * @param destPTR a pointer pointing to the Assembly-file
  */
-void startTranslation(FILE *srcPTR, FILE *destPTR) {
+void startTranslation(char file[][128], int lineCount, int opcodes[], FILE *destPTR) {
     //Assign file pointers to file-wide variables
-    analyzerPointer = fopen("opcodes", "w");
-    srcPointer = srcPTR;
     destPointer = destPTR;
     printDebugMessage("opcodes-File opened for writing", "");
 
     char line[128];
     int lineNum = 1;
 
+    printDebugMessage("Defining section.text", "");
     //Define the main-function
     fprintf(destPTR, "section .text\n");
+    printDebugMessage("Defining main-function", "");
     fprintf(destPTR, "global main\n");
     fprintf(destPTR, "main:\n");
 
-    printInfoMessage("Source file opened for reading, starting line-by-line analysis");
-    while(fgets(line, sizeof(line), srcPTR) != NULL) {
+    printInfoMessage("Internal array received, starting line-by-line analysis");
+    for(int i = 0; i < lineCount; i++) {
+        strcpy(line, file[i]);
         printDebugMessage("Starting analysis of", line);
-        if(translateLine(line, lineNum, destPTR, analyzerPointer) == 1) printErrorASCII();
+        if(translateLine(line, lineNum, destPTR, opcodes) == 1) printErrorASCII();
         lineNum++;
         printDebugMessage("Done, moving on to next line", "\n");
     }
@@ -305,9 +317,7 @@ void startTranslation(FILE *srcPTR, FILE *destPTR) {
     //Finally, insert a ret-statement
     fprintf(destPTR, "\n\tret");
 
-    printInfoMessage("\nDone, closing all files...\n");
-    //Close all files
-    fclose(srcPTR);
+    printInfoMessage("\nDone, closing destination file...\n");
+    //Close the destination file
     fclose(destPTR);
-    fclose(analyzerPointer);
 }

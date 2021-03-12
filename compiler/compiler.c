@@ -3,6 +3,7 @@
 
 #include <string.h> //String functions
 
+#include "preprocessor.h" //Semantic analysis
 #include "translator.h" //Translation to Assembly
 #include "analyser.h" //Semantic analysis
 #include "log.h" //Writing to the command line with log levels
@@ -22,10 +23,27 @@
  * @param destPTR a pointer to the destination file. If nonexistent, it will be created
  */
 void compile(FILE *srcPTR, FILE *destPTR) {
+    //First, we create an array with the size of our number of lines. For that, we first count the number of lines
+    char line[128];
+    int numberOfLines = 0;
+    while(fgets(line, sizeof(line), srcPTR) != NULL) {
+        numberOfLines++;
+    }
+    //Done, now we create the array
+    char file[numberOfLines][128];
+    int opcodes[numberOfLines];
+
+    printDebugMessage("Array created, rewinding source pointer...", "");
+    rewind(srcPTR);
+
+    printInfoMessage("Starting pre-translation processing...");
+    preprocess(file, srcPTR);
+
     printInfoMessage("Starting Assembly-Translation...");
-    startTranslation(srcPTR, destPTR);
+    startTranslation(file, numberOfLines, opcodes, destPTR);
+    
     printInfoMessage("Starting semantic analysis...");
-    startSemanticAnalysis();
+    startSemanticAnalysis(opcodes, numberOfLines);
 
     printSuccessMessage("File compiled successfully!");
 }

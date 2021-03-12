@@ -53,6 +53,27 @@ void printErrorASCII() {
 }
 
 /**
+ * Called when the command 'perfectly balanced as all things should be' is used. It prints a Snap ASCII art
+ * @param deletedLines the number of lines that got deleted
+ */
+void printThanosASCII(int deletedLines) {
+    printf("\n");
+    printf("\n");
+    printf(YEL "   _____                 \n");
+    printf("  / ____|         \n");
+    printf(" | (___  _ __   __ _ _ __ \n");
+    printf("  \\___ \\| '_ \\ / _` | '_ \\ \n");
+    printf("  ____) | | | | (_| | |_) | \n");
+    printf(" |_____/|_| |_|\\__,_| .__/  \n");
+    printf("                    | |  \n");
+    printf("                    |_|    \n" RESET);
+    printf(GRN "\nDid you do it?\n" RESET);
+    printf(MAG "Yes\n" RESET);
+    printf(GRN "What did it cost?\n" RESET);
+    printf(MAG "%d lines of code\n\n" RESET, deletedLines);
+}
+
+/**
  * A success message. Will always be printed
  * @param message the message
  */
@@ -83,10 +104,23 @@ void printInfoMessage(char message[]) {
 /**
  * A debug message. Will only be printed if -vv is active
  * @param message the message
+ * @param variable an optional string variable
  */
 void printDebugMessage(char message[], char *variable) {
     if(logLevel == 3) {
         printf("%s %s \n", message, variable);
+        fflush( stdout );  
+    }
+}
+
+/**
+ * A debug message. Will only be printed if -vv is active
+ * @param message the message
+ * @param variable an optional integer variable
+ */
+void printDebugMessageWithNumber(char message[], int variable) {
+    if(logLevel == 3) {
+        printf("%s %d \n", message, variable);
         fflush( stdout );  
     }
 }
@@ -119,7 +153,7 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
  * @param lineNum the line number
  */
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
-    printf(RED "Syntax Error in line %d: Expected %s, but got %s", lineNum, expected, got);
+    printf(RED "Syntax Error in line %d: Expected %s, but got %s" RESET, lineNum, expected, got);
 }
 
 /**

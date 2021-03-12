@@ -6,6 +6,7 @@ Syntax  | Usage
 ------------- | -------------
 ```stonks [value]``` | Pushes a value to the stack
 ``` not stonks [destination]``` | Pops a value from the stack
+```confused stonks``` | Jumps to a random address decided at compilation time
 ```upgrade [other commands] fuck go back``` | Defines a marker and jumps back to that marker at a later point
 ```[command] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
 ```guess I'll die``` | Crashes the program with a segmentation fault
@@ -35,16 +36,15 @@ upgrade
 sneak 100 eax
 fuck go back
 ```
-3. Subtract 25 from 64:
+3. Add 25 to 64:
 ```
 ebx is great, but I want 64
 sneak 100 eax
-guess I'll die or draw 25
 
 upgrade
-downvote ebx
-downvote eax
-corporate needs you to find the difference between eax and 0
+upvote ebx
+upvote eax
+corporate needs you to find the difference between eax and 25
 fuck go back
 
 they're the same picture
@@ -73,6 +73,8 @@ MemeAssembly stands out from the crowd, since it:
 - only supports registers and immediates
 - completely refuses to provide storage functionality
 - provides a simple command to make your entire program crash
+- knows that you ignore compiler warnings and hence doesn't output any
+- makes your program unpredictable with random jumps and line removals. Makes debugging more fun, right?
 - doesn't force you to make 'understandable' code by commenting it, since comments aren't supported anyway and would cause the compiler to crash
 - removes the pain of working with negative numbers by outright not supporting them
 
