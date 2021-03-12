@@ -8,10 +8,12 @@
 
 /**
  * Translates the MemeASM File into an x86-Assembly file
- * @param srcPTR a pointer to the source file to be translated
- * @param destPTR a pointer to the destination file. If nonexistent, it will be created
+ * @param file an array containing all lines
+ * @param lineCount the number of lines
+ * @param opcodes an empty array in which the opcodes of each line will be written to
+ * @param destPTR a pointer pointing to the Assembly-file
  */
-void startTranslation(FILE *srcPTR, FILE *destPTR);
+void startTranslation(char file[][128], int lineCount, int opcodes[], FILE *destPTR);
 
 void removeLineBreak(char *token);
 
