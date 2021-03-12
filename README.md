@@ -19,6 +19,7 @@ Syntax  | Usage
 ```ah shit, here we go again``` | Jumps back to the beginning of your code
 ```they're the same picture``` | A jump marker for the command below
 ```corporate needs you to find the difference between [register/value] and [register/value]``` | Compares both arguments and jumps to "they're the same picture" if both values are equal
+```no, I don't think I will``` | Exits the program
 ```perfectly balanced as all things should be``` | Restore balance to your code by randomly deleting half the commands at compile-time
 
 ## Code examples

@@ -24,7 +24,7 @@
 
 FILE *destPointer;
 
-char commandPatterns[16][60] = {
+char commandPatterns[17][60] = {
     "stonks v",
     "not stonks r",
     "upgrade",
@@ -39,11 +39,12 @@ char commandPatterns[16][60] = {
     "r is great, but I want v",
     "ah shit, here we go again",
     "parry v you filthy casual r",
+    "no, I don't think I will",
     "perfectly balanced as all things should be",
-    "or draw 25"
+    "or draw 25" //Insert new commands above this line
 };
 
-char translationPatterns[16][60] = {
+char translationPatterns[17][60] = {
     "push 0",
     "pop 0",
     "upgradeMarker:",
@@ -58,8 +59,9 @@ char translationPatterns[16][60] = {
     "mov 0, 1",
     "jmp main",
     "sub 1, 0",
+    "ret",
     "",
-    "add eax, 25"
+    "add eax, 25" //Insert new commands above this line
 };
 
 int commandArraySize = sizeof(translationPatterns) / sizeof(translationPatterns[0]);    
