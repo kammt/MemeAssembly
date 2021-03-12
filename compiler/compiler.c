@@ -65,4 +65,5 @@ void compileAndRun(FILE *srcPTR) {
     printStatusMessage("Running file...");
     execv ("tmp", NULL);
     //TODO delete temporary files
+    exit(EXIT_SUCCESS);
 }
