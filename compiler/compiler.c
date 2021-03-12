@@ -32,7 +32,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     //Done, now we create the array
     char file[numberOfLines][128];
     int opcodes[numberOfLines];
-    
+
     printDebugMessage("Array created, rewinding source pointer...", "");
     rewind(srcPTR);
 
@@ -43,7 +43,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     startTranslation(file, numberOfLines, opcodes, destPTR);
     
     printInfoMessage("Starting semantic analysis...");
-    //startSemanticAnalysis();
+    startSemanticAnalysis(opcodes, numberOfLines);
 
     printSuccessMessage("File compiled successfully!");
 }
