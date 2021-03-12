@@ -70,7 +70,7 @@ void printThanosASCII(int deletedLines) {
     printf(GRN "\nDid you do it?\n" RESET);
     printf(MAG "Yes\n" RESET);
     printf(GRN "What did it cost?\n" RESET);
-    printf(MAG "%d lines of code\n" RESET, deletedLines);
+    printf(MAG "%d lines of code\n\n" RESET, deletedLines);
 }
 
 /**
