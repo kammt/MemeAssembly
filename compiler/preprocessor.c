@@ -110,7 +110,7 @@ void preprocessConfusedStonks(int lineFound, char file[][128]) {
     sprintf(lineAsString, "%d", randomLine);
 
     strcat(jumpString, lineAsString);
-    printDebugMessage(jumpString, "");
+    printDebugMessage("Inserting:", jumpString);
 
     strcpy(file[lineFound - 1], jumpString);
 }
@@ -149,11 +149,11 @@ void *preprocess(char file[][128], FILE *srcPTR) {
     }
     numberOfLines = lineNum;
 
-    printDebugMessage("First Analysis done. Starting preprocessor functions if necessary", "\n");
+    printInfoMessage("First Analysis done. Starting preprocessor functions if necessary");
     srand(time(NULL));
 
     if(perfectlyBalancedFound >= 1) preprocessPerfectlyBalanced(file);
 
     fclose(srcPTR);
-    printDebugMessage("Source pointer closed, preprocessing is done.", "\n");
+    printInfoMessage("Source pointer closed, preprocessing is done.\n");
 }

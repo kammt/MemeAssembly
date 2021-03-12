@@ -67,4 +67,5 @@ void startSemanticAnalysis(int opcodes[], int lineCount) {
     } else if(upgradeJumpDefined != 0 && upgradeMarkerDefined == 0) {
         printSemanticError("'fuck go back' was used, but no 'upgrade' jump marker was found", upgradeJumpDefined);
     }
+    printInfoMessage("Semantic analysis done, no issues found");
 }  
