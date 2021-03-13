@@ -1,12 +1,22 @@
-# MemeAssembly
-Or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.
+<p align="center">
+ <h1 align="center">MemeAssembly</h1>
+ <p align="center">or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.</p>
+</p>
+  <p align="center">
+    <a href="https://github.com/kammt/MemeAssembly/actions/workflows/build_test.yml">
+        <img src="https://github.com/kammt/MemeAssembly/actions/workflows/build_test.yml/badge.svg" alt="Build Test">
+    </a>
+    <a href="https://github.com/kammt/MemeAssembly/actions/workflows/compilation_test.yml">
+      <img src="https://github.com/kammt/MemeAssembly/actions/workflows/compilation_test.yml/badge.svg" alt="Compilation Test" />
+   </a>
+  </p>
 
 ## Commands overview
 Syntax  | Usage
 ------------- | -------------
 ```stonks [value]``` | Pushes a value to the stack
 ``` not stonks [destination]``` | Pops a value from the stack
-```confused stonks``` | Jumps to a random address decided at compilation time
+```confused stonks``` | Jumps to a random line of code decided at compilation time
 ```upgrade [other commands] fuck go back``` | Defines a marker and jumps back to that marker at a later point
 ```[command] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
 ```guess I'll die``` | Crashes the program with a segmentation fault
@@ -56,7 +66,7 @@ To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After
 ```
 sudo make install
 ```
-The compiler can now be called by using the *memeasm* command
+This will install the binary file under /usr/bin/memeasm. The compiler can now be called by using the *memeasm* command
 
 ## Compiling and running your code
 First, do what a developer does best: code! Keep in mind that it is recommended to save your code in a .memeasm file. 
