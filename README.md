@@ -86,3 +86,9 @@ Whoever dares to write their code in MemeASM shall be rewarded. Not only with a 
 ![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)\
 To do so, insert this code block into your ReadMe file: \
 ```![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)```
+
+## License and Contributing
+But let's get serious for a minute: \
+This project is licensed under the GPLv3 license. For more information, check this repo's <a href="LICENSE">LICENSE file</a>. This obviously excludes the "Developers"-GIF in this ReadMe file. \
+Contributions to this repository are welcome! Especially ideas for new (and hopefully idiotic) commands. To add a new command, either create an issue with the tag "new-command" or add it yourself and create a pull-request. Check the beginning of <a href="compiler/translator.c">translator.c</a> for a quick tutorial on how to do that.
+
