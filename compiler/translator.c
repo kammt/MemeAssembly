@@ -107,7 +107,9 @@ char* validChar(char *token)
     if (len == 1) {
         // Backslashes should also work, so we escape them
         if (token[0] == '\\') {
-            return "'\\\\'";
+            return "92";
+        } else if (token[0] == '\'') {
+            return "39";
         } else {
             char* newtok = (char *)malloc(3);
             newtok[0] = '\'';
@@ -133,14 +135,14 @@ char* validChar(char *token)
             return "12";
         case 'r':
             return "13";
-        case '\\':
-            return "'\\\\'";
+        case '"':
+            return "34";
         case '\'':
             return "39";
-        case '"':
-            return "'\"'";
         case '?':
             return "63";
+        case '\\':
+            return "92";
         }
     }
 
@@ -259,17 +261,14 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
             argCnt++;
             probing = 0;
         } else if (strcmp(commandToken, "c") == 0) { // token has to be a character
-            //printf("Entering character...");
             char* escaped = validChar(token);
             if (escaped == -1) {
-                //printf("Rejected character %s\n", token);
                 if (probing == 0)
                 {
                     printSyntaxError("Expected character, but got", token, lineNum);
                     return 1;
                 } else return -1;
             }
-            //printf("result of validChar: %s\n", escaped);
             strcpy(arguments[argCnt], escaped);
             argCnt++;
             probing = 0;
