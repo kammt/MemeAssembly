@@ -31,7 +31,7 @@ Syntax  | Usage
 ```corporate needs you to find the difference between [register/value] and [register/value]``` | Compares both arguments and jumps to "they're the same picture" if both values are equal
 ```no, I don't think I will``` | Exits the program
 ```perfectly balanced as all things should be``` | Restore balance to your code by randomly deleting half the commands at compile-time
-```what can I say except [character]``` | Prints the given character to stdout
+```what can I say except [character/8-bit register]``` | Prints the given character to stdout
 
 ## Code examples
 Before continuing, please keep in mind that these examples only represent a tiny fraction of what can be done with MemeAssembly. Are you ready to experience the infinite possibilities of MemeAssembly? Here we go:
