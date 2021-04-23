@@ -151,6 +151,22 @@ char* validChar(char *token)
 }
 
 /**
+ * Checks whether the supplied token is a valid x86 8 bit register
+ * @param token The supplied token
+ * @return 0 if it's valid, 1 otherwise
+ */
+int isValid8BitRegister(char *token) {
+    if (strcmp(token, "ah") || strcmp(token, "al") 
+     || strcmp(token, "bh") || strcmp(token, "bl") 
+     || strcmp(token, "ch") || strcmp(token, "cl") 
+     || strcmp(token, "dh") || strcmp(token, "dl"))
+    {
+        return 0;
+    }
+    return 1;
+} 
+
+/**
  * Checks whether the supplied token is a valid decimal digit or x86 register keyword
  * @param token The supplied token
  * @param onlyRegister 1 if the value is only allowed to be a x86 register
@@ -263,7 +279,10 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
         } else if (strcmp(commandToken, "c") == 0) { // token has to be a character
             char* escaped = validChar(token);
             if (escaped == -1) {
-                if (probing == 0)
+                // We also allow 8-Bit registers for characters
+                if (isValid8BitRegister(token) == 0) {
+                    escaped = token;
+                } else if (probing == 0)
                 {
                     printSyntaxError("Expected character, but got", token, lineNum);
                     return 1;

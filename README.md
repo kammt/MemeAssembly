@@ -68,6 +68,20 @@ what can I say except A
 fuck go back
 ```
 
+5. Print the alphabet and a new line:
+```
+eax is great, but I want 65
+
+upgrade
+what can I say except al
+upvote eax
+corporate needs you to find the difference between eax and 91
+fuck go back
+
+they're the same picture
+what can I say except \n
+```
+
 ## Installation instructions
 To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
 ```
