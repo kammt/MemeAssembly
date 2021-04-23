@@ -62,7 +62,7 @@ char translationPatterns[18][60] = {
     "sub 1, 0",
     "ret",
     "",
-    "mov al, 0\n\tcall writechar",
+    "push eax\n\tmov al, 0\n\tcall writechar\n\tpop eax",
     "add eax, 25" //Insert new commands above this line
 };
 
