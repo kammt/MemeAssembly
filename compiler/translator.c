@@ -24,7 +24,7 @@
 
 FILE *destPointer;
 
-char commandPatterns[17][60] = {
+char commandPatterns[18][60] = {
     "stonks v",
     "not stonks r",
     "upgrade",
@@ -41,10 +41,11 @@ char commandPatterns[17][60] = {
     "parry v you filthy casual r",
     "no, I don't think I will",
     "perfectly balanced as all things should be",
+    "what can I say except c",
     "or draw 25" //Insert new commands above this line
 };
 
-char translationPatterns[17][60] = {
+char translationPatterns[18][60] = {
     "push 0",
     "pop 0",
     "upgradeMarker:",
@@ -61,6 +62,7 @@ char translationPatterns[17][60] = {
     "sub 1, 0",
     "ret",
     "",
+    "mov al, 0\n\tcall writechar",
     "add eax, 25" //Insert new commands above this line
 };
 
@@ -95,6 +97,58 @@ int isValidDigit(char *token) {
 }
 
 /**
+ * Checks whether the supplied token is a valid character.
+ * @param token The supplied token
+ * @return the quoted character if it's valid, -1 otherwise
+ */
+char* validChar(char *token)
+{
+    int len = strlen(token);
+    if (len == 1) {
+        // Backslashes should also work, so we escape them
+        if (token[0] == '\\') {
+            return "'\\\\'";
+        } else {
+            char* newtok = (char *)malloc(3);
+            newtok[0] = '\'';
+            strcpy(&newtok[1], token);
+            newtok[2] = '\'';
+            return newtok;
+        }
+    } else if (len == 2 && token[0] == '\\') {
+        // Escape sequences according to https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences
+        // We just return their ASCII number as a string as that can also be used to print the string
+        // This is mostly done because when writing '\n' in asm, it prints just '\', which is weird
+        switch (token[1])
+        {
+        case 'b':
+            return "8";
+        case 't':
+            return "9";
+        case 'n':
+            return "10";
+        case 'v':
+            return "11";
+        case 'f':
+            return "12";
+        case 'r':
+            return "13";
+        case '\\':
+            return "'\\\\'";
+        case '\'':
+            return "39";
+        case '"':
+            return "'\"'";
+        case '?':
+            return "63";
+        }
+    }
+
+    // Invalid
+    return -1;
+}
+
+/**
  * Checks whether the supplied token is a valid decimal digit or x86 register keyword
  * @param token The supplied token
  * @param onlyRegister 1 if the value is only allowed to be a x86 register
@@ -113,7 +167,7 @@ int isValidValue(char *token, int onlyRegister) {
         return 0;
     } else if(onlyRegister == 0 && isValidDigit(token) == 0) {
         return 0;
-    } else return 1;       
+    } else return 1;
 }
 
 
@@ -202,6 +256,21 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
             }
             //Token is a valid value/register, set it as argument
             strcpy(arguments[argCnt], token);
+            argCnt++;
+            probing = 0;
+        } else if (strcmp(commandToken, "c") == 0) { // token has to be a character
+            //printf("Entering character...");
+            char* escaped = validChar(token);
+            if (escaped == -1) {
+                //printf("Rejected character %s\n", token);
+                if (probing == 0)
+                {
+                    printSyntaxError("Expected character, but got", token, lineNum);
+                    return 1;
+                } else return -1;
+            }
+            //printf("result of validChar: %s\n", escaped);
+            strcpy(arguments[argCnt], escaped);
             argCnt++;
             probing = 0;
         } else {
@@ -319,7 +388,13 @@ void startTranslation(char file[][128], int lineCount, int opcodes[], FILE *dest
     //Finally, insert a ret-statement
     fprintf(destPTR, "\n\tret");
 
+    //Insert the writechar function used for the "what can I say except c" command
+    fprintf(destPTR, "\n\nwritechar:\n\tpush ebx\n\tpush ecx\n\tpush edx\n\tpush eax\n\tmov edx, 1\n\tmov ecx, esp\n\tmov ebx, 1\n\tmov eax, 4\n\tint 128\n\tpop eax\n\tpop edx\n\tpop ecx\n\tpop ebx\n\t\n\tret");
+
     printInfoMessage("\nDone, closing destination file...\n");
+    
     //Close the destination file
     fclose(destPTR);
 }
+
+
