@@ -60,6 +60,12 @@ fuck go back
 
 they're the same picture
 ```
+4. Express your feelings during a math exam:
+```
+upgrade
+what can I say except A
+fuck go back
+```
 
 ## Installation instructions
 To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
