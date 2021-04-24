@@ -290,7 +290,7 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
                     escaped = token;
                 } else if (probing == 0)
                 {
-                    printSyntaxError("Expected character, ASCII-code or 8 bit register, but got", token, lineNum);
+                    printSyntaxError("Expected character (strlen 1 or escape sequence), ASCII-code or 8 bit register, but got", token, lineNum);
                     return 1;
                 } else return -1;
             }
