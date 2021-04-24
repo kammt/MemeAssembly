@@ -31,6 +31,7 @@ Syntax  | Usage
 ```corporate needs you to find the difference between [register/value] and [register/value]``` | Compares both arguments and jumps to "they're the same picture" if both values are equal
 ```no, I don't think I will``` | Exits the program
 ```perfectly balanced as all things should be``` | Restore balance to your code by randomly deleting half the commands at compile-time
+```what can I say except [character/8-bit register/ASCII value]``` | Prints the given ASCII-character to stdout
 
 ## Code examples
 Before continuing, please keep in mind that these examples only represent a tiny fraction of what can be done with MemeAssembly. Are you ready to experience the infinite possibilities of MemeAssembly? Here we go:
@@ -41,10 +42,10 @@ not stonks ebx
 bitconeeeeeeect eax ebx
 guess I'll die
 ```
-2. Repeatedly set the register eax to zero until the program is killed by the user:
+2. Express your feelings during a math exam:
 ```
 upgrade
-sneak 100 eax
+what can I say except A
 fuck go back
 ```
 3. Add 25 to 64:
@@ -60,6 +61,23 @@ fuck go back
 
 they're the same picture
 ```
+
+4. Print the alphabet with spaces in between and a new line at the end:
+```
+eax is great, but I want 65
+
+upgrade
+what can I say except al
+what can I say except \s
+upvote eax
+corporate needs you to find the difference between eax and 91
+fuck go back
+
+they're the same picture
+what can I say except \n
+```
+
+You can also check the [examples](examples/) directory to find more.
 
 ## Installation instructions
 To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
