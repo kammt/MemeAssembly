@@ -99,7 +99,7 @@ int isValidDigit(char *token) {
 /**
  * Checks whether the supplied token is a valid character.
  * @param token The supplied token
- * @return the quoted character if it's valid, -1 otherwise
+ * @return the quoted character if it's valid, NULL otherwise
  */
 char* validChar(char *token)
 {
@@ -153,7 +153,7 @@ char* validChar(char *token)
     }
 
     // Invalid
-    return -1;
+    return NULL;
 }
 
 /**
@@ -284,13 +284,13 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
             probing = 0;
         } else if (strcmp(commandToken, "c") == 0) { // token has to be a character
             char* escaped = validChar(token);
-            if (escaped == -1) {
+            if (escaped == NULL) {
                 // We also allow 8-Bit registers and numbers for characters
                 if (isValid8BitRegister(token) == 0 || isValidDigit(token) == 0) {
                     escaped = token;
                 } else if (probing == 0)
                 {
-                    printSyntaxError("Expected character, number or 8 bit register, but got", token, lineNum);
+                    printSyntaxError("Expected character, ASCII-code or 8 bit register, but got", token, lineNum);
                     return 1;
                 } else return -1;
             }
@@ -420,5 +420,3 @@ void startTranslation(char file[][128], int lineCount, int opcodes[], FILE *dest
     //Close the destination file
     fclose(destPTR);
 }
-
-
