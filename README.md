@@ -82,6 +82,8 @@ they're the same picture
 what can I say except \n
 ```
 
+You can also check the [examples](examples/) directory to find more.
+
 ## Installation instructions
 To correctly use MemeAssembly, you will further need **gcc** and **nasm**. After those are installed, clone this repository, open it in a terminal and type:
 ```
