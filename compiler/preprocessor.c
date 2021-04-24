@@ -79,6 +79,7 @@ void preprocessPerfectlyBalanced(char file[][128]) {
     
     int i = 0;
     while(i < deleteNumberOfLines) {
+        srand(time(NULL));
         int randomLine = (rand() % (numberOfLines-1)) + 1; //Choose a random line
         printDebugMessageWithNumber("Chose random line:", randomLine);
         //Check if that line was already cleared
@@ -101,6 +102,8 @@ void preprocessPerfectlyBalanced(char file[][128]) {
  * @param file the file array 
  */
 void preprocessConfusedStonks(int lineFound, char file[][128]) {
+    srand(time(NULL));
+
     printDebugMessage("preprocessConfusedStonks() called", "");
     int randomLine = (rand() % (linesOfCode)) + 1;
     printDebugMessageWithNumber("Injecting jump to line", randomLine);
