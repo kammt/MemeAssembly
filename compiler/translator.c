@@ -143,7 +143,13 @@ char* validChar(char *token)
             return "63";
         case '\\':
             return "92";
+        case 's':
+            // This usually isn't a valid escape character, but we treat it as a space
+            return "32";
         }
+    } else if (strcmp(token, "space") == 0)
+    {
+        return "32";
     }
 
     // Invalid

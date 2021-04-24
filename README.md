@@ -68,12 +68,13 @@ what can I say except A
 fuck go back
 ```
 
-5. Print the alphabet and a new line:
+5. Print the alphabet with spaces in between and a new line at the end:
 ```
 eax is great, but I want 65
 
 upgrade
 what can I say except al
+what can I say except \s
 upvote eax
 corporate needs you to find the difference between eax and 91
 fuck go back
