@@ -156,10 +156,10 @@ char* validChar(char *token)
  * @return 0 if it's valid, 1 otherwise
  */
 int isValid8BitRegister(char *token) {
-    if (strcmp(token, "ah") || strcmp(token, "al") 
-     || strcmp(token, "bh") || strcmp(token, "bl") 
-     || strcmp(token, "ch") || strcmp(token, "cl") 
-     || strcmp(token, "dh") || strcmp(token, "dl"))
+    if (strcmp(token, "ah") == 0 || strcmp(token, "al") == 0 
+     || strcmp(token, "bh") == 0 || strcmp(token, "bl") == 0 
+     || strcmp(token, "ch") == 0 || strcmp(token, "cl") == 0 
+     || strcmp(token, "dh") == 0 || strcmp(token, "dl") == 0)
     {
         return 0;
     }
@@ -279,12 +279,12 @@ int compileWithPattern(char *token, int lineNum, int opcode, int opcodes[]) {
         } else if (strcmp(commandToken, "c") == 0) { // token has to be a character
             char* escaped = validChar(token);
             if (escaped == -1) {
-                // We also allow 8-Bit registers for characters
-                if (isValid8BitRegister(token) == 0) {
+                // We also allow 8-Bit registers and numbers for characters
+                if (isValid8BitRegister(token) == 0 || isValidDigit(token) == 0) {
                     escaped = token;
                 } else if (probing == 0)
                 {
-                    printSyntaxError("Expected character, but got", token, lineNum);
+                    printSyntaxError("Expected character, number or 8 bit register, but got", token, lineNum);
                     return 1;
                 } else return -1;
             }
