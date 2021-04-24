@@ -24,7 +24,7 @@
 
 FILE *destPointer;
 
-char commandPatterns[18][60] = {
+char commandPatterns[19][60] = {
     "stonks v",
     "not stonks r",
     "upgrade",
@@ -42,10 +42,11 @@ char commandPatterns[18][60] = {
     "no, I don't think I will",
     "perfectly balanced as all things should be",
     "what can I say except c",
+    "oh yeah, it's all coming together r v",
     "or draw 25" //Insert new commands above this line
 };
 
-char translationPatterns[18][60] = {
+char translationPatterns[19][60] = {
     "push 0",
     "pop 0",
     "upgradeMarker:",
@@ -63,6 +64,7 @@ char translationPatterns[18][60] = {
     "ret",
     "",
     "push eax\n\tmov al, 0\n\tcall writechar\n\tpop eax",
+    "add 0, 1",
     "add eax, 25" //Insert new commands above this line
 };
 
