@@ -2,14 +2,6 @@
  <h1 align="center">MemeAssembly</h1>
  <p align="center">or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.</p>
 </p>
-  <p align="center">
-    <a href="https://github.com/kammt/MemeAssembly/actions/workflows/build_test.yml">
-        <img src="https://github.com/kammt/MemeAssembly/actions/workflows/build_test.yml/badge.svg" alt="Build Test">
-    </a>
-    <a href="https://github.com/kammt/MemeAssembly/actions/workflows/compilation_test.yml">
-      <img src="https://github.com/kammt/MemeAssembly/actions/workflows/compilation_test.yml/badge.svg" alt="Compilation Test" />
-   </a>
-  </p>
 
 ## Commands overview
 Syntax  | Usage
