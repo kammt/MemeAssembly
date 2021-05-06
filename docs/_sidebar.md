@@ -2,5 +2,9 @@
 * Commands
     * [Printing to the console](pages/commands/printing.md)
     * [Stack Operations](README.md)
-    * [Compiler usage](README.md)
-    * [Hello World](README.md)    
+    * [Logical Operations](README.md)
+    * [Mathematical Operations](README.md)    
+    * [Mathematical Operations](README.md) 
+    * [Comparing two values](README.md) 
+    * [Defining Jump-markers](README.md) 
+    * [Balancing your code](README.md)   

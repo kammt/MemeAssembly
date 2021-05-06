@@ -14,7 +14,7 @@
 
 ## Hello World
 So let's create our first program! 
-1. Create a text file and name it "HelloWorld.memeasm"
+1. Create a new file and name it "HelloWorld.memeasm"
 2. Now open it using a text editor of your choice and paste the following code into it:
     ```
     what can I say except H
