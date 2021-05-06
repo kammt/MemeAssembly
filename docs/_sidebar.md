@@ -1,8 +1,8 @@
 * [Getting Started](getting_started.md)
 * Commands
-    * [Printing to the console](pages/commands/printing.md)
+    * [Printing to the console](commands/printing.md)
     * Stack Operations
-        * [Pushing to the stack](pages/commands/push.md)
+        * [Pushing to the stack](commands/push.md)
         * [Remove from the stack](README.md)
     * [Moving values into registers](README.md)
     * [Logical Operations](README.md)
