@@ -30,16 +30,31 @@
       loadSidebar: true,
       autoHeader: true,
 
+      themeable: {
+          readyTransition : true,
+          responsiveTables: true 
+      },
+
       plugins: [
         EditOnGithubPlugin.create("https://github.com/kammt/MemeAssembly/tree/main/docs/")
-      ]
+      ],
+
+      search: {
+          depth      : 3,
+          noData     : 'No results!',
+          placeholder: 'Search...'
+      }
     }
   </script>
+
   <!-- Docsify v4 -->
   <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
 
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify-sidebar-collapse/dist/docsify-sidebar-collapse.min.js"></script>
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-sidebar-collapse/dist/sidebar.min.css" />
   <script src="//cdn.jsdelivr.net/npm/docsify-copy-code"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
+
 </body>
 </html>
