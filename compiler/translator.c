@@ -36,7 +36,7 @@ char commandPatterns[20][60] = {
     "downvote r",
     "they're the same picture",
     "corporate needs you to find the difference between r and v",
-    "r is great, but I want v",
+    "r is brilliant, but I like v",
     "ah shit, here we go again",
     "parry v you filthy casual r",
     "no, I don't think I will",
