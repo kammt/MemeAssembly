@@ -1,5 +1,7 @@
 ## Installation
-1. Download MemeAssembly. This can be done either by [downloading the latest release](https://github.com/kammt/MemeAssembly/releases) or by cloning the GitHub repository using \
+1. Download MemeAssembly. This can be done either by 
+    - [downloading the latest release](https://github.com/kammt/MemeAssembly/releases) 
+    - or by cloning the GitHub repository using \
 ```git clone https://github.com/kammt/MemeAssembly.git```
 2. Open a terminal and set the current directory so that you are in the root directory of the project
 3. 
