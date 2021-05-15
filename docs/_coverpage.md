@@ -7,7 +7,3 @@
 
 # MemeAssembly <small>v0.2</small>
 > An x86-Assembly based programming language using only memes as commands
-
-
-
-![color](#3366ff)
