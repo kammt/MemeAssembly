@@ -33,4 +33,4 @@ So let's create our first program!
     ```
 3. Open a terminal in the directory of your file and type ```memeasm HelloWorld.memeasm```
 4. Voilà! The output of your program is <br>
-<img src="casts/helloWorld.svg" width="60%" > 
+<img src="casts/helloWorld.svg" max-width="60em" > 
