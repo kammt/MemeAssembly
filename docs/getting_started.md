@@ -3,8 +3,8 @@
 ```git clone https://github.com/kammt/MemeAssembly.git```
 2. Open a terminal and set the current directory so that you are in the root directory of the project
 3. 
-    1. Install the compiler in */usr/bin* by typing ```sudo make install```. Root priveleges are required for this.
-    2. Simply compile the project by typing ```make all```. The executable is now in the current working directory.
+    - Install the compiler in */usr/bin* by typing ```sudo make install```. Root priveleges are required for this.
+    - Simply compile the project by typing ```make all```. The executable is now in the current working directory.
 
 ## Compiler usage
 - ```memeasm (-c | --compile) [-v | -vv] sourceFile destinationFile``` - only compiles the specified file
