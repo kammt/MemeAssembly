@@ -2,7 +2,8 @@
 ```stonks [value/register]```
 ### Description
 Pushes the given value or register to the stack. Only 16 and 32 bit registers are supported by this operation. The stack can be used to temporarily save values that do not fit into registers.
-> Note: Values pushed to the stack have to be removed before the end of your code or else a Segmentation Fault will occur!
+
+!> Values pushed to the stack have to be removed before the end of your code or else a Segmentation Fault will occur!
 
 ### Origin
 This command is derived from the "Stonks" meme. More information can be found [here](https://knowyourmeme.com/memes/stonks). \

@@ -16,7 +16,7 @@ Escape Sequence  | Usage
 ```\?``` | Question mark
 ```\\``` | Backslash
 
-> Please note: Printing Unicode-Characters directly is not possible. However, using [this program](https://play.golang.org/p/TojzlTMIcJe), you can get the sequence of commands needed to print your character.
+?> Printing Unicode-Characters directly is not possible. However, using [this program](https://play.golang.org/p/TojzlTMIcJe), you can get the sequence of commands needed to print your character.
 
 ### Origin
 This command is derived from the "What can I say except you're welcome" meme. More information can be found [here](https://knowyourmeme.com/memes/youre-welcome). \

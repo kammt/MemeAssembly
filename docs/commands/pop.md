@@ -2,7 +2,8 @@
 ```not stonks [register]```
 ### Description
 Moves the last value on the stack into the specified register. The amount of data removed from the stack depends on the size of the destination register.
-> Note: Values pushed to the stack have to be removed before the end of your code or else a Segmentation Fault will occur!
+
+!> Values pushed to the stack have to be removed before the end of your code or else a Segmentation Fault will occur!
 
 ### Origin
 This command is derived from the "Stonks" meme. More information can be found [here](https://knowyourmeme.com/memes/stonks). \
