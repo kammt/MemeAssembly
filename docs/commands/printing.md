@@ -19,7 +19,9 @@ Escape Sequence  | Usage
 > Please note: Printing Unicode-Characters directly is not possible. However, using [this program](https://play.golang.org/p/TojzlTMIcJe), you can get the sequence of commands needed to print your character.
 
 ### Origin
-This command is derived from the "What can I say except you're welcome" meme. More information can be found [here](https://knowyourmeme.com/memes/youre-welcome).
+This command is derived from the "What can I say except you're welcome" meme. More information can be found [here](https://knowyourmeme.com/memes/youre-welcome). \
+![Bitconnect GIF](https://media.tenor.com/images/778ac5849626f52c2dd9a020b58ec55a/tenor.gif)
+
 
 ### Examples
 #### 1. Hello World!
@@ -48,7 +50,7 @@ what can I say except 142
 
 #### 3. Print the alphabet with spaces in between and a new line at the end
 ```
-eax is great, but I want 65
+eax is brilliant, but I like 65
 
 upgrade
 what can I say except al

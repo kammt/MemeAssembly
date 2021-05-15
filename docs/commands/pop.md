@@ -1,7 +1,7 @@
 ### Definition
-```stonks [value/register]```
+```not stonks [register]```
 ### Description
-Pushes the given value or register to the stack. Only 16 and 32 bit registers are supported by this operation. The stack can be used to temporarily save values that do not fit into registers.
+Moves the last value on the stack into the specified register. The amount of data removed from the stack depends on the size of the destination register.
 > Note: Values pushed to the stack have to be removed before the end of your code or else a Segmentation Fault will occur!
 
 ### Origin
