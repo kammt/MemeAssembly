@@ -1,10 +1,11 @@
 ## Installation
-1. Download MemeAssembly. This can be done either by 
+1. Make sure that both [NASM](https://nasm.us/) and [GCC](https://gcc.gnu.org/) are installed on your computer.
+2. Download MemeAssembly. This can be done either by 
     - [downloading the latest release](https://github.com/kammt/MemeAssembly/releases) 
     - or by cloning the GitHub repository using \
 ```git clone https://github.com/kammt/MemeAssembly.git```
-2. Open a terminal and set the current directory so that you are in the root directory of the project
-3. 
+3. Open a terminal and set the current directory so that you are in the root directory of the project
+4. 
     - Install the compiler in */usr/bin* by typing ```sudo make install```. Root priveleges are required for this.
     - Simply compile the project by typing ```make all```. The executable is now in the current working directory.
 
