@@ -20,7 +20,7 @@ Syntax  | Usage
 ```upgrade [other commands] fuck go back``` | Defines a marker and jumps back to that marker at a later point
 ```[command] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
 ```guess I'll die``` | Crashes the program with a segmentation fault
-```bitconeeeeeeect [destination] [register/value]``` | Performs a logical and
+```bitconneeeeeeect [destination] [register/value]``` | Performs a logical and
 ```sneak 100 [register]``` | Sets a register to zero
 ```upvote [register]``` | Adds 1 to the specified register
 ```downvote [register]``` | Subtracts 1 from the specified register

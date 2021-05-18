@@ -30,7 +30,7 @@ char commandPatterns[20][60] = {
     "upgrade",
     "fuck go back",
     "guess I'll die",
-    "bitconeeeeeeect r v",
+    "bitconneeeeeeect r v",
     "sneak 100 r",
     "upvote r",
     "downvote r",
