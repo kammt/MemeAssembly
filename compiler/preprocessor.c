@@ -76,10 +76,9 @@ void preprocessPerfectlyBalanced(char file[][128]) {
     }
     //Now we calculate the number of lines to be deleted
     int deleteNumberOfLines = linesOfCode - (int) temp;
-    
+
     int i = 0;
     while(i < deleteNumberOfLines) {
-        srand(time(NULL));
         int randomLine = (rand() % (numberOfLines-1)) + 1; //Choose a random line
         printDebugMessageWithNumber("Chose random line:", randomLine);
         //Check if that line was already cleared
