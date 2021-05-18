@@ -20,14 +20,14 @@ Syntax  | Usage
 ```upgrade [other commands] fuck go back``` | Defines a marker and jumps back to that marker at a later point
 ```[command] or draw 25``` | The compiler will completely disregard the command before and instead add 25 to the register eax
 ```guess I'll die``` | Crashes the program with a segmentation fault
-```bitconeeeeeeect [destination] [register/value]``` | Performs a logical and
+```bitconneeeeeeect [destination] [register/value]``` | Performs a logical and
 ```sneak 100 [register]``` | Sets a register to zero
 ```upvote [register]``` | Adds 1 to the specified register
 ```downvote [register]``` | Subtracts 1 from the specified register
 ```upgrades, people. Upgrades [register]``` | Doubles the register value
 ```they had us in the first half, not gonna lie [register]``` | Halves the register value
 ```parry [value/register] you filthy casual [destination]``` | Subtracts the specified value from a register
-```[destination] is great, but I want [register/value]``` | Move a value into a register
+```[destination] is brilliant, but I like [register/value]``` | Move a value into a register
 ```ah shit, here we go again``` | Jumps back to the beginning of your code
 ```they're the same picture``` | A jump marker for the command below
 ```corporate needs you to find the difference between [register/value] and [register/value]``` | Compares both arguments and jumps to "they're the same picture" if both values are equal
@@ -52,7 +52,7 @@ fuck go back
 ```
 3. Add 25 to 64:
 ```
-ebx is great, but I want 64
+ebx is brilliant, but I like 64
 sneak 100 eax
 
 upgrade
@@ -66,7 +66,7 @@ they're the same picture
 
 4. Print the alphabet with spaces in between and a new line at the end:
 ```
-eax is great, but I want 65
+eax is brilliant, but I like 65
 
 upgrade
 what can I say except al
