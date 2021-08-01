@@ -29,12 +29,11 @@ void removeLineBreak(char *token) {
 
 /**
  * Checks whether this line should be skipped or not
- * @param lineString the parsed line
- * @param lineStringLength the length of this line
  * @return 0 if it is of interest (=> code), 1 if it should be skipped (e.g. it is a comment or it's empty)
  */
-int isLineOfInterest(char *lineString, ssize_t lineStringLength) {
-    if(lineLength != 1 && strncmp(line, commentStart, min(strlen(line), strlen(commentStart))) != 0) {
+int isLineOfInterest() {
+    //TODO tabbed comments?
+    if(lineLength != 1 && strncmp(line, commentStart, min(lineLength, strlen(commentStart))) != 0) {
         return 0;
     }
     return 1;
@@ -51,7 +50,7 @@ int getLinesOfCode(FILE *inputFile) {
     int loc = 0;
 
     while((lineLength = getline(&line, &len, inputFile)) != -1) {
-        if(isLineOfInterest(line, lineLength) == 0) {
+        if(isLineOfInterest() == 0) {
             loc++;
         }
     }
@@ -62,20 +61,89 @@ int getLinesOfCode(FILE *inputFile) {
     return loc;
 }
 
-struct command parseLine(char *line, ssize_t lineLength) {
+struct command parseLine(int lineNum) {
+    //Temporarily save the line on the stack to be able to restore when a comparison failed
     struct command parsedCommand;
-    char linecpy[strlen(line) + 1];
-    strncpy(linecpy, line, strlen(line) + 1);
+    char lineCpy[strlen(line) + 1];
+    strncpy(lineCpy, line, strlen(line) + 1);
 
+    char *savePtrLine;
+    char *savePtrPattern;
 
+    //Iterate through all possible commands
+    for(int i = 0; i < NUMBER_OF_COMMANDS; i++) {
+        strncpy(lineCpy, line, strlen(line) + 1);
+        savePtrLine = NULL;
+        savePtrPattern = NULL;
 
-    return parsedCommand;
+        //Copy the current command pattern out of read-only memory
+        char commandString[COMMAND_LIST_MAX_STRING_LENGTH + 1];
+        strncpy(commandString, commandList[i], COMMAND_LIST_MAX_STRING_LENGTH);
+
+        //Tokenize both strings. Tabs at the beginning are allowed and should be ignored, hence they are a delimiter
+        char *commandToken = strtok_r(commandString, " \t", &savePtrPattern);
+        char *lineToken = strtok_r(lineCpy, " \t", &savePtrLine);
+
+        int numberOfParameters = 0;
+        parsedCommand.isPointer = 0;
+
+        //Enter the comparison loop
+        while (commandToken != NULL && lineToken != NULL) {
+            printf("%s has length %lu\n", commandToken, strlen(commandToken));
+            //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
+            if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
+                strncpy(parsedCommand.params[numberOfParameters++], lineToken, min(strlen(lineToken), sizeof(parsedCommand.params[0])));
+
+                //If the line after this parameter contains "do you know de wey", mark it as a pointer
+                if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
+                    printDebugMessage("'do you know de wey' was found", "");
+                    //If another parameter is already marked as a variable, throw an error
+                    if(parsedCommand.isPointer != 0) {
+                        printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
+                    } else {
+                        parsedCommand.isPointer = numberOfParameters;
+                        //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
+                        savePtrLine += strlen(pointerSuffix);
+                    }
+                }
+            } else if(strcmp(commandToken, lineToken) != 0) {
+                //If both tokens do not match, try the next command
+                break;
+            }
+
+            //Tokenize both strings again. This time, only spaces are allowed
+            commandToken = strtok_r(NULL, " ", &savePtrPattern);
+            lineToken = strtok_r(NULL, " ", &savePtrLine);
+        }
+
+        if(commandToken != NULL && lineToken != NULL) {
+            continue;
+        }
+
+        /*Either the line or the command pattern have reached their end. We now have to check what caused the problem
+         * - if both are NULL, then there is no problem!
+         * - if the commandToken is NULL, then we should have been at the end of the line. Check if the rest is equal to 'or draw 25'. If not, try the next command
+         * - if the token is NULL, then the line is too short, try the next command
+         */
+        if(commandToken == NULL && lineToken == NULL) {
+            parsedCommand.opcode = i;
+            return parsedCommand;
+        } else if(lineToken == NULL) {
+            break;
+        //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
+        } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
+            parsedCommand.opcode = OR_DRAW_25_OPCODE;
+            return parsedCommand;
+        }
+    }
+
+    printSyntaxError("Failed to parse command:", line, lineNum);
 }
 
 struct command *parseCommands(FILE *inputFile) {
     //First, we create an array of command structs
     int loc = getLinesOfCode(inputFile);
-    struct command *commands = calloc(sizeof(struct command), loc);
+    struct command *commands = calloc(sizeof(struct command), (size_t) loc);
     if(commands == NULL) {
         fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
         exit(EXIT_FAILURE);
@@ -84,13 +152,16 @@ struct command *parseCommands(FILE *inputFile) {
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array
     int i = 0;
+    int lineNumber = 1;
 
     while((lineLength = getline(&line, &len, inputFile)) != -1) {
-        if(isLineOfInterest(line, lineLength) == 0) {
+        if(isLineOfInterest() == 0) {
             removeLineBreak(line);
             printDebugMessage("Parsing line:", line);
-            *(commands + i) = parseLine(line, lineLength);
+            *(commands + i) = parseLine(lineNumber);
+            i++;
         }
+        lineNumber++;
     }
 
     return commands;
