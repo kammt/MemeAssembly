@@ -34,6 +34,27 @@ struct commandsArray {
     int size;
 };
 
+struct command {
+    char pattern[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH];
+    uint8_t usesPointer; //1 = Uses String pointer, 0 = Uses two char arrays
+    uint8_t usedParameters;
+    /*
+     * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
+     * That way, each parameter can allow multiple variable types.
+     *  Bit 0: 32 bit and 64 bit registers
+     *  Bit 1: 16 bit registers
+     *  Bit 2: 8 bit registers
+     *  Bit 3: decimal numbers
+     *  Bit 4: Characters (including Escape Sequences)
+     *  Bit 5: Not used yet
+     *  Bit 6: Not used yet
+     *  Bit 7: Not used yet
+     */
+    uint8_t allowedTypesParam1;
+    uint8_t allowedTypesParam2;
+    char translationPattern[COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH];
+};
+
 #define commentStart "What the hell happened here?"
 
 #define orDraw25Suffix "or draw 25"

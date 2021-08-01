@@ -9,36 +9,7 @@ char *line = NULL;
 size_t len = 0;
 ssize_t lineLength;
 
-char commandList[NUMBER_OF_COMMANDS][COMMAND_LIST_MAX_STRING_LENGTH] = {
-        "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
-        "right back at ya, buckaroo",
-        "stonks p",
-        "not stonks p",
-        "upgrade",
-        "fuck go back",
-        "guess I'll die",
-        "bitconneeeeeeect p p",
-        "sneak 100 p",
-        "upvote p",
-        "downvote p",
-        "they're the same picture",
-        "corporate needs you to find the difference between p and p",
-        "p is brilliant, but I like p",
-        "ah shit, here we go again",
-        "parry p you filthy casual p",
-        "no, I don't think I will",
-        "perfectly balanced as all things should be",
-        "what can I say except p",
-        "upgrades, people. Upgrades p",
-        "they had us in the first half, not gonna lie p",
-        "monke p",
-        "return to monke p",
-        "who would win? p or p",
-        "p wins",
-        "banana",
-        "where banana",
-        "or draw 25" //Insert commands above this one
-};
+extern struct command commandList[];
 
 unsigned int min(unsigned int one, unsigned int two) {
     if(one > two) {
@@ -92,9 +63,9 @@ int getLinesOfCode(FILE *inputFile) {
     return loc;
 }
 
-struct command parseLine(int lineNum) {
+struct parsedCommand parseLine(int lineNum) {
     //Temporarily save the line on the stack to be able to restore when a comparison failed
-    struct command parsedCommand;
+    struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum;
 
     char lineCpy[strlen(line) + 1];
@@ -110,8 +81,8 @@ struct command parseLine(int lineNum) {
         savePtrPattern = NULL;
 
         //Copy the current command pattern out of read-only memory
-        char commandString[COMMAND_LIST_MAX_STRING_LENGTH + 1];
-        strncpy(commandString, commandList[i], COMMAND_LIST_MAX_STRING_LENGTH);
+        char commandString[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH + 1];
+        strncpy(commandString, commandList[i].pattern, COMMAND_PATTERN_LIST_MAX_STRING_LENGTH);
 
         //Tokenize both strings. Tabs at the beginning are allowed and should be ignored, hence they are a delimiter
         char *commandToken = strtok_r(commandString, " \t", &savePtrPattern);
@@ -126,20 +97,32 @@ struct command parseLine(int lineNum) {
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
                 printDebugMessage("\tInterpreting as parameter:", lineToken);
-                strncpy(parsedCommand.params[numberOfParameters++], lineToken, min((unsigned int) strlen(lineToken) + 1, MAX_PARAMETER_LENGTH));
 
-                //If the line after this parameter contains "do you know de wey", mark it as a pointer
-                if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
-                    printDebugMessage("\t\t'do you know de wey' was found, interpreting as pointer", "");
-                    //If another parameter is already marked as a variable, throw an error
-                    if(parsedCommand.isPointer != 0) {
-                        printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
-                        //Return something to be added to the array, compilation won't continue anyway. If we wouldn't stop here, an "Failed to parse" error would be printed again
-                        return parsedCommand;
-                    } else {
-                        parsedCommand.isPointer = (uint8_t) numberOfParameters;
-                        //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
-                        savePtrLine += strlen(pointerSuffix);
+                //We now need to check if we save a pointer or save the variable directly
+                if(commandList[i].usesPointer == 1) {
+                    char *variable = malloc(strlen(lineToken) + 1);
+                    if(variable == NULL) {
+                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                        exit(EXIT_FAILURE);
+                    }
+                    strncpy(variable, lineToken, strlen(lineToken));
+                    parsedCommand.parameters.pointer.param = variable;
+                } else {
+                    strncpy(parsedCommand.parameters.paramsArray.params[numberOfParameters++], lineToken, min((unsigned int) strlen(lineToken) + 1, MAX_PARAMETER_LENGTH));
+
+                    //If the line after this parameter contains "do you know de wey", mark it as a pointer
+                    if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
+                        printDebugMessage("\t\t'do you know de wey' was found, interpreting as pointer", "");
+                        //If another parameter is already marked as a variable, throw an error
+                        if(parsedCommand.isPointer != 0) {
+                            printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
+                            //Return something to be added to the array, compilation won't continue anyway. If we wouldn't stop here, an "Failed to parse" error would be printed again
+                            return parsedCommand;
+                        } else {
+                            parsedCommand.isPointer = (uint8_t) numberOfParameters;
+                            //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
+                            savePtrLine += strlen(pointerSuffix);
+                        }
                     }
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
@@ -185,7 +168,7 @@ struct command parseLine(int lineNum) {
 struct commandsArray parseCommands(FILE *inputFile) {
     //First, we create an array of command structs
     int loc = getLinesOfCode(inputFile);
-    struct command *commands = calloc(sizeof(struct command), (size_t) loc);
+    struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), (size_t) loc);
     if(commands == NULL) {
         fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
         exit(EXIT_FAILURE);
