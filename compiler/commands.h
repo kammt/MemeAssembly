@@ -1,7 +1,3 @@
-//
-// Created by tobias on 01.08.21.
-//
-
 #ifndef MEMEASSEMBLY_COMMANDS_H
 #define MEMEASSEMBLY_COMMANDS_H
 
@@ -12,11 +8,13 @@ struct command {
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter
 };
 
-char *functionDeclaration = "I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun";
-char *functionReturn = "right back at ya, buckaroo";
-char *commentStart = "What the hell happened here?";
+const char *functionDeclaration = "I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun";
+const char *functionReturn = "right back at ya, buckaroo";
+const char *commentStart = "What the hell happened here?";
+const char *orDraw25Suffix = "or draw 25";
+const char *pointerSuffix = "do you know de wey";
 
-char commandList[19][58] = {
+const char commandList[25][58] = {
         "stonks p",
         "not stonks p",
         "upgrade",
@@ -36,6 +34,12 @@ char commandList[19][58] = {
         "what can I say except p",
         "upgrades, people. Upgrades p",
         "they had us in the first half, not gonna lie p",
+        "monke p",
+        "return to monke p",
+        "who would win? p or p",
+        "p wins",
+        "banana",
+        "where banana"
 };
 
 #endif //MEMEASSEMBLY_COMMANDS_H
