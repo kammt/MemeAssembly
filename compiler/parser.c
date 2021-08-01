@@ -89,7 +89,7 @@ struct command parseLine(int lineNum) {
 
         //Enter the comparison loop
         while (commandToken != NULL && lineToken != NULL) {
-            printf("%s has length %lu\n", commandToken, strlen(commandToken));
+            printf("\tcomparing %s with %s\n", lineToken, commandToken);
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
                 strncpy(parsedCommand.params[numberOfParameters++], lineToken, min(strlen(lineToken), sizeof(parsedCommand.params[0])));
