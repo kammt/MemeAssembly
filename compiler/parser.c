@@ -89,14 +89,15 @@ struct command parseLine(int lineNum) {
 
         //Enter the comparison loop
         while (commandToken != NULL && lineToken != NULL) {
-            printf("\tcomparing %s with %s\n", lineToken, commandToken);
+            printDebugMessage("\tcomparing with", commandToken);
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
+                printDebugMessage("\tInterpreting as parameter:", lineToken);
                 strncpy(parsedCommand.params[numberOfParameters++], lineToken, min(strlen(lineToken), sizeof(parsedCommand.params[0])));
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
                 if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
-                    printDebugMessage("'do you know de wey' was found", "");
+                    printDebugMessage("\t\t'do you know de wey' was found, interpreting as pointer", "");
                     //If another parameter is already marked as a variable, throw an error
                     if(parsedCommand.isPointer != 0) {
                         printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
@@ -108,6 +109,7 @@ struct command parseLine(int lineNum) {
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
+                printDebugMessage("\tMatching failed, attempting to match next command", "");
                 break;
             }
 
@@ -129,9 +131,11 @@ struct command parseLine(int lineNum) {
             parsedCommand.opcode = i;
             return parsedCommand;
         } else if(lineToken == NULL) {
+            printDebugMessage("\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "");
             break;
         //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
+            printDebugMessage("\t'or draw 25' was found, replacing opcode", "");
             parsedCommand.opcode = OR_DRAW_25_OPCODE;
             return parsedCommand;
         }
