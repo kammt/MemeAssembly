@@ -131,7 +131,7 @@ void printDebugMessageWithNumber(char message[], int variable) {
  * @param lineNum the line number
  */
 void printSemanticError(char message[], int lineNum) {
-    printf(RED "Semantic Error in line %d: %s", lineNum, message);
+    printf(RED "Semantic Error in line %d: %s\n" RESET, lineNum, message);
     printErrorASCII();
 }
 
@@ -142,7 +142,7 @@ void printSemanticError(char message[], int lineNum) {
  * @param originalDefinition the line Number in which the original definition was
  */
 void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
-    printf(RED "Semantic Error in line %d: %s (already defined in line %d)", lineNum, message, originalDefinition);
+    printf(RED "Semantic Error in line %d: %s (already defined in line %d)\n" RESET, lineNum, message, originalDefinition);
     printErrorASCII();
 }
 
@@ -153,7 +153,7 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
  * @param lineNum the line number
  */
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
-    printf(RED "Syntax Error in line %d: Expected %s, but got %s" RESET, lineNum, expected, got);
+    printf(RED "Syntax Error in line %d: Expected %s, but got %s\n" RESET, lineNum, expected, got);
 }
 
 /**
@@ -163,5 +163,5 @@ void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
  * @param lineNum the line number
  */
 void printSyntaxError(char message[], char got[], int lineNum) {
-    printf(RED "Syntax Error in line %d: %s '%s'", lineNum, message, got);
+    printf(RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
 }    
