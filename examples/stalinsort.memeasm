@@ -1,0 +1,38 @@
+What the hell happened here? This program takes a pointer in rdi, the number of elements in rsi and a pointer to the sorted array in rdx. No value is returned
+I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun stalinsort
+
+What the hell happened here? Set up our loop counter in r8
+sneak 100 r8d
+
+What the hell happened here? Move the first value into the destination and eax
+ecx is brilliant, but I like rdi do you know de wey
+eax is brilliant, but I like ecx
+edx do you know de wey is brilliant, but I like ecx
+
+upvote rdi
+upvote rdx
+upvote r8
+
+corporate needs you to find the difference between r8 and rsi
+
+upgrade
+What the hell happened here? Move the current value into ecx
+ecx is brilliant, but I like edi do you know de wey
+who would win? ecx or eax
+eax is brilliant, but I like ecx
+
+What the hell happened here? If ecx is greater, then this value is in order. Move it into our sorted array
+ecx wins
+rdx do you know de wey is brilliant, but I like ecx
+upvote rdx
+
+eax wins
+upvote rdi
+upvote r8
+
+corporate needs you to find the difference between r8 and rsi
+fuck go back
+
+What the hell happened here? If all elements were traversed, we land here
+they're the same picture
+right back at ya, buckaroo
