@@ -7,7 +7,7 @@
 
 #include "compiler.h" //Compiler related functions in a separate file
 
-#include "log.h"
+#include "logger/log.h"
 
 int mode = 0; //0 = Compile and Run, 1 = Compile only
 FILE *outputFile;

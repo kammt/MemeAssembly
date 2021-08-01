@@ -6,7 +6,7 @@
 #include "preprocessor.h" //Semantic analysis
 #include "translator.h" //Translation to Assembly
 #include "analyser.h" //Semantic analysis
-#include "log.h" //Writing to the command line with log levels
+#include "logger/log.h" //Writing to the command line with log levels
 
 /**
  * compiler.c:
@@ -29,12 +29,6 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     //Done, now we create the array
     char file[numberOfLines][128];
     int opcodes[numberOfLines];
-
-    printDebugMessage("Array created, rewinding source pointer...", "");
-    rewind(srcPTR);
-
-    printInfoMessage("Starting pre-translation processing...");
-    preprocess(file, srcPTR);
 
     printInfoMessage("Starting Assembly-Translation...");
     startTranslation(file, numberOfLines, opcodes, destPTR);

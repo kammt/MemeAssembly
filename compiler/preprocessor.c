@@ -6,7 +6,7 @@
 #include <time.h> //Random() function
 
 #include "translator.h" //Setting the commands to be ignored or setting jump markers etc.
-#include "log.h" //Printing to the console
+#include "logger/log.h" //Printing to the console
 
 /**
  * preprocessor.c

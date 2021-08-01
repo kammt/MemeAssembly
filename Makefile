@@ -4,10 +4,10 @@ CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wshadow -Wdouble-promotion -Wformat=2 -W
 
 .PHONY: all clean debug uninstall install
 
-all: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/log.c compiler/preprocessor.c
+all: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c
 	$(CC) -o memeasm $^ $(CFLAGS)
 
-debug: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/log.c compiler/preprocessor.c
+debug: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c
 	$(CC) -o memeasm $^ $(CFLAGS) $(CLFAGS_DEBUG)
 
 clean: 
@@ -16,5 +16,5 @@ clean:
 uninstall: 
 	$(RM) /usr/bin/memeasm
 
-install: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/log.c compiler/preprocessor.c
+install: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c
 	$(CC) -o /usr/bin/memeasm $^ $(CFLAGS)

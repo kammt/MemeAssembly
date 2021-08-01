@@ -3,7 +3,7 @@
 
 #include <string.h> //String functions
 
-#include "log.h" //Printing to the console
+#include "logger/log.h" //Printing to the console
 
 /**
  * analyser.c
