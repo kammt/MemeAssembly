@@ -44,10 +44,14 @@ int getLinesOfCode(FILE *inputFile) {
     return loc;
 }
 
-struct command parseCommands(FILE *inputFile) {
+struct command *parseCommands(FILE *inputFile) {
+    //First, we create an array of command structs
     int loc = getLinesOfCode(inputFile);
     struct command *commands = calloc(sizeof(struct command), loc);
     if(commands == NULL) {
         fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
     }
+    printDebugMessage("Struct array was created successfully", "");
+
+    return commands;
 }

@@ -5,6 +5,13 @@
 #ifndef MEMEASSEMBLY_COMMANDS_H
 #define MEMEASSEMBLY_COMMANDS_H
 
+struct command {
+    uint8_t opcode;
+    char param1[3];
+    char param2[3];
+    uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter
+};
+
 char *functionDeclaration = "I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun";
 char *functionReturn = "right back at ya, buckaroo";
 char *commentStart = "What the hell happened here?";
