@@ -10,12 +10,16 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
-int compilationFailure = 0;
+int compilationErrors = 0;
 int logLevel = 1; //Default value
 char version_string[] = "v0.1";
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
+}
+
+int getNumberOfCompilationErrors() {
+    return compilationErrors;
 }
 
 /**
@@ -48,9 +52,6 @@ void printErrorASCII() {
     printf("     \\/  \\/ \\__,_|_|\\__( )  \\__|_| |_|\\__,_|\\__| |___/ |_|_|_|\\___|\\__, |\\__,_|_(_) \n");
     printf("                       |/                                           __/ |           \n");
     printf("                                                                   |___/  \n" RESET);
-    printf("\nYour program failed to compile because of errors in your code. Please check your input file and try again.\n");
-    printf(" Exiting....\n");
-    exit(EXIT_FAILURE);
 }
 
 /**
@@ -132,9 +133,8 @@ void printDebugMessageWithNumber(char message[], int variable) {
  * @param lineNum the line number
  */
 void printSemanticError(char message[], int lineNum) {
-    compilationFailure = 1;
-    printf(RED "Semantic Error in line %d: %s\n" RESET, lineNum, message);
-    printErrorASCII();
+    compilationErrors += 1;
+    fprintf(stderr, RED "Semantic Error in line %d: %s\n" RESET, lineNum, message);
 }
 
 /**
@@ -144,9 +144,8 @@ void printSemanticError(char message[], int lineNum) {
  * @param originalDefinition the line Number in which the original definition was
  */
 void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
-    compilationFailure = 1;
-    printf(RED "Semantic Error in line %d: %s (already defined in line %d)\n" RESET, lineNum, message, originalDefinition);
-    printErrorASCII();
+    compilationErrors += 1;
+    fprintf(stderr, RED "Semantic Error in line %d: %s (already defined in line %d)\n" RESET, lineNum, message, originalDefinition);
 }
 
 /**
@@ -156,8 +155,8 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
  * @param lineNum the line number
  */
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
-    compilationFailure = 1;
-    printf(RED "Syntax Error in line %d: Expected %s, but got %s\n" RESET, lineNum, expected, got);
+    compilationErrors += 1;
+    fprintf(stderr, RED "Syntax Error in line %d: Expected %s, but got %s\n" RESET, lineNum, expected, got);
 }
 
 /**
@@ -167,6 +166,6 @@ void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
  * @param lineNum the line number
  */
 void printSyntaxError(char message[], char got[], int lineNum) {
-    compilationFailure = 1;
-    printf(RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
+    compilationErrors += 1;
+    fprintf(stderr, RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
 }    
