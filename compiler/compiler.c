@@ -8,9 +8,6 @@
 #include "analyser.h" //Semantic analysis
 #include "log.h" //Writing to the command line with log levels
 
-#include <sys/types.h>
-#include <unistd.h>
-
 /**
  * compiler.c:
  * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
@@ -52,7 +49,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
  * Compiles, links and runs the specified memeasm-file
  * @param srcPTR a pointer to the source file to be compiled
  */
-void compileAndRun(FILE *srcPTR) {
+void createExecutable(FILE *srcPTR) {
     FILE *destPTR = fopen("tmp.asm","w");
     compile(srcPTR, destPTR);
 
@@ -61,9 +58,7 @@ void compileAndRun(FILE *srcPTR) {
 
     printStatusMessage("Linking...");
     system("gcc tmp.o -g -o tmp -m32 -fno-pie -no-pie");
-    
-    printStatusMessage("Running file...");
-    execv ("tmp", NULL);
+
     //TODO delete temporary files
     exit(EXIT_SUCCESS);
 }

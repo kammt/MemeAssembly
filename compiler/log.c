@@ -91,7 +91,7 @@ void printStatusMessage(char message[]) {
 }
 
 /**
- * An information message. Will only be printed if -v or -vv is active
+ * An information message. Will only be printed if -d or -i is active
  * @param message the message
  */
 void printInfoMessage(char message[]) {
@@ -102,7 +102,7 @@ void printInfoMessage(char message[]) {
 }
 
 /**
- * A debug message. Will only be printed if -vv is active
+ * A debug message. Will only be printed if -d is active
  * @param message the message
  * @param variable an optional string variable
  */
@@ -114,7 +114,7 @@ void printDebugMessage(char message[], char *variable) {
 }
 
 /**
- * A debug message. Will only be printed if -vv is active
+ * A debug message. Will only be printed if -d is active
  * @param message the message
  * @param variable an optional integer variable
  */
