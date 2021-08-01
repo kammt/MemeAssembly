@@ -1,8 +1,8 @@
 # This is a basic workflow to help you get started with Actions
 
-name: Compilation Test
+name: Compile and Run Test
 
-# Controls when the action will run. 
+# Controls when the action will run.
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
@@ -28,6 +28,9 @@ jobs:
       # Runs a single command using the runners shell
       - name: compile the project
         run: make debug
-        
-      - name: run the compiler on example.memeasm
-        run: ./memeasm -c -d -o example.asm .github/workflows/example.memeasm
+
+      - name: run the compiler on runnable_example.memeasm
+        run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
+
+      - name: run the executable
+        run: ./tmp
