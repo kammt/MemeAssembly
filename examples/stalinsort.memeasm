@@ -1,5 +1,5 @@
 What the hell happened here? This program takes a pointer in rdi, the number of elements in rsi and a pointer to the sorted array in rdx. No value is returned
-I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun stalinsort
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun stalinsort
 
 What the hell happened here? Set up our loop counter in r8
 sneak 100 r8

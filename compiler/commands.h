@@ -23,7 +23,7 @@ const char *orDraw25End = "draw 25";
 const char *pointerSuffix = "do you know de wey";
 
 char commandList[NUMBER_OF_COMMANDS][COMMAND_LIST_MAX_STRING_LENGTH] = {
-        "I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun p",
+        "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
         "right back at ya, buckaroo",
         "stonks p",
         "not stonks p",
