@@ -4,6 +4,6 @@
 #ifndef MEMEASSEMBLY_PARSER_H
 #define MEMEASSEMBLY_PARSER_H
 
-struct command *parseCommands(FILE *inputFile);
+struct commandsArray parseCommands(FILE *inputFile);
 
 #endif //MEMEASSEMBLY_PARSER_H

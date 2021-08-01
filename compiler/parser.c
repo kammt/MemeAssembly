@@ -9,6 +9,37 @@ char *line = NULL;
 size_t len = 0;
 ssize_t lineLength;
 
+char commandList[NUMBER_OF_COMMANDS][COMMAND_LIST_MAX_STRING_LENGTH] = {
+        "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
+        "right back at ya, buckaroo",
+        "stonks p",
+        "not stonks p",
+        "upgrade",
+        "fuck go back",
+        "guess I'll die",
+        "bitconneeeeeeect p p",
+        "sneak 100 p",
+        "upvote p",
+        "downvote p",
+        "they're the same picture",
+        "corporate needs you to find the difference between p and p",
+        "p is brilliant, but I like p",
+        "ah shit, here we go again",
+        "parry p you filthy casual p",
+        "no, I don't think I will",
+        "perfectly balanced as all things should be",
+        "what can I say except p",
+        "upgrades, people. Upgrades p",
+        "they had us in the first half, not gonna lie p",
+        "monke p",
+        "return to monke p",
+        "who would win? p or p",
+        "p wins",
+        "banana",
+        "where banana",
+        "or draw 25" //Insert commands above this one
+};
+
 unsigned int min(unsigned int one, unsigned int two) {
     if(one > two) {
         return two;
@@ -64,6 +95,8 @@ int getLinesOfCode(FILE *inputFile) {
 struct command parseLine(int lineNum) {
     //Temporarily save the line on the stack to be able to restore when a comparison failed
     struct command parsedCommand;
+    parsedCommand.lineNum = lineNum;
+
     char lineCpy[strlen(line) + 1];
     strncpy(lineCpy, line, strlen(line) + 1);
 
@@ -93,7 +126,7 @@ struct command parseLine(int lineNum) {
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
                 printDebugMessage("\tInterpreting as parameter:", lineToken);
-                strncpy(parsedCommand.params[numberOfParameters++], lineToken, min((unsigned int) strlen(lineToken), sizeof(parsedCommand.params[0])));
+                strncpy(parsedCommand.params[numberOfParameters++], lineToken, min((unsigned int) strlen(lineToken) + 1, MAX_PARAMETER_LENGTH));
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
                 if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
@@ -149,7 +182,7 @@ struct command parseLine(int lineNum) {
     return parsedCommand;
 }
 
-struct command *parseCommands(FILE *inputFile) {
+struct commandsArray parseCommands(FILE *inputFile) {
     //First, we create an array of command structs
     int loc = getLinesOfCode(inputFile);
     struct command *commands = calloc(sizeof(struct command), (size_t) loc);
@@ -178,5 +211,10 @@ struct command *parseCommands(FILE *inputFile) {
         fprintf(stderr, "File Parsing failed with %d errors, please check your code and try again.\n", getNumberOfCompilationErrors());
         exit(EXIT_FAILURE);
     }
-    return commands;
+
+    struct commandsArray result = {
+            commands, loc
+    };
+
+    return result;
 }
