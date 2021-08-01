@@ -2,7 +2,7 @@ What the hell happened here? This program takes a pointer in rdi, the number of 
 I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun stalinsort
 
 What the hell happened here? Set up our loop counter in r8
-sneak 100 r8d
+sneak 100 r8
 
 What the hell happened here? Move the first value into the destination and eax
 ecx is brilliant, but I like rdi do you know de wey
