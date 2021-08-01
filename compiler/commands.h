@@ -1,20 +1,30 @@
 #ifndef MEMEASSEMBLY_COMMANDS_H
 #define MEMEASSEMBLY_COMMANDS_H
 
+#define NUMBER_OF_COMMANDS 28
+#define COMMAND_LIST_MAX_STRING_LENGTH 66
+#define MAX_PARAMETER_COUNT 2
+#define MAX_PARAMETER_LENGTH 3
+
+#define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 1;
+
 struct command {
     uint8_t opcode;
-    char param1[3];
-    char param2[3];
+    char params[MAX_PARAMETER_COUNT][MAX_PARAMETER_LENGTH];
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter
 };
 
-const char *functionDeclaration = "I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun";
-const char *functionReturn = "right back at ya, buckaroo";
 const char *commentStart = "What the hell happened here?";
+
 const char *orDraw25Suffix = "or draw 25";
+const char *orDraw25Start = "or";
+const char *orDraw25End = "draw 25";
+
 const char *pointerSuffix = "do you know de wey";
 
-const char commandList[25][58] = {
+char commandList[NUMBER_OF_COMMANDS][COMMAND_LIST_MAX_STRING_LENGTH] = {
+        "I like to have fun, fun, fun, fun, fun, fun, fun ,fun, fun, fun p",
+        "right back at ya, buckaroo",
         "stonks p",
         "not stonks p",
         "upgrade",
@@ -39,7 +49,8 @@ const char commandList[25][58] = {
         "who would win? p or p",
         "p wins",
         "banana",
-        "where banana"
+        "where banana",
+        "or draw 25" //Insert commands above this one
 };
 
 #endif //MEMEASSEMBLY_COMMANDS_H
