@@ -93,7 +93,7 @@ struct command parseLine(int lineNum) {
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
                 printDebugMessage("\tInterpreting as parameter:", lineToken);
-                strncpy(parsedCommand.params[numberOfParameters++], lineToken, min(strlen(lineToken), sizeof(parsedCommand.params[0])));
+                strncpy(parsedCommand.params[numberOfParameters++], lineToken, min((unsigned int) strlen(lineToken), sizeof(parsedCommand.params[0])));
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
                 if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
@@ -101,8 +101,10 @@ struct command parseLine(int lineNum) {
                     //If another parameter is already marked as a variable, throw an error
                     if(parsedCommand.isPointer != 0) {
                         printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
+                        //Return something to be added to the array, compilation won't continue anyway. If we wouldn't stop here, an "Failed to parse" error would be printed again
+                        return parsedCommand;
                     } else {
-                        parsedCommand.isPointer = numberOfParameters;
+                        parsedCommand.isPointer = (uint8_t) numberOfParameters;
                         //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
                         savePtrLine += strlen(pointerSuffix);
                     }
@@ -128,7 +130,7 @@ struct command parseLine(int lineNum) {
          * - if the token is NULL, then the line is too short, try the next command
          */
         if(commandToken == NULL && lineToken == NULL) {
-            parsedCommand.opcode = i;
+            parsedCommand.opcode = (uint8_t) i;
             return parsedCommand;
         } else if(lineToken == NULL) {
             printDebugMessage("\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "");
@@ -142,6 +144,9 @@ struct command parseLine(int lineNum) {
     }
 
     printSyntaxError("Failed to parse command:", line, lineNum);
+    //Any error will set the "compilationErrors" variable in log.c to 1, meaning that we can safely return something that doesn't make sense
+    //We don't exit immediately because we want to print every error possible
+    return parsedCommand;
 }
 
 struct command *parseCommands(FILE *inputFile) {
@@ -168,5 +173,10 @@ struct command *parseCommands(FILE *inputFile) {
         lineNumber++;
     }
 
+    if(getNumberOfCompilationErrors() > 0) {
+        printErrorASCII();
+        fprintf(stderr, "File Parsing failed with %d errors, please check your code and try again.\n", getNumberOfCompilationErrors());
+        exit(EXIT_FAILURE);
+    }
     return commands;
 }
