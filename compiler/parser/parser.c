@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "logger/log.h"
-#include "commands.h"
+#include "../logger/log.h"
+#include "../commands.h"
 
 char *line = NULL;
 size_t len = 0;
@@ -96,7 +96,7 @@ struct parsedCommand parseLine(int lineNum) {
             printDebugMessage("\tcomparing with", commandToken);
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
-                printDebugMessage("\tInterpreting as parameter:", lineToken);
+                printDebugMessage("\t\tInterpreting as parameter:", lineToken);
 
                 //We now need to check if we save a pointer or save the variable directly
                 if(commandList[i].usesPointer == 1) {
@@ -112,7 +112,7 @@ struct parsedCommand parseLine(int lineNum) {
 
                     //If the line after this parameter contains "do you know de wey", mark it as a pointer
                     if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
-                        printDebugMessage("\t\t'do you know de wey' was found, interpreting as pointer", "");
+                        printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
                         //If another parameter is already marked as a variable, throw an error
                         if(parsedCommand.isPointer != 0) {
                             printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
@@ -127,7 +127,7 @@ struct parsedCommand parseLine(int lineNum) {
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
-                printDebugMessage("\tMatching failed, attempting to match next command", "");
+                printDebugMessage("\t\tMatching failed, attempting to match next command", "");
                 break;
             }
 
@@ -149,11 +149,11 @@ struct parsedCommand parseLine(int lineNum) {
             parsedCommand.opcode = (uint8_t) i;
             return parsedCommand;
         } else if(lineToken == NULL) {
-            printDebugMessage("\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "");
-            break;
+            printDebugMessage("\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "");
+            continue;
         //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
-            printDebugMessage("\t'or draw 25' was found, replacing opcode", "");
+            printDebugMessage("\t\t'or draw 25' was found, replacing opcode", "");
             parsedCommand.opcode = OR_DRAW_25_OPCODE;
             return parsedCommand;
         }
