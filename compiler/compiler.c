@@ -5,7 +5,7 @@
 
 #include "commands.h"
 
-#include "parser.h" //String functions
+#include "parser/parser.h" //String functions
 #include "translator.h" //Translation to Assembly
 #include "analyser.h" //Semantic analysis
 #include "logger/log.h" //Writing to the command line with log levels
@@ -20,6 +20,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
             .usesPointer = 1,
+            .allowedTypesParam1 = 0b10000000,
             .translationPattern = "0:"
         },
         {
@@ -152,11 +153,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "monke p",
             .usesPointer = 1,
+            .allowedTypesParam1 = 0b1000000,
             .translationPattern = ".L0:"
         },
         {
             .pattern = "return to monke p",
             .usesPointer = 1,
+            .allowedTypesParam1 = 0b1000000,
             .translationPattern = "jmp .L0:"
         },
         {
@@ -166,6 +169,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .allowedTypesParam1 = 0b111,
             .allowedTypesParam2 = 0b11111,
             .translationPattern = "cmp 0, 1\n\tjg .L0Wins\n\tjmp .L1Wins"
+        },
+        {
+            .pattern = "p wins",
+            .usesPointer = 0,
+            .usedParameters = 1,
+            .allowedTypesParam1 = 0b11111,
+            .translationPattern = ".L0Wins:"
         },
         {
             .pattern = "they're the same picture",
@@ -222,10 +232,6 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
 void compile(FILE *srcPTR, FILE *destPTR) {
     struct commandsArray commands = parseCommands(srcPTR);
 
-    for(int i = 0; i < commands.size; i++) {
-        struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
-        printf("---------------\n\topcode = %d\n\tparameter1 = %s\n\tparameter2 = %s\n\tparameter%d is a pointer\n\tcommand was found in line %d\n", parsedCommand.opcode, parsedCommand.parameters.paramsArray.params[0], parsedCommand.parameters.paramsArray.params[1], parsedCommand.isPointer, parsedCommand.lineNum);
-    }
     /*
     printInfoMessage("Starting Assembly-Translation...");
     startTranslation(file, numberOfLines, opcodes, destPTR);
@@ -235,6 +241,12 @@ void compile(FILE *srcPTR, FILE *destPTR) {
 
     printSuccessMessage("File compiled successfully!");
      */
+    for(int i = 0; i < commands.size; i++) {
+        struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
+        if(commandList[parsedCommand.opcode].usesPointer == 1) {
+            free(parsedCommand.parameters.pointer.param);
+        }
+    }
     free(commands.arrayPointer);
 }
 
