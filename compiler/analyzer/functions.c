@@ -1,6 +1,5 @@
 #include "functions.h"
 #include "../logger/log.h"
-#include "../compiler.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +12,7 @@ extern int compileMode;
  * command array until a return statement, new function definition or end of array is found
  * @param commandsArray a pointer to the commands array created by the parser
  * @param functionStartAtIndex at which index of the array the function definition is
+ * @param functionDeclarationOpcode the opcode of the function declaration command. The three return commands must be the three consecutive opcodes
  * @return a function struct containing all parsed information
  */
 struct function parseFunction(struct commandsArray *commandsArray, int functionStartAtIndex, int functionDeclarationOpcode) {

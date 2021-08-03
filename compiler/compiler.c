@@ -138,7 +138,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "upgrade",
             .usedParameters = 0,
-            .analysisFunction = &checkUpgradeValidity,
+            .analysisFunction = &checkJumpLabelValidity,
             .translationPattern = ".LUpgradeMarker:"
         },
         {
@@ -150,7 +150,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "banana",
             .usedParameters = 0,
-            .analysisFunction = &checkBananaValidity,
+            .analysisFunction = &checkJumpLabelValidity,
             .translationPattern = ".LBananaMarker:"
         },
         {
