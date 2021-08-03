@@ -21,24 +21,30 @@ unsigned int min(unsigned int one, unsigned int two) {
 
 /**
  * Removes the \n from a string if it is present at the end of the string
- * @param token the token
  */
-void removeLineBreak(char *token) {
-    if(token[strlen(token)-1] == '\n') {
-        token[strlen(token)-1] = '\0';
+void removeLineBreaksAndTabs() {
+    size_t i = strlen(line) - 1;
+    while (line[i] == '\t' || line[i] == '\n' || line[i] == ' ') {
+        i--;
     }
+    line[i + 1] = '\0';
 }
 
 /**
  * Checks whether this line should be skipped or not
- * @return 0 if it is of interest (=> code), 1 if it should be skipped (e.g. it is a comment or it's empty)
+ * @return 1 if it is of interest (=> code), 0 if it should be skipped (e.g. it is a comment or it's empty)
  */
 int isLineOfInterest() {
-    //TODO tabbed comments?
-    if(lineLength != 1 && strncmp(line, commentStart, min(lineLength, strlen(commentStart))) != 0) {
-        return 0;
+    //To support tabbed comments, we need to determine when the text actually starts
+    int i = 0;
+    while (line[i] == '\t' || line[i] == ' ') {
+        i++; //Increase our variable as long as there are only tabs or spaces
     }
-    return 1;
+
+    if(lineLength != 1 && strncmp((line + i), commentStart, min(lineLength, strlen(commentStart))) != 0) {
+        return 1;
+    }
+    return 0;
 }
 
 /**
@@ -52,7 +58,7 @@ int getLinesOfCode(FILE *inputFile) {
     int loc = 0;
 
     while((lineLength = getline(&line, &len, inputFile)) != -1) {
-        if(isLineOfInterest() == 0) {
+        if(isLineOfInterest() == 1) {
             loc++;
         }
     }
@@ -64,13 +70,14 @@ int getLinesOfCode(FILE *inputFile) {
 }
 
 struct parsedCommand parseLine(int lineNum) {
-    //Temporarily save the line on the stack to be able to restore when a comparison failed
     struct parsedCommand parsedCommand;
-    parsedCommand.lineNum = lineNum;
+    parsedCommand.lineNum = lineNum; //Set the line number
 
+    //Temporarily save the line on the stack to be able to restore when a comparison failed
     char lineCpy[strlen(line) + 1];
     strncpy(lineCpy, line, strlen(line) + 1);
 
+    //Define save pointers for strtok_r
     char *savePtrLine;
     char *savePtrPattern;
 
@@ -149,13 +156,18 @@ struct parsedCommand parseLine(int lineNum) {
         //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
             printDebugMessage("\t\t'or draw 25' was found, replacing opcode", "");
+            //Before we replace the opcode though, we need to free memory that was allocated for parameters
+            for(int j = 0; j < commandList[i].usedParameters; j++) {
+                free(parsedCommand.parameters[j]);
+            }
+            //Now we can change the opcode and return the struct
             parsedCommand.opcode = OR_DRAW_25_OPCODE;
             return parsedCommand;
         }
     }
 
     printSyntaxError("Failed to parse command:", line, lineNum);
-    //Any error will set the "compilationErrors" variable in log.c to 1, meaning that we can safely return something that doesn't make sense
+    //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
     //We don't exit immediately because we want to print every error possible
     return parsedCommand;
 }
@@ -171,14 +183,19 @@ struct commandsArray parseCommands(FILE *inputFile) {
     printDebugMessage("Struct array was created successfully", "");
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array
-    int i = 0;
-    int lineNumber = 1;
+    int i = 0; //The number of structs in the array
+    int lineNumber = 1; //The line number we are currently on. We differentiate between number of commands and number of lines to print the correct line number in case of an error
 
+    //Parse the file line by line
     while((lineLength = getline(&line, &len, inputFile)) != -1) {
-        if(isLineOfInterest() == 0) {
-            removeLineBreak(line);
+        //Check if the line contains actual code or if it's empty/contains comments
+        if(isLineOfInterest() == 1) {
+            //Remove \n from the end of the line
+            removeLineBreaksAndTabs();
             printDebugMessage("Parsing line:", line);
+            //Parse the command and add the returned struct into the array
             *(commands + i) = parseLine(lineNumber);
+            //Increase our number of structs in the array
             i++;
         }
         lineNumber++;
