@@ -121,7 +121,7 @@ struct parsedCommand parseLine(int lineNum) {
                     fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                     exit(EXIT_FAILURE);
                 }
-                strncpy(variable, lineToken, strlen(lineToken));
+                strncpy(variable, lineToken, strlen(lineToken) + 1);
                 parsedCommand.parameters[numberOfParameters++] = variable;
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
