@@ -106,6 +106,10 @@ void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkFor
             }
         }
 
+        if(commandArrayIndex >= commandsArray -> size) {
+            break;
+        }
+
         //Parse the function
         functions[functionArrayIndex] = parseFunction(commandsArray, commandArrayIndex);
         //Increase our command index so that it points to the next unparsed command
