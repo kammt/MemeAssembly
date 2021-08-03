@@ -41,6 +41,7 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
+    void (*analysisFunction)(struct commandsArray*, int);
     char translationPattern[COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH];
 };
 

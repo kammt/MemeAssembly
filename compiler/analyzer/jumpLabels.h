@@ -3,6 +3,8 @@
 
 #include "../commands.h"
 
-void checkJumpLabelValidity(struct commandsArray *commandsArray, int functionDeclarationOpcode);
+void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode);
+void checkUpgradeValidity(struct commandsArray *commandsArray, int upgradeOpcode);
+void checkBananaValidity(struct commandsArray *commandsArray, int bananaOpcode);
 
 #endif //MEMEASSEMBLY_JUMPLABELS_H

@@ -10,6 +10,6 @@ struct function {
     int numberOfCommands;
 };
 
-void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkForMainFunction);
+void checkFunctionValidity(struct commandsArray *commandsArray, int functionDeclarationOpcode);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H

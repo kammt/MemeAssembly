@@ -1,5 +1,6 @@
 #include "functions.h"
 #include "../logger/log.h"
+#include "../compiler.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +13,7 @@
  * @param functionStartAtIndex at which index of the array the function definition is
  * @return a function struct containing all parsed information
  */
-struct function parseFunction(struct commandsArray *commandsArray, int functionStartAtIndex) {
+struct function parseFunction(struct commandsArray *commandsArray, int functionStartAtIndex, int functionDeclarationOpcode) {
     struct parsedCommand functionStart = *(commandsArray->arrayPointer + functionStartAtIndex);
 
     //Define the structs
@@ -44,10 +45,10 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
         //Get the opcode
         uint8_t opcode = parsedCommand.opcode;
 
-        if(opcode == 0) { //If it is a function definition, throw an error since there was no return statement until now
+        if(opcode == functionDeclarationOpcode) { //If it is a function definition, throw an error since there was no return statement until now
             printSemanticError("Expected a return statement, but got a new function definition", parsedCommand.lineNum);
             break;
-        } if(opcode > 0 && opcode <= 3) { //Function is a return statement, abort
+        } if(opcode > functionDeclarationOpcode && opcode <= functionDeclarationOpcode + 3) { //Function is a return statement, abort
             returnStatementFound = 1;
             index++;
             break;
@@ -70,14 +71,15 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
  *  - functions end with a return statement
  *  - there is a main function if it is supposed to be executable
  * @param commandsArray a pointer to the commandsArray created by the parser
+ * @param functionDeclarationOpcode the opcode of the function declaration command. The three return commands must be the three consecutive opcodes
  */
-void checkFunctionValidity(struct commandsArray *commandsArray) {
+void checkFunctionValidity(struct commandsArray *commandsArray, int functionDeclarationOpcode) {
     struct parsedCommand *arrayPointer = commandsArray->arrayPointer;
 
     //First, count how many function definitions there are
     int functionDefinitions = 0;
     for (int i = 0; i < commandsArray->size; ++i) {
-        if(arrayPointer[i].opcode == 0) {
+        if(arrayPointer[i].opcode == functionDeclarationOpcode) {
             functionDefinitions++;
         }
     }
@@ -98,7 +100,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray) {
     while (commandArrayIndex < commandsArray->size) {
         for (; commandArrayIndex < commandsArray->size; commandArrayIndex++) {
             //At this point, we are in between function definitions, so any commands that are not function definitions are illegal
-            if(arrayPointer[commandArrayIndex].opcode != 0) {
+            if(arrayPointer[commandArrayIndex].opcode != functionDeclarationOpcode) {
                 printSemanticError("Statement does not belong to any function", commandsArray -> arrayPointer[commandArrayIndex].lineNum);
             } else {
                 break;
@@ -137,7 +139,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray) {
         }
     }
 
-    if(mode == 1 && mainFunctionExists == 0) {
+    if(compileMode == 1 && mainFunctionExists == 0) {
         printSemanticError("An executable cannot be created if no main-function exists", 1);
     }
 

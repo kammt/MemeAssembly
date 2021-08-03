@@ -8,6 +8,8 @@
 #include "parser/parser.h"
 #include "analyzer/parameters.h"
 #include "analyzer/functions.h"
+#include "analyzer/jumpLabels.h"
+#include "analyzer/comparisons.h"
 #include "translator.h" //Translation to Assembly
 #include "analyser.h" //Semantic analysis
 #include "logger/log.h" //Writing to the command line with log levels
@@ -23,36 +25,41 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
             .usedParameters = 1,
             .allowedParamTypes = {0b10000000},
+            .analysisFunction = &checkFunctionValidity,
             .translationPattern = "0:"
         },
         {
             .pattern = "right back at ya, buckaroo",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "ret"
         },
         {
             .pattern = "no, I don't think I will",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "mov rax, 1\n\tret"
         },
         {
             .pattern = "I see this as an absolute win",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "mov rax, 0\n\tret"
         },
-        //TODO "ah shit, here we go again",
 
         ///Stack operations
         {
             .pattern = "stonks p",
             .usedParameters = 1,
             .allowedParamTypes = {0b11001},
+            .analysisFunction = NULL,
             .translationPattern = "push 0"
         },
         {
             .pattern = "not stonks p",
             .usedParameters = 1,
             .allowedParamTypes = {0b1},
+            .analysisFunction = NULL,
             .translationPattern = "pop 0"
         },
 
@@ -60,6 +67,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "bitconneeeeeeect p p",
             .usedParameters = 2,
+            .analysisFunction = NULL,
             .allowedParamTypes = {0b111, 0b11111}
         },
 
@@ -68,12 +76,14 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "sneak 100 p",
             .usedParameters = 1,
             .allowedParamTypes = {0b111},
+            .analysisFunction = NULL,
             .translationPattern = "xor 0, 0"
         },
         {
             .pattern = "p is brilliant, but I like p",
             .usedParameters = 2,
             .allowedParamTypes = {0b111, 0b11111},
+            .analysisFunction = NULL,
             .translationPattern = "mov 0, 1"
         },
 
@@ -82,36 +92,42 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "upvote p",
             .usedParameters = 1,
             .allowedParamTypes = {0b111},
+            .analysisFunction = NULL,
             .translationPattern = "add 0, 1"
         },
         {
             .pattern = "downvote p",
             .usedParameters = 1,
             .allowedParamTypes = {0b111},
+            .analysisFunction = NULL,
             .translationPattern = "sub 0, 1"
         },
         {
             .pattern = "parry p you filthy casual p",
             .usedParameters = 2,
             .allowedParamTypes = {0b111111, 0b111},
+            .analysisFunction = NULL,
             .translationPattern = "sub 1, 0"
         },
         {
             .pattern = "p units are ready, with p more well on the way",
             .usedParameters = 2,
             .allowedParamTypes = {0b111, 0b111111},
+            .analysisFunction = NULL,
             .translationPattern = "sub 0, 1"
         },
         {
             .pattern = "upgrades, people. Upgrades p",
             .usedParameters = 1,
             .allowedParamTypes = {0b111},
+            .analysisFunction = NULL,
             .translationPattern = "shl 0, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie p",
             .usedParameters = 1,
             .allowedParamTypes = {0b111},
+            .analysisFunction = NULL,
             .translationPattern = "shr 0, 1"
         },
 
@@ -120,63 +136,74 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "upgrade",
             .usedParameters = 0,
+            .analysisFunction = &checkUpgradeValidity,
             .translationPattern = ".LUpgradeMarker:"
         },
         {
             .pattern = "fuck go back",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "jmp .LUpgradeMarker"
         },
         {
             .pattern = "banana",
             .usedParameters = 0,
+            .analysisFunction = &checkBananaValidity,
             .translationPattern = ".LBananaMarker:"
         },
         {
             .pattern = "where banana",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "jmp .LBananaMarker"
         },
         {
             .pattern = "monke p",
             .usedParameters = 1,
             .allowedParamTypes = {0b1000000},
+            .analysisFunction = &checkMonkeJumpLabelValidity,
             .translationPattern = ".L0:"
         },
         {
             .pattern = "return to monke p",
             .usedParameters = 1,
             .allowedParamTypes = {0b1000000},
+            .analysisFunction = NULL,
             .translationPattern = "jmp .L0:"
         },
         {
             .pattern = "who would win? p or p",
             .usedParameters = 2,
             .allowedParamTypes = {0b111, 0b11111},
+            .analysisFunction = &checkWhoWouldWinValidity,
             .translationPattern = "cmp 0, 1\n\tjg .L0Wins\n\tjmp .L1Wins"
         },
         {
             .pattern = "p wins",
             .usedParameters = 1,
             .allowedParamTypes = {0b11111},
+            .analysisFunction = NULL,
             .translationPattern = ".L0Wins:"
-        },
-        {
-            .pattern = "they're the same picture",
-            .usedParameters = 0,
-            .translationPattern = ".LSamePicture:"
         },
         {
             .pattern = "corporate needs you to find the difference between p and p",
             .usedParameters = 2,
             .allowedParamTypes = {0b111, 0b11111},
+            .analysisFunction = &checkTheyreTheSamePictureValidity,
             .translationPattern = "cmp 0, 1\n\tje .LSamePicture"
+        },
+        {
+            .pattern = "they're the same picture",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = ".LSamePicture:"
         },
 
         ///IO-Operations
         {
             .pattern = "what can I say except p",
             .usedParameters = 1,
+            .analysisFunction = NULL,
             .allowedParamTypes = {0b110100}
         },
 
@@ -185,16 +212,19 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "guess I'll die",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "mov rax, [69]"
         },
         {
             .pattern = "confused stonks",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "jmp .LConfusedStonks:"
         },
         {
             .pattern = "perfectly balanced as all things should be",
             .usedParameters = 0,
+            .analysisFunction = NULL, //TODO
             .translationPattern = ""
         },
         //Insert commands above this one
