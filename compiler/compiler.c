@@ -202,6 +202,11 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "or draw 25",
             .usedParameters = 0,
             .translationPattern = "add eax, 25"
+        },
+        {
+            .pattern = "",
+            .usedParameters = 0,
+            .translationPattern = "0"
         }
 };
 
@@ -234,6 +239,12 @@ void compile(FILE *srcPTR, FILE *destPTR) {
         }
     }
     free(commands.arrayPointer);
+
+    if(getNumberOfCompilationErrors() > 0) {
+        printErrorASCII();
+        fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", getNumberOfCompilationErrors());
+        exit(EXIT_FAILURE);
+    }
 }
 
 /**
