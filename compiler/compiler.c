@@ -177,7 +177,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "what can I say except p",
             .usedParameters = 1,
-            .allowedParamTypes = {0b10100}
+            .allowedParamTypes = {0b110100}
         },
 
 
