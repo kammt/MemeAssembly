@@ -179,6 +179,7 @@ struct parsedCommand parseLine(int lineNum) {
         }
     }
 
+    parsedCommand.opcode = INVALID_COMMAND_OPCODE;
     printSyntaxError("Failed to parse command:", line, lineNum);
     //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
     //We don't exit immediately because we want to print every error possible
@@ -212,12 +213,6 @@ struct commandsArray parseCommands(FILE *inputFile) {
             i++;
         }
         lineNumber++;
-    }
-
-    if(getNumberOfCompilationErrors() > 0) {
-        printErrorASCII();
-        fprintf(stderr, "File Parsing failed with %d errors, please check your code and try again.\n", getNumberOfCompilationErrors());
-        exit(EXIT_FAILURE);
     }
 
     struct commandsArray result = {
