@@ -11,6 +11,7 @@
 
 FILE *outputFile;
 FILE *inputFile;
+extern int compileMode;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal

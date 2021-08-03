@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdio.h>
 
+extern int compileMode;
+
 /**
  * Creates a function struct by starting at the function definition and then traversing the
  * command array until a return statement, new function definition or end of array is found
@@ -112,7 +114,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
         }
 
         //Parse the function
-        functions[functionArrayIndex] = parseFunction(commandsArray, commandArrayIndex);
+        functions[functionArrayIndex] = parseFunction(commandsArray, commandArrayIndex, functionDeclarationOpcode);
         //Increase our command index so that it points to the next unparsed command
         commandArrayIndex += functions[functionArrayIndex].numberOfCommands + 1;
         //Increase our function array index so that it points to the next uninitialised struct

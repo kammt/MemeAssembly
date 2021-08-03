@@ -19,6 +19,8 @@
  * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
  */
 
+int compileMode = 0;
+
 struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
@@ -251,7 +253,11 @@ void compile(FILE *srcPTR, FILE *destPTR) {
         checkParameters(&commands.arrayPointer[i]);
     }
 
-    checkFunctionValidity(&commands, 1);
+    for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
+        if(commandList[opcode].analysisFunction != NULL) {
+            commandList[opcode].analysisFunction(&commands, opcode);
+        }
+    }
 
     /*
     printInfoMessage("Starting Assembly-Translation...");
