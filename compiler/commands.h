@@ -11,14 +11,6 @@
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 1;
 
-struct params {
-    char params[MAX_PARAMETER_COUNT][MAX_PARAMETER_LENGTH];
-};
-
-struct variablePointer {
-    char* param;
-};
-
 struct parsedCommand {
     uint8_t opcode;
     char *parameters[MAX_PARAMETER_COUNT];
@@ -28,7 +20,7 @@ struct parsedCommand {
 
 struct commandsArray {
     struct parsedCommand* arrayPointer;
-    int size;
+    size_t size;
 };
 
 struct command {
