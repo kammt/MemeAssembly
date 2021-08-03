@@ -28,6 +28,8 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
     //Set the line number
     function.definedInLine = functionStart.lineNum;
 
+    printDebugMessage("\tParsing function:", functionName);
+
     int index = 1;
     uint8_t returnStatementFound = 0;
     //Iterate through all commands until a return statement is found or the end of the array is reached
@@ -38,7 +40,6 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
 
         if(opcode == 0) { //If it is a function definition, throw an error since there was no return statement until now
             printSemanticError("Expected a return statement, but got a new function definition", parsedCommand.lineNum);
-
             break;
         } if(opcode > 0 && opcode <= 3) { //Function is a return statement, abort
             returnStatementFound = 1;
@@ -47,6 +48,7 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
         }
         index++;
     }
+    printDebugMessageWithNumber("\tIteration stopped at index", index);
 
     if(returnStatementFound == 0) {
         printSemanticError("No return statement found", functionStart.lineNum);
@@ -74,6 +76,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkFor
             functionDefinitions++;
         }
     }
+    printDebugMessageWithNumber("Number of functions:", functionDefinitions);
 
     //Now we create our array of functions
     int functionArrayIndex = 0;
@@ -82,6 +85,8 @@ void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkFor
         fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
         exit(EXIT_FAILURE);
     }
+
+    printDebugMessage("Starting function parsing", "");
 
     //We now traverse the commands array again, this time parsing the functions
     int commandArrayIndex = 0; //At which command we currently are
@@ -127,6 +132,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkFor
         printSemanticError("An executable cannot be created if no main-function exists", 1);
     }
 
+    printDebugMessage("Checks done, freeing memory", "");
     //Now, we free all memory again
     for(int i = 0; i < functionDefinitions; i++) {
         //Free the pointer to the function name
