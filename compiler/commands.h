@@ -35,7 +35,7 @@ struct command {
      *  Bit 2: 8 bit registers
      *  Bit 3: decimal numbers
      *  Bit 4: Characters (including Escape Sequences)
-     *  Bit 5: Not used yet
+     *  Bit 5: ASCII-Code
      *  Bit 6: Valid Monke Jump Label
      *  Bit 7: Valid function name
      */

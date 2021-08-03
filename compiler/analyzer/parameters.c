@@ -216,6 +216,19 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             }
             printDebugMessage("\t\tParameter is neither a character nor an escape sequence", "");
         }
+        if((allowedTypes & 0b100000) != 0) { //ASCII-code
+            char* endPtr;
+            long result = strtol(parameter, &endPtr, 10);
+            //If the end pointer does not point to the end of the string, there was an illegal character
+            if(*endPtr == '\0' && result >= 0 && result <= 127) {
+                printDebugMessage("\t\tParameter is an ASCII-code", "");
+                if(parsedCommand -> isPointer == parameterNum + 1) {
+                    printSyntaxErrorWithoutString("An ASCII-code cannot be a pointer", parsedCommand -> lineNum);
+                }
+                continue;
+            }
+            printDebugMessage("\t\tParameter is not an ASCII-code", "");
+        }
         if((allowedTypes & 0b1000000) != 0) { //Monke Jump label
             //Iterate through each character and check if it is either a U or an A
             //Define variables that are set to 1 if either a U or an A are found. That way, you can check if both of them occurred at least once
