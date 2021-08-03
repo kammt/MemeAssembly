@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
                 printHelpPage(argv[0]);
                 return 0;
             case 'c':
-                compileMode = 1;
+                compileMode = 0;
                 break;
             case 'd':
                 setLogLevel(3);
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if(compileMode == 0) {
+        if(compileMode == 1) {
             createExecutable(inputFile);
         } else {
             compile(inputFile, outputFile);

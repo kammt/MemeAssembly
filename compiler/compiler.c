@@ -19,7 +19,7 @@
  * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
  */
 
-int compileMode = 0;
+int compileMode = 1; //1 = Create Executable, 0 = Compile only
 
 struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
