@@ -168,4 +168,14 @@ void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
 void printSyntaxError(char message[], char got[], int lineNum) {
     compilationErrors += 1;
     fprintf(stderr, RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
-}    
+}
+
+/**
+ * Prints a generic syntax error
+ * @param message the error message
+ * @param lineNum the line number
+ */
+void printSyntaxErrorWithoutString(char message[], int lineNum) {
+    compilationErrors += 1;
+    fprintf(stderr, RED "Syntax Error in line %d: %s\n" RESET, lineNum, message);
+}

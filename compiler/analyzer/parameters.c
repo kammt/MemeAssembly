@@ -151,9 +151,8 @@ void translateCharacter(char *parameter, int parameterNum, struct parsedCommand 
 /**
  * Checks if the given parsed command adheres to the parameter constraints (i.e. the parameters are legal)
  * @param parsedCommand
- * @return 1 if the parameters are valid, 0 otherwise
  */
-int hasValidParameters(struct parsedCommand *parsedCommand) {
+void checkParameters(struct parsedCommand *parsedCommand) {
     printDebugMessage("Starting parameter validity check", "");
     for(int parameterNum = 0; parameterNum < commandList[(*parsedCommand).opcode].usedParameters; parameterNum++) {
         //Get the current parameter
@@ -190,6 +189,9 @@ int hasValidParameters(struct parsedCommand *parsedCommand) {
             //If the end pointer does not point to the end of the string, there was an illegal character
             if(*endPtr == '\0') {
                 printDebugMessage("\t\tParameter is a decimal number", "");
+                if(parsedCommand -> isPointer == parameterNum + 1) {
+                    printSyntaxErrorWithoutString("A decimal number cannot be a pointer", parsedCommand -> lineNum);
+                }
                 continue;
             }
             printDebugMessage("\t\tParameter is not a decimal number", "");
@@ -199,11 +201,17 @@ int hasValidParameters(struct parsedCommand *parsedCommand) {
             if(isInArray(parameter, (char **) escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES)) {
                 translateEscapeSequence(parameter, parameterNum, parsedCommand);
                 printDebugMessage("\t\tParameter is an escape sequence and has been translated", "");
+                if(parsedCommand -> isPointer == parameterNum + 1) {
+                    printSyntaxErrorWithoutString("A character cannot be a pointer", parsedCommand -> lineNum);
+                }
                 continue;
             //If not, check if the parameter is only one character
             } else if(strlen(parameter) == 1) {
                 translateCharacter(parameter, parameterNum, parsedCommand);
                 printDebugMessage("\t\tParameter is a character, translated to:", (*parsedCommand).parameters[parameterNum]);
+                if(parsedCommand -> isPointer == parameterNum + 1) {
+                    printSyntaxErrorWithoutString("A character cannot be a pointer", parsedCommand -> lineNum);
+                }
                 continue;
             }
             printDebugMessage("\t\tParameter is neither a character nor an escape sequence", "");
@@ -227,6 +235,9 @@ int hasValidParameters(struct parsedCommand *parsedCommand) {
 
             if(a_used == 1 && u_used == 1 && unexpectedCharacter == 0) {
                 printDebugMessage("\t\tParameter is a valid Monke jump label", "");
+                if(parsedCommand -> isPointer == parameterNum + 1) {
+                    printSyntaxErrorWithoutString("A jump label cannot be a pointer", parsedCommand -> lineNum);
+                }
                 continue;
             }
             printDebugMessage("\t\tParameter is not a valid Monke jump label", "");
@@ -248,13 +259,13 @@ int hasValidParameters(struct parsedCommand *parsedCommand) {
             }
             if(unexpectedCharacter == 0) {
                 printDebugMessage("\t\tParameter is a valid function name", "");
+                if(parsedCommand -> isPointer == parameterNum + 1) {
+                    printSyntaxErrorWithoutString("A function name cannot be a pointer", parsedCommand -> lineNum);
+                }
                 continue;
             }
         }
         printDebugMessage("No checks succeeded, invalid parameter!", "");
         printSyntaxError("Invalid parameter provided", parameter, (*parsedCommand).lineNum);
-        return 0;
-
     }
-    return 1;
 }

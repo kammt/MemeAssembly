@@ -26,5 +26,6 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
 
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum);
 void printSyntaxError(char message[], char got[], int lineNum);
+void printSyntaxErrorWithoutString(char message[], int lineNum);
 
 #endif

@@ -2,6 +2,7 @@
 #define MEMEASSEMBLY_COMMANDS_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define NUMBER_OF_COMMANDS 30
 #define COMMAND_PATTERN_LIST_MAX_STRING_LENGTH 66
