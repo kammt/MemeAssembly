@@ -22,6 +22,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
+            .usedParameters = 1,
             .allowedParamTypes = {0b10000000},
             .translationPattern = "0:"
         },
@@ -139,11 +140,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         },
         {
             .pattern = "monke p",
+            .usedParameters = 1,
             .allowedParamTypes = {0b1000000},
             .translationPattern = ".L0:"
         },
         {
             .pattern = "return to monke p",
+            .usedParameters = 1,
             .allowedParamTypes = {0b1000000},
             .translationPattern = "jmp .L0:"
         },
@@ -223,9 +226,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     for(int i = 0; i < commands.size; i++) {
         struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
         for(int j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
-            if(parsedCommand.parameters[i] != NULL) {
-                free(parsedCommand.parameters[j]);
-            }
+            free(parsedCommand.parameters[j]);
         }
     }
     free(commands.arrayPointer);

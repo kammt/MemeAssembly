@@ -69,6 +69,17 @@ int getLinesOfCode(FILE *inputFile) {
     return loc;
 }
 
+/**
+ * Frees the memory of variables after they are not needed anymore
+ * @param parsedCommand the parsedCommand struct
+ * @param numberOfParameters how many variables are currently in use (allocated)
+ */
+void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParameters) {
+    for(int i = 0; i < numberOfParameters; i++) {
+        free(parsedCommand.parameters[i]);
+    }
+}
+
 struct parsedCommand parseLine(int lineNum) {
     struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum; //Set the line number
@@ -130,6 +141,7 @@ struct parsedCommand parseLine(int lineNum) {
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
                 printDebugMessage("\t\tMatching failed, attempting to match next command", "");
+                freeAllocatedMemory(parsedCommand, numberOfParameters);
                 break;
             }
 
@@ -152,6 +164,7 @@ struct parsedCommand parseLine(int lineNum) {
             return parsedCommand;
         } else if(lineToken == NULL) {
             printDebugMessage("\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "");
+            freeAllocatedMemory(parsedCommand, numberOfParameters);
             continue;
         //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
