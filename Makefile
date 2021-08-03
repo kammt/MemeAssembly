@@ -4,10 +4,10 @@ CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wshadow -Wdouble-promotion -Wformat=2 -W
 
 .PHONY: all clean debug uninstall install
 
-all: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c
+all: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c
 	$(CC) -o memeasm $^ $(CFLAGS)
 
-debug: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c
+debug: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c
 	$(CC) -o memeasm $^ $(CFLAGS) $(CFLAGS_DEBUG)
 
 clean: 
@@ -16,5 +16,5 @@ clean:
 uninstall: 
 	$(RM) /usr/bin/memeasm
 
-install: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c
+install: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/logger/log.c compiler/preprocessor.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c
 	$(CC) -o /usr/bin/memeasm $^ $(CFLAGS)
