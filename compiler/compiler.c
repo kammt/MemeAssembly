@@ -1,3 +1,6 @@
+#define FALSE (1==0)
+#define TRUE  (1==1)
+
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
@@ -19,8 +22,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
-            .usesPointer = 1,
-            .allowedTypesParam1 = 0b10000000,
+            .allowedParamTypes = {0b10000000},
             .translationPattern = "0:"
         },
         {
@@ -43,88 +45,73 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Stack operations
         {
             .pattern = "stonks p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b11001,
+            .allowedParamTypes = {0b11001},
             .translationPattern = "push 0"
         },
         {
             .pattern = "not stonks p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b1,
+            .allowedParamTypes = {0b1},
             .translationPattern = "pop 0"
         },
 
         ///Logical Operations
         {
             .pattern = "bitconneeeeeeect p p",
-            .usesPointer = 0,
             .usedParameters = 2,
-            .allowedTypesParam1 = 0b111,
-            .allowedTypesParam2 = 0b11111,
+            .allowedParamTypes = {0b111, 0b11111}
         },
 
         ///Register Manipulation
         {
             .pattern = "sneak 100 p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b111,
+            .allowedParamTypes = {0b111},
             .translationPattern = "xor 0, 0"
         },
         {
             .pattern = "p is brilliant, but I like p",
-            .usesPointer = 0,
             .usedParameters = 2,
-            .allowedTypesParam1 = 0b111,
-            .allowedTypesParam2 = 0b11111,
+            .allowedParamTypes = {0b111, 0b11111},
             .translationPattern = "mov 0, 1"
         },
 
         ///Arithmetic operations
         {
             .pattern = "upvote p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b111,
+            .allowedParamTypes = {0b111},
             .translationPattern = "add 0, 1"
         },
         {
             .pattern = "downvote p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b111,
+            .allowedParamTypes = {0b111},
             .translationPattern = "sub 0, 1"
         },
         {
             .pattern = "parry p you filthy casual p",
             .usedParameters = 2,
-            .usesPointer = 0,
-            .allowedTypesParam1 = 0b111111,
-            .allowedTypesParam2 = 0b111,
+            .allowedParamTypes = {0b111111, 0b111},
             .translationPattern = "sub 1, 0"
         },
         {
             .pattern = "p units are ready, with p more well on the way",
             .usedParameters = 2,
-            .usesPointer = 0,
-            .allowedTypesParam1 = 0b111,
-            .allowedTypesParam2 = 0b111111,
+            .allowedParamTypes = {0b111, 0b111111},
             .translationPattern = "sub 0, 1"
         },
         {
             .pattern = "upgrades, people. Upgrades p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b111,
+            .allowedParamTypes = {0b111},
             .translationPattern = "shl 0, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b111,
+            .allowedParamTypes = {0b111},
             .translationPattern = "shr 0, 1"
         },
 
@@ -152,29 +139,24 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         },
         {
             .pattern = "monke p",
-            .usesPointer = 1,
-            .allowedTypesParam1 = 0b1000000,
+            .allowedParamTypes = {0b1000000},
             .translationPattern = ".L0:"
         },
         {
             .pattern = "return to monke p",
-            .usesPointer = 1,
-            .allowedTypesParam1 = 0b1000000,
+            .allowedParamTypes = {0b1000000},
             .translationPattern = "jmp .L0:"
         },
         {
             .pattern = "who would win? p or p",
-            .usesPointer = 0,
             .usedParameters = 2,
-            .allowedTypesParam1 = 0b111,
-            .allowedTypesParam2 = 0b11111,
+            .allowedParamTypes = {0b111, 0b11111},
             .translationPattern = "cmp 0, 1\n\tjg .L0Wins\n\tjmp .L1Wins"
         },
         {
             .pattern = "p wins",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b11111,
+            .allowedParamTypes = {0b11111},
             .translationPattern = ".L0Wins:"
         },
         {
@@ -185,18 +167,15 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "corporate needs you to find the difference between p and p",
             .usedParameters = 2,
-            .usesPointer = 0,
-            .allowedTypesParam1 = 0b111,
-            .allowedTypesParam2 = 0b11111,
+            .allowedParamTypes = {0b111, 0b11111},
             .translationPattern = "cmp 0, 1\n\tje .LSamePicture"
         },
 
         ///IO-Operations
         {
             .pattern = "what can I say except p",
-            .usesPointer = 0,
             .usedParameters = 1,
-            .allowedTypesParam1 = 0b10100
+            .allowedParamTypes = {0b10100}
         },
 
 
@@ -243,8 +222,10 @@ void compile(FILE *srcPTR, FILE *destPTR) {
      */
     for(int i = 0; i < commands.size; i++) {
         struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
-        if(commandList[parsedCommand.opcode].usesPointer == 1) {
-            free(parsedCommand.parameters.pointer.param);
+        for(int j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
+            if(parsedCommand.parameters[i] != NULL) {
+                free(parsedCommand.parameters[j]);
+            }
         }
     }
     free(commands.arrayPointer);

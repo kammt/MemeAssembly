@@ -98,31 +98,26 @@ struct parsedCommand parseLine(int lineNum) {
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
                 printDebugMessage("\t\tInterpreting as parameter:", lineToken);
 
-                //We now need to check if we save a pointer or save the variable directly
-                if(commandList[i].usesPointer == 1) {
-                    char *variable = malloc(strlen(lineToken) + 1);
-                    if(variable == NULL) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
-                    strncpy(variable, lineToken, strlen(lineToken));
-                    parsedCommand.parameters.pointer.param = variable;
-                } else {
-                    strncpy(parsedCommand.parameters.paramsArray.params[numberOfParameters++], lineToken, min((unsigned int) strlen(lineToken) + 1, MAX_PARAMETER_LENGTH));
+                char *variable = malloc(strlen(lineToken) + 1);
+                if(variable == NULL) {
+                    fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                    exit(EXIT_FAILURE);
+                }
+                strncpy(variable, lineToken, strlen(lineToken));
+                parsedCommand.parameters[numberOfParameters++] = variable;
 
-                    //If the line after this parameter contains "do you know de wey", mark it as a pointer
-                    if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
-                        printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
-                        //If another parameter is already marked as a variable, throw an error
-                        if(parsedCommand.isPointer != 0) {
-                            printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
-                            //Return something to be added to the array, compilation won't continue anyway. If we wouldn't stop here, an "Failed to parse" error would be printed again
-                            return parsedCommand;
-                        } else {
-                            parsedCommand.isPointer = (uint8_t) numberOfParameters;
-                            //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
-                            savePtrLine += strlen(pointerSuffix);
-                        }
+                //If the line after this parameter contains "do you know de wey", mark it as a pointer
+                if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
+                    printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
+                    //If another parameter is already marked as a variable, throw an error
+                    if(parsedCommand.isPointer != 0) {
+                        printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
+                        //Return something to be added to the array, compilation won't continue anyway. If we wouldn't stop here, a "Failed to parse" error would be printed again
+                        return parsedCommand;
+                    } else {
+                        parsedCommand.isPointer = (uint8_t) numberOfParameters;
+                        //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
+                        savePtrLine += strlen(pointerSuffix);
                     }
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define NUMBER_OF_COMMANDS 29
+#define NUMBER_OF_COMMANDS 30
 #define COMMAND_PATTERN_LIST_MAX_STRING_LENGTH 66
 #define COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH 33
 #define MAX_PARAMETER_COUNT 2
@@ -21,11 +21,8 @@ struct variablePointer {
 
 struct parsedCommand {
     uint8_t opcode;
-    union {
-        struct params paramsArray;
-        struct variablePointer pointer;
-    } parameters;
-    uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter
+    char *parameters[MAX_PARAMETER_COUNT];
+    uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter, ...
     int lineNum;
 };
 
@@ -36,7 +33,6 @@ struct commandsArray {
 
 struct command {
     char pattern[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH];
-    uint8_t usesPointer; //1 = Uses String pointer, 0 = Uses two char arrays
     uint8_t usedParameters;
     /*
      * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
@@ -47,11 +43,10 @@ struct command {
      *  Bit 3: decimal numbers
      *  Bit 4: Characters (including Escape Sequences)
      *  Bit 5: Not used yet
-     *  Bit 6: Not used yet
-     *  Bit 7: Not used yet
+     *  Bit 6: Valid Monke Jump Label
+     *  Bit 7: Valid function name
      */
-    uint8_t allowedTypesParam1;
-    uint8_t allowedTypesParam2;
+    uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
     char translationPattern[COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH];
 };
 
