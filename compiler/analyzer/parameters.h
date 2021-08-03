@@ -3,6 +3,6 @@
 
 #include "../commands.h"
 
-int hasValidParameters(struct parsedCommand parsedCommand);
+int hasValidParameters(struct parsedCommand *parsedCommand);
 
 #endif //MEMEASSEMBLY_PARAMETERS_H

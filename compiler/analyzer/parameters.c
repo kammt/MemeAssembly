@@ -68,11 +68,11 @@ char *registers_8_bit[NUMBER_OF_8_BIT_REGISTERS] = {
         "r15b",
 };
 
-char escapeSequences[NUMBER_OF_ESCAPE_SEQUENCES][6] = {
+char *escapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
         "\\n", "\\s", "space", "\\t", "\\f", "\\b", "\\v", "\\\"", "\\?", "\\\\"
 };
-char translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES][6] = {
-        "\n", " ", " ", "\t", "\f", "\b", "\v", "\"", "\?", "\\"
+char *translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
+        "\n", "' '", "' '", "\t", "\f", "\b", "\v", "\"", "\?", "\\"
 };
 
 /**
@@ -97,7 +97,7 @@ int isInArray(char* parameter, char **array, int arraySize) {
  * @param parameterNum the parameter number
  * @param parsedCommand the struct of the current command
  */
-void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCommand parsedCommand) {
+void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
     char *modifiedParameter = malloc(2);
     if(modifiedParameter == NULL) {
@@ -112,13 +112,13 @@ void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCom
     }
 
     //Set the value to the translated escape sequence
-    modifiedParameter = translatedEscapeSequences[i];
+    strcpy(modifiedParameter, translatedEscapeSequences[i]);
 
     //Free the old memory
     free(parameter);
 
     //Set the reference to the new memory block
-    parsedCommand.parameters[parameterNum] = modifiedParameter;
+    (*parsedCommand).parameters[parameterNum] = modifiedParameter;
 }
 
 /**
@@ -127,7 +127,7 @@ void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCom
  * @param parameterNum the parameter number
  * @param parsedCommand the struct of the current command
  */
-void translateCharacter(char *parameter, int parameterNum, struct parsedCommand parsedCommand) {
+void translateCharacter(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
     char *modifiedParameter = malloc(4);
     if(modifiedParameter == NULL) {
@@ -136,14 +136,16 @@ void translateCharacter(char *parameter, int parameterNum, struct parsedCommand 
     }
 
     //Set the value to the provided character, surrounded by ''
-    modifiedParameter = "' '";
+    modifiedParameter[0] = '\'';
     modifiedParameter[1] = parameter[0];
+    modifiedParameter[2] = '\'';
+    modifiedParameter[3] = '\0';
 
     //Free the old memory
     free(parameter);
 
     //Set the reference to the new memory block
-    parsedCommand.parameters[parameterNum] = modifiedParameter;
+    (*parsedCommand).parameters[parameterNum] = modifiedParameter;
 }
 
 /**
@@ -151,57 +153,62 @@ void translateCharacter(char *parameter, int parameterNum, struct parsedCommand 
  * @param parsedCommand
  * @return 1 if the parameters are valid, 0 otherwise
  */
-int hasValidParameters(struct parsedCommand parsedCommand) {
+int hasValidParameters(struct parsedCommand *parsedCommand) {
     printDebugMessage("Starting parameter validity check", "");
-    for(int parameterNum = 0; parameterNum < commandList[parsedCommand.opcode].usedParameters; parameterNum++) {
+    for(int parameterNum = 0; parameterNum < commandList[(*parsedCommand).opcode].usedParameters; parameterNum++) {
         //Get the current parameter
-        char* parameter = parsedCommand.parameters[parameterNum];
+        char* parameter = (*parsedCommand).parameters[parameterNum];
         printDebugMessage("\tChecking parameter", parameter);
 
         //Get the allowed parameter types for this parameter
-        uint8_t allowedTypes = commandList[parsedCommand.opcode].allowedParamTypes[parameterNum];
+        uint8_t allowedTypes = commandList[(*parsedCommand).opcode].allowedParamTypes[parameterNum];
 
         if((allowedTypes & 0b1) != 0) { //64 and 32 bit registers
             if(isInArray(parameter, registers_64_32_bit, NUMBER_OF_64_32_BIT_REGISTERS)) {
-                printDebugMessage("\tParameter is a 64 bit / 32 bit register", "");
+                printDebugMessage("\t\tParameter is a 64 bit / 32 bit register", "");
                 continue;
             }
-            printDebugMessage("\tParameter is not a 64 bit / 32 bit register", "");
-        } else if((allowedTypes & 0b10) != 0) { //16 bit registers
+            printDebugMessage("\t\tParameter is not a 64 bit / 32 bit register", "");
+        }
+        if((allowedTypes & 0b10) != 0) { //16 bit registers
             if(isInArray(parameter, registers_16_bit, NUMBER_OF_16_BIT_REGISTERS)) {
-                printDebugMessage("\tParameter is a 16 bit register", "");
+                printDebugMessage("\t\tParameter is a 16 bit register", "");
                 continue;
             }
-            printDebugMessage("\tParameter is not a 16 bit register", "");
-        } else if((allowedTypes & 0b100) != 0) { //8 bit registers
+            printDebugMessage("\t\tParameter is not a 16 bit register", "");
+        }
+        if((allowedTypes & 0b100) != 0) { //8 bit registers
             if(isInArray(parameter, registers_8_bit, NUMBER_OF_8_BIT_REGISTERS)) {
-                printDebugMessage("\tParameter is an 8 bit register", "");
+                printDebugMessage("\t\tParameter is an 8 bit register", "");
                 continue;
             }
-            printDebugMessage("\tParameter is not an 8 bit register", "");
-        } else if((allowedTypes & 0b1000) != 0) { //Decimal number
+            printDebugMessage("\t\tParameter is not an 8 bit register", "");
+        }
+        if((allowedTypes & 0b1000) != 0) { //Decimal number
             char* endPtr;
             strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
             if(*endPtr == '\0') {
-                printDebugMessage("\tParameter is a decimal number", "");
+                printDebugMessage("\t\tParameter is a decimal number", "");
                 continue;
             }
-            printDebugMessage("\tParameter is not a decimal number", "");
-        } else if((allowedTypes & 0b10000) != 0) { //Characters (including escape sequences)
+            printDebugMessage("\t\tParameter is not a decimal number", "");
+        }
+        if((allowedTypes & 0b10000) != 0) { //Characters (including escape sequences)
             //Check if any of the escape sequences match
             if(isInArray(parameter, (char **) escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES)) {
                 translateEscapeSequence(parameter, parameterNum, parsedCommand);
-                printDebugMessage("\tParameter is an escape sequence, translated to:", parsedCommand.parameters[parameterNum]);
+                printDebugMessage("\t\tParameter is an escape sequence and has been translated", "");
                 continue;
             //If not, check if the parameter is only one character
             } else if(strlen(parameter) == 1) {
                 translateCharacter(parameter, parameterNum, parsedCommand);
-                printDebugMessage("\tParameter is a character, translated to:", parsedCommand.parameters[parameterNum]);
+                printDebugMessage("\t\tParameter is a character, translated to:", (*parsedCommand).parameters[parameterNum]);
                 continue;
             }
-            printDebugMessage("\tParameter is neither a character nor an escape sequence", "");
-        } else if((allowedTypes & 0b1000000) != 0) { //Monke Jump label
+            printDebugMessage("\t\tParameter is neither a character nor an escape sequence", "");
+        }
+        if((allowedTypes & 0b1000000) != 0) { //Monke Jump label
             //Iterate through each character and check if it is either a U or an A
             //Define variables that are set to 1 if either a U or an A are found. That way, you can check if both of them occurred at least once
             uint8_t a_used = 0;
@@ -210,7 +217,7 @@ int hasValidParameters(struct parsedCommand parsedCommand) {
             for(int i = 0; i < strlen(parameter); i++) {
                 if(parameter[i] == 'a') {
                     a_used = 1;
-                } else if(parameterNum == 'u') {
+                } else if(parameter[i] == 'u') {
                     u_used = 1;
                 } else {
                     unexpectedCharacter = 1;
@@ -219,32 +226,33 @@ int hasValidParameters(struct parsedCommand parsedCommand) {
             }
 
             if(a_used == 1 && u_used == 1 && unexpectedCharacter == 0) {
-                printDebugMessage("\tParameter is a valid Monke jump label", "");
+                printDebugMessage("\t\tParameter is a valid Monke jump label", "");
                 continue;
             }
-            printDebugMessage("\tParameter is not a valid Monke jump label", "");
-        } else if((allowedTypes & 0b10000000) != 0) { //Function name
+            printDebugMessage("\t\tParameter is not a valid Monke jump label", "");
+        }
+        if((allowedTypes & 0b10000000) != 0) { //Function name
             uint8_t unexpectedCharacter = 0;
             for(int i = 0; i < strlen(parameter); i++) {
                 char character = parameter[i];
                 if(i == 0 && character >= '0' && character <= '9') {
                     unexpectedCharacter = 1;
-                    printDebugMessage("\tParameter is not a valid function name, as there is a number in the first position", "");
+                    printDebugMessage("\t\tParameter is not a valid function name, as there is a number in the first position", "");
                     break;
                 }
                 if(!(character == '_' || character == '$' || character == '.' || (character >= '0' && character <= '9') || (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
                     unexpectedCharacter = 1;
-                    printDebugMessageWithNumber("\tParameter is not a valid function name, unexpected character found at position", i);
+                    printDebugMessageWithNumber("\t\tParameter is not a valid function name, unexpected character found at position", i);
                     break;
                 }
             }
             if(unexpectedCharacter == 0) {
-                printDebugMessage("\tParameter is a valid function name", "");
+                printDebugMessage("\t\tParameter is a valid function name", "");
                 continue;
             }
         }
         printDebugMessage("No checks succeeded, invalid parameter!", "");
-        printSyntaxError("Invalid parameter provided", parameter, parsedCommand.lineNum);
+        printSyntaxError("Invalid parameter provided", parameter, (*parsedCommand).lineNum);
         return 0;
 
     }

@@ -1,6 +1,3 @@
-#define FALSE (1==0)
-#define TRUE  (1==1)
-
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
@@ -8,7 +5,8 @@
 
 #include "commands.h"
 
-#include "parser/parser.h" //String functions
+#include "parser/parser.h"
+#include "analyzer/parameters.h"
 #include "translator.h" //Translation to Assembly
 #include "analyser.h" //Semantic analysis
 #include "logger/log.h" //Writing to the command line with log levels
@@ -213,7 +211,9 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
  */
 void compile(FILE *srcPTR, FILE *destPTR) {
     struct commandsArray commands = parseCommands(srcPTR);
-
+    for (int i = 0; i < commands.size; ++i) {
+        printf("Parameter Check returned %d\n", hasValidParameters(&commands.arrayPointer[i]));
+    }
     /*
     printInfoMessage("Starting Assembly-Translation...");
     startTranslation(file, numberOfLines, opcodes, destPTR);
