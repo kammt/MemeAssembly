@@ -70,9 +70,8 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
  *  - functions end with a return statement
  *  - there is a main function if it is supposed to be executable
  * @param commandsArray a pointer to the commandsArray created by the parser
- * @param checkForMainFunction whether or not it should be checked if a main function exists
  */
-void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkForMainFunction) {
+void checkFunctionValidity(struct commandsArray *commandsArray) {
     struct parsedCommand *arrayPointer = commandsArray->arrayPointer;
 
     //First, count how many function definitions there are
@@ -138,7 +137,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkFor
         }
     }
 
-    if(checkForMainFunction == 1 && mainFunctionExists == 0) {
+    if(mode == 1 && mainFunctionExists == 0) {
         printSemanticError("An executable cannot be created if no main-function exists", 1);
     }
 

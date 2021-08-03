@@ -9,7 +9,6 @@
 
 #include "logger/log.h"
 
-int mode = 0; //0 = Compile and Run, 1 = Compile only
 FILE *outputFile;
 FILE *inputFile;
 
@@ -46,7 +45,7 @@ int main(int argc, char* argv[]) {
                 printHelpPage(argv[0]);
                 return 0;
             case 'c':
-                mode = 1;
+                compileMode = 1;
                 break;
             case 'd':
                 setLogLevel(3);
@@ -104,7 +103,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if(mode == 0) {
+        if(compileMode == 0) {
             createExecutable(inputFile);
         } else {
             compile(inputFile, outputFile);
