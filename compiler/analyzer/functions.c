@@ -5,7 +5,13 @@
 #include <string.h>
 #include <stdio.h>
 
-
+/**
+ * Creates a function struct by starting at the function definition and then traversing the
+ * command array until a return statement, new function definition or end of array is found
+ * @param commandsArray a pointer to the commands array created by the parser
+ * @param functionStartAtIndex at which index of the array the function definition is
+ * @return a function struct containing all parsed information
+ */
 struct function parseFunction(struct commandsArray *commandsArray, int functionStartAtIndex) {
     struct parsedCommand functionStart = *(commandsArray->arrayPointer + functionStartAtIndex);
 
@@ -48,7 +54,7 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
         }
         index++;
     }
-    printDebugMessageWithNumber("\tIteration stopped at index", index);
+    printDebugMessageWithNumber("\t\tIteration stopped at index", index);
 
     if(returnStatementFound == 0) {
         printSemanticError("No return statement found", functionStart.lineNum);
