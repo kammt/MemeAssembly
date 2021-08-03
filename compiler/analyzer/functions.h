@@ -6,12 +6,10 @@
 
 struct function {
     char* name;
-    struct commandsArray commands;
+    int definedInLine;
+    int numberOfCommands;
 };
 
-struct functionsArray{
-    struct function* functionsPointer;
-    size_t size;
-};
+void checkFunctionValidity(struct commandsArray *commandsArray, uint8_t checkForMainFunction);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H
