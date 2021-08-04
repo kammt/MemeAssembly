@@ -318,7 +318,7 @@ void createExecutable(FILE *srcPTR, char *destFile) {
         system(command);
 
         printDebugMessage("Removing temporary file", "");
-        //system("rm tmp.S");
+        system("rm tmp.S");
         exit(EXIT_SUCCESS);
     } else {
         exit(EXIT_FAILURE);
