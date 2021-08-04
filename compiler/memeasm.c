@@ -112,7 +112,7 @@ int main(int argc, char* argv[]) {
             }
 
 
-            compile(inputFile, outputFile);
+            return compile(inputFile, outputFile);
         }
     }
 }

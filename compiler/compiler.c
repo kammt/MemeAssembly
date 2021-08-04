@@ -268,15 +268,6 @@ int compile(FILE *srcPTR, FILE *destPTR) {
         }
     }
 
-    /*
-    printInfoMessage("Starting Assembly-Translation...");
-    startTranslation(file, numberOfLines, opcodes, destPTR);
-    
-    printInfoMessage("Starting semantic analysis...");
-    startSemanticAnalysis(opcodes, numberOfLines);
-
-    printSuccessMessage("File compiled successfully!");
-     */
     if(getNumberOfCompilationErrors() > 0) {
         printErrorASCII();
         fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", getNumberOfCompilationErrors());
