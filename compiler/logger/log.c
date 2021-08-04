@@ -12,7 +12,7 @@
 
 int compilationErrors = 0;
 int logLevel = 1; //Default value
-char version_string[] = "v0.1";
+char *version_string = "v0.1";
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
@@ -88,8 +88,10 @@ void printSuccessMessage(char message[]) {
  * @param message the message
  */
 void printStatusMessage(char message[]) {
-    printf(YEL "%s \n" RESET, message);
-    fflush( stdout );   
+    if(logLevel >= 2) {
+        printf(YEL "%s \n" RESET, message);
+        fflush( stdout );
+    }
 }
 
 /**
