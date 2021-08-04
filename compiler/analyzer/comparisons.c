@@ -13,6 +13,14 @@ struct comparisonJumpLabel {
     int definedInLine;
 };
 
+
+/**
+ * Checks the validity of "Who would win" comparisons. It checks the following
+ * - that no jump markers are defined twice
+ * - that jump markers exist required by a comparison
+ * @param commandsArray the parsed commands
+ * @param whoWouldWinOpcode the opcode of the "Who would win" command. The opcode of the jump marker must be the one following it.
+ */
 void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode) {
     printDebugMessageWithNumber("Starting \"Who would win\" comparison validity check for opcode", whoWouldWinOpcode);
 
