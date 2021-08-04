@@ -11,6 +11,7 @@
 #include "analyzer/jumpLabels.h"
 #include "analyzer/comparisons.h"
 #include "analyzer/randomCommands.h"
+#include "translator/translator.h"
 #include "logger/log.h"
 
 /**
@@ -247,11 +248,15 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
  * @param destPTR a pointer to the destination file. If nonexistent, it will be created
  */
 void compile(FILE *srcPTR, FILE *destPTR) {
+    printStatusMessage("Parsing input file");
     struct commandsArray commands = parseCommands(srcPTR);
+
+    printStatusMessage("Starting parameter check");
     for (int i = 0; i < commands.size; ++i) {
         checkParameters(&commands.arrayPointer[i]);
     }
 
+    printStatusMessage("Analyzing commands");
     for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
         if(commandList[opcode].analysisFunction != NULL) {
             commandList[opcode].analysisFunction(&commands, opcode);
@@ -267,6 +272,14 @@ void compile(FILE *srcPTR, FILE *destPTR) {
 
     printSuccessMessage("File compiled successfully!");
      */
+    if(getNumberOfCompilationErrors() > 0) {
+        printErrorASCII();
+        fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", getNumberOfCompilationErrors());
+    } else {
+        writeToFile(&commands, destPTR);
+    }
+
+    printDebugMessage("Freeing memory", "");
     for(int i = 0; i < commands.size; i++) {
         struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
         for(int j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
@@ -275,11 +288,7 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     }
     free(commands.arrayPointer);
 
-    if(getNumberOfCompilationErrors() > 0) {
-        printErrorASCII();
-        fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", getNumberOfCompilationErrors());
-        exit(EXIT_FAILURE);
-    }
+    printDebugMessage("All memory freed, compilation done", "");
 }
 
 /**
