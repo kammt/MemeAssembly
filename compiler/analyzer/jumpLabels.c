@@ -1,10 +1,92 @@
 #include "jumpLabels.h"
 #include "../logger/log.h"
 
+#include <string.h>
+
 extern struct command commandList[];
 
-void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode) {
+struct monkeLabel {
+    char* labelName;
+    int definedInLine;
+};
 
+
+/**
+ * Checks if the usage of all monke labels and return jumps are valid. This includes
+ *  - that no jump labels were defined twice
+ *  - that no returns were used where the label name wasn't defined
+ * @param commandsArray the parsed commands
+ * @param monkeOpcode the opcode of the "monke" command. "return to monke" must be the following opcode
+ */
+void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode) {
+    //First, traverse the array and count the number of appearences of the monke-command. This is how many array items we need to create
+    int monkeFound = 0;
+    int returnMonkeFound = 0;
+
+    for(int i = 0; i < commandsArray->size; i++) {
+        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+        if(parsedCommand.opcode == monkeOpcode) {
+            monkeFound++;
+        } else if(parsedCommand.opcode == monkeOpcode + 1) {
+            returnMonkeFound++;
+        }
+    }
+
+    //Now we allocate memory for our monkeLabel structs
+    struct monkeLabel *labelDefinitions = calloc(sizeof(struct monkeLabel), monkeFound);
+    struct monkeLabel *labelJumps = calloc(sizeof(struct monkeLabel), returnMonkeFound);
+    if(labelDefinitions == NULL || labelJumps == NULL) {
+        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+        exit(EXIT_FAILURE);
+    }
+
+    int labelArrayIndex = 0;
+    int jumpArrayIndex = 0;
+    for(int i = 0; i < commandsArray->size; i++) {
+        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+        if(parsedCommand.opcode == monkeOpcode || parsedCommand.opcode == monkeOpcode + 1) {
+            struct monkeLabel monkeLabel;
+            monkeLabel.definedInLine = parsedCommand.lineNum;
+            monkeLabel.labelName = parsedCommand.parameters[0];
+
+            if(parsedCommand.opcode == monkeOpcode) {
+                labelDefinitions[labelArrayIndex++] = monkeLabel;
+            } else {
+                labelDefinitions[jumpArrayIndex++] = monkeLabel;
+            }
+        }
+    }
+
+    //First check: Did any monke labels get defined twice (i.e. two definitions with the same label)
+    for(int i = 0; i < labelArrayIndex; i++) {
+        for(int j = i + 1; j < labelArrayIndex; j++) {
+            if(strcmp(labelDefinitions[i].labelName, labelDefinitions[j].labelName) == 0) {
+                printSemanticErrorWithExtraLineNumber("Monke labels cannot be defined twice", labelDefinitions[j].definedInLine, labelDefinitions[i].definedInLine);
+            }
+        }
+    }
+
+    //Second check: Did any "return to monke"-commands use a label that doesn't exist?
+    for(int i = 0; i < jumpArrayIndex; i++) {
+        uint8_t labelFound = 0;
+        //For every jump, traverse through the label array and see if that label is defined somewhere
+        for(int j = 0; j < labelArrayIndex; j++) {
+            //If it is defined, set the value to 1 and escape the loop
+            if(strcmp(labelDefinitions[i].labelName, labelDefinitions[j].labelName) == 0) {
+                labelFound = 1;
+                break;
+            }
+        }
+
+        //If we got here with the variable value still 0, it means that no comparison was successful, print an error
+        if(labelFound == 0) {
+            printSemanticError("This label wasn't defined anywhere", labelDefinitions[i].definedInLine);
+        }
+    }
+
+    //Now, we free all memory again
+    free(labelDefinitions);
+    free(labelJumps);
 }
 
 /**
