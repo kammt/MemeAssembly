@@ -10,9 +10,7 @@
 #include "analyzer/functions.h"
 #include "analyzer/jumpLabels.h"
 #include "analyzer/comparisons.h"
-#include "translator.h" //Translation to Assembly
-#include "analyser.h" //Semantic analysis
-#include "logger/log.h" //Writing to the command line with log levels
+#include "logger/log.h"
 
 /**
  * compiler.c:
