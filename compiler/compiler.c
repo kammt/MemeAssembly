@@ -116,7 +116,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 2,
             .allowedParamTypes = {0b111, 0b111111},
             .analysisFunction = NULL,
-            .translationPattern = "sub 0, 1"
+            .translationPattern = "add 0, 1"
         },
         {
             .pattern = "upgrades, people. Upgrades p",
