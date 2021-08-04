@@ -21,23 +21,13 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
     //Define the structs
     struct function function;
 
-    //Allocate a new memory block for the function name
-    char* functionName = malloc(strlen(functionStart.parameters[0]) + 1);
-    if(functionName == NULL) {
-        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-        exit(EXIT_FAILURE);
-    }
-
-    //Copy the function name
-    strcpy(functionName, functionStart.parameters[0]);
-
     //Set the function name
-    function.name = functionName;
+    function.name = functionStart.parameters[0];
 
     //Set the line number
     function.definedInLine = functionStart.lineNum;
 
-    printDebugMessage("\tParsing function:", functionName);
+    printDebugMessage("\tParsing function:", functionStart.parameters[0]);
 
     int index = 1;
     uint8_t returnStatementFound = 0;
@@ -147,10 +137,6 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
 
     printDebugMessage("Checks done, freeing memory", "");
     //Now, we free all memory again
-    for(int i = 0; i < functionDefinitions; i++) {
-        //Free the pointer to the function name
-        free(functions[i].name);
-    }
     //Free the allocated memory for the function array
     free(functions);
 }
