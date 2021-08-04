@@ -83,6 +83,7 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
 struct parsedCommand parseLine(int lineNum) {
     struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum; //Set the line number
+    parsedCommand.translate = 1;
 
     //Temporarily save the line on the stack to be able to restore when a comparison failed
     char lineCpy[strlen(line) + 1];

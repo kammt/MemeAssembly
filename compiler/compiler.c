@@ -10,6 +10,7 @@
 #include "analyzer/functions.h"
 #include "analyzer/jumpLabels.h"
 #include "analyzer/comparisons.h"
+#include "analyzer/randomCommands.h"
 #include "logger/log.h"
 
 /**
@@ -218,13 +219,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "confused stonks",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisFunction = &setConfusedStonksJumpLabel,
             .translationPattern = "jmp .LConfusedStonks:"
         },
         {
             .pattern = "perfectly balanced as all things should be",
             .usedParameters = 0,
-            .analysisFunction = NULL, //TODO
+            .analysisFunction = &chooseLinesToBeDeleted,
             .translationPattern = ""
         },
         //Insert commands above this one
