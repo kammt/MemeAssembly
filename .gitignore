@@ -5,3 +5,5 @@ example.memeasm
 tmp
 tmp.o
 opcodes
+examples/Stalinsort/.idea
+examples/Stalinsort/stalinsort.S
