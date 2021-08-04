@@ -4,6 +4,6 @@
 #include "../commands.h"
 
 void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode);
-void checkTheyreTheSamePictureValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode);
+void checkTheyreTheSamePictureValidity(struct commandsArray *commandsArray, int comparisonOpcode);
 
 #endif //MEMEASSEMBLY_COMPARISONS_H
