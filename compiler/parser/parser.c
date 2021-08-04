@@ -127,16 +127,13 @@ struct parsedCommand parseLine(int lineNum) {
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
                 if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
                     printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
-                    //If another parameter is already marked as a variable, throw an error
+                    //If another parameter is already marked as a variable, print an error
                     if(parsedCommand.isPointer != 0) {
                         printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
-                        //Return something to be added to the array, compilation won't continue anyway. If we wouldn't stop here, a "Failed to parse" error would be printed again
-                        return parsedCommand;
-                    } else {
-                        parsedCommand.isPointer = (uint8_t) numberOfParameters;
-                        //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
-                        savePtrLine += strlen(pointerSuffix);
                     }
+                    parsedCommand.isPointer = (uint8_t) numberOfParameters;
+                    //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
+                    savePtrLine += strlen(pointerSuffix);
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
