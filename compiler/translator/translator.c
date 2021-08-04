@@ -16,7 +16,7 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
         strLen += strlen(parsedCommand.parameters[i]);
     }
 
-    char *translatedLine = malloc(strLen + 1); //Include an extra byte for the null-Pointer
+    char *translatedLine = malloc(strLen + 3); //Include an extra byte for the null-Pointer and two extra bytes in case []-brackets are needed for a pointer
     if(translatedLine == NULL) {
         fprintf(stderr, "Critical error: Memory allocation for command translation failed!");
         exit(EXIT_FAILURE);
@@ -25,9 +25,28 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
 
     for(int i = 0; i < strlen(translationPattern); i++) {
         char character = translationPattern[i];
-        if(character >= '0' && character <= (char) command.usedParameters + 48) {
-            printDebugMessage("\tAppending parameter", parsedCommand.parameters[character - 48]);
-            strncat(translatedLine, parsedCommand.parameters[character - 48], strLen);
+        if(character >= '0' && character <= (char) command.usedParameters + 47) {
+            char *parameter = parsedCommand.parameters[character - 48];
+
+            if(parsedCommand.isPointer == (character - 48) + 1) {
+                printDebugMessage("\tAppending pointer parameter", parameter);
+
+                //Manually add braces to the string
+                size_t currentStrLen = strlen(translatedLine);
+
+                //Append a '['
+                translatedLine[currentStrLen] = '[';
+                translatedLine[currentStrLen + 1] = '\0';
+                //Append the parameter
+                strncat(translatedLine, parameter, strLen);
+                //Append a ']'
+                currentStrLen = strlen(translatedLine);
+                translatedLine[currentStrLen] = ']';
+                translatedLine[currentStrLen + 1] = '\0';
+            } else {
+                printDebugMessage("\tAppending parameter", parameter);
+                strncat(translatedLine, parameter, strLen);
+            }
         } else {
             char appendix[2] = {character, '\0'};
             strncat(translatedLine, appendix, strLen);
