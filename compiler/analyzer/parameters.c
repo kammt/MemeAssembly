@@ -5,32 +5,52 @@
 #include <stdio.h>
 
 #define NUMBER_OF_8_BIT_REGISTERS 20
-#define NUMBER_OF_64_32_BIT_REGISTERS 32
+#define NUMBER_OF_64_BIT_REGISTERS 16
+#define NUMBER_OF_32_BIT_REGISTERS 16
 #define NUMBER_OF_16_BIT_REGISTERS 16
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
 extern struct command commandList[];
 
-char *registers_64_32_bit[32] = {
-        "rax", "eax",
-        "rbx", "ebx",
-        "rcx", "ecx",
-        "rdx", "edx",
-        "rdi", "edi",
-        "rsi", "esi",
-        "rsp", "esp",
-        "rbp", "ebp",
-        "r8", "r8d",
-        "r9", "r9d",
-        "r10", "r10d",
-        "r11", "r11d",
-        "r12", "r12d",
-        "r13", "r13d",
-        "r14", "r14d",
-        "r15", "r15d",
+char *registers_64_bit[NUMBER_OF_64_BIT_REGISTERS] = {
+        "rax",
+        "rbx",
+        "rcx",
+        "rdx",
+        "rdi",
+        "rsi",
+        "rsp",
+        "rbp",
+        "r8",
+        "r9",
+        "r10",
+        "r11",
+        "r12",
+        "r13",
+        "r14",
+        "r15"
 };
 
-char *registers_16_bit[16] = {
+char *registers_32_bit[NUMBER_OF_32_BIT_REGISTERS] = {
+        "eax",
+        "ebx",
+        "ecx",
+        "edx",
+        "edi",
+        "esi",
+        "esp",
+        "ebp",
+        "r8d",
+        "r9d",
+        "r10d",
+        "r11d",
+        "r12d",
+        "r13d",
+        "r14d",
+        "r15d",
+};
+
+char *registers_16_bit[NUMBER_OF_16_BIT_REGISTERS] = {
         "ax",
         "bx",
         "cx",
@@ -162,28 +182,35 @@ void checkParameters(struct parsedCommand *parsedCommand) {
         //Get the allowed parameter types for this parameter
         uint8_t allowedTypes = commandList[(*parsedCommand).opcode].allowedParamTypes[parameterNum];
 
-        if((allowedTypes & 0b1) != 0) { //64 and 32 bit registers
-            if(isInArray(parameter, registers_64_32_bit, NUMBER_OF_64_32_BIT_REGISTERS)) {
-                printDebugMessage("\t\tParameter is a 64 bit / 32 bit register", "");
+        if((allowedTypes & 0b1) != 0) { //64 bit registers
+            if(isInArray(parameter, registers_64_bit, NUMBER_OF_64_BIT_REGISTERS)) {
+                printDebugMessage("\t\tParameter is a 64 bit register", "");
                 continue;
             }
-            printDebugMessage("\t\tParameter is not a 64 bit / 32 bit register", "");
+            printDebugMessage("\t\tParameter is not a 64 bit register", "");
         }
-        if((allowedTypes & 0b10) != 0) { //16 bit registers
+        if((allowedTypes & 0b10) != 0) { //32 bit registers
+            if(isInArray(parameter, registers_32_bit, NUMBER_OF_32_BIT_REGISTERS)) {
+                printDebugMessage("\t\tParameter is a 32 bit register", "");
+                continue;
+            }
+            printDebugMessage("\t\tParameter is not a 32 bit register", "");
+        }
+        if((allowedTypes & 0b100) != 0) { //16 bit registers
             if(isInArray(parameter, registers_16_bit, NUMBER_OF_16_BIT_REGISTERS)) {
                 printDebugMessage("\t\tParameter is a 16 bit register", "");
                 continue;
             }
             printDebugMessage("\t\tParameter is not a 16 bit register", "");
         }
-        if((allowedTypes & 0b100) != 0) { //8 bit registers
+        if((allowedTypes & 0b1000) != 0) { //8 bit registers
             if(isInArray(parameter, registers_8_bit, NUMBER_OF_8_BIT_REGISTERS)) {
                 printDebugMessage("\t\tParameter is an 8 bit register", "");
                 continue;
             }
             printDebugMessage("\t\tParameter is not an 8 bit register", "");
         }
-        if((allowedTypes & 0b1000) != 0) { //Decimal number
+        if((allowedTypes & 0b10000) != 0) { //Decimal number
             char* endPtr;
             strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
@@ -196,7 +223,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             }
             printDebugMessage("\t\tParameter is not a decimal number", "");
         }
-        if((allowedTypes & 0b10000) != 0) { //Characters (including escape sequences)
+        if((allowedTypes & 0b100000) != 0) { //Characters (including escape sequences) / ASCII-code
             //Check if any of the escape sequences match
             if(isInArray(parameter, (char **) escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES)) {
                 translateEscapeSequence(parameter, parameterNum, parsedCommand);
@@ -215,8 +242,8 @@ void checkParameters(struct parsedCommand *parsedCommand) {
                 continue;
             }
             printDebugMessage("\t\tParameter is neither a character nor an escape sequence", "");
-        }
-        if((allowedTypes & 0b100000) != 0) { //ASCII-code
+
+            //Now check if it is an ASCII-code
             char* endPtr;
             long result = strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character

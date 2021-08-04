@@ -32,12 +32,12 @@ struct command {
     /*
      * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
      * That way, each parameter can allow multiple variable types.
-     *  Bit 0: 32 bit and 64 bit registers
-     *  Bit 1: 16 bit registers
-     *  Bit 2: 8 bit registers
-     *  Bit 3: decimal numbers
-     *  Bit 4: Characters (including Escape Sequences)
-     *  Bit 5: ASCII-Code
+     *  Bit 0: 64 bit registers
+     *  Bit 1: 32 bit registers
+     *  Bit 2: 16 bit registers
+     *  Bit 3: 8 bit registers
+     *  Bit 4: decimal numbers
+     *  Bit 5: Characters (including Escape Sequences) / ASCII-code
      *  Bit 6: Valid Monke Jump Label
      *  Bit 7: Valid function name
      */
