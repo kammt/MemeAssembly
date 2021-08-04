@@ -207,7 +207,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 1,
             .analysisFunction = NULL,
             .allowedParamTypes = {0b110100},
-            .translationPattern = "push eax\n\tmov al, 0\n\tcall writechar\n\tpop eax"
+            .translationPattern = "mov BYTE PTR [rip + .LCharacter], 0\n\tcall writechar"
         },
 
 
