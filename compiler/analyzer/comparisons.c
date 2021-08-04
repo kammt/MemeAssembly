@@ -1,8 +1,113 @@
+#include <string.h>
 #include "comparisons.h"
 #include "../logger/log.h"
 
-void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode) {
+struct comparison {
+    char* parameter1;
+    char* parameter2;
+    int definedInLine;
+};
 
+struct comparisonJumpLabel {
+    char* parameter;
+    int definedInLine;
+};
+
+void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode) {
+    printDebugMessageWithNumber("Starting \"Who would win\" comparison validity check for opcode", whoWouldWinOpcode);
+
+    //Traverse the command Array and count how many comparisons and jump labels there are
+    int comparisonsUsed = 0;
+    int comparisonJumpLabelsUsed = 0;
+    for(int i = 0; i < commandsArray->size; i++) {
+        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+        if(parsedCommand.opcode == whoWouldWinOpcode) {
+            printDebugMessageWithNumber("\t\tComparison found in line", parsedCommand.lineNum);
+            comparisonsUsed++;
+        } else if(parsedCommand.opcode == whoWouldWinOpcode + 1) {
+            printDebugMessageWithNumber("\t\tComparison jump label found in line", parsedCommand.lineNum);
+            comparisonJumpLabelsUsed++;
+        }
+    }
+
+    printDebugMessageWithNumber("\tNumber of comparisons:", comparisonsUsed);
+    printDebugMessageWithNumber("\tNumber of comparison labels:", comparisonJumpLabelsUsed);
+    printDebugMessage("\tAllocating memory for structs", "");
+
+    //Allocate memory for the structs
+    struct comparison *comparisons = calloc(sizeof(struct comparison), comparisonsUsed);
+    struct comparisonJumpLabel *comparisonJumpLabels = calloc(sizeof(struct comparisonJumpLabel), comparisonJumpLabelsUsed);
+    if(comparisons == NULL || comparisonJumpLabels == NULL) {
+        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+        exit(EXIT_FAILURE);
+    }
+
+    //Traverse the command array again and add the objects to the respective arrays
+    int comparisonArrayIndex = 0;
+    int comparisonJumpArrayIndex = 0;
+    for(int i = 0; i < commandsArray->size; i++) {
+        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+        if(parsedCommand.opcode == whoWouldWinOpcode) {
+            struct comparison comparison = {
+                    parsedCommand.parameters[0],
+                    parsedCommand.parameters[1],
+                    parsedCommand.lineNum
+            };
+            comparisons[comparisonArrayIndex++] = comparison;
+        } else if(parsedCommand.opcode == whoWouldWinOpcode + 1) {
+            struct comparisonJumpLabel comparisonJumpLabel =  {
+                    parsedCommand.parameters[0],
+                    parsedCommand.lineNum
+            };
+            comparisonJumpLabels[comparisonJumpArrayIndex++] = comparisonJumpLabel;
+        }
+    }
+
+    printDebugMessage("\tMemory allocation and struct creation successful, starting checks", "");
+    /*
+     * We now need to check the following things
+     * - That no labels were defined twice
+     * - That a "p wins" was declared if p was used in a comparison
+     */
+    for(int i = 0; i < comparisonJumpLabelsUsed; i++) {
+        printDebugMessage("\tLabel duplicity check for parameter", comparisonJumpLabels[i].parameter);
+        for(int j = i + 1; j < comparisonJumpLabelsUsed; j++) {
+            printDebugMessage("\t\tComparing against parameter", comparisonJumpLabels[j].parameter);
+            if(strcmp(comparisonJumpLabels[i].parameter, comparisonJumpLabels[j].parameter) == 0) {
+                printSemanticErrorWithExtraLineNumber("Comparison jump markers cannot be defined twice", comparisonJumpLabels[j].definedInLine, comparisonJumpLabels[i].definedInLine);
+            }
+        }
+    }
+
+    for(int i = 0; i < comparisonsUsed; i++) {
+        uint8_t parameter1Defined = 0;
+        uint8_t parameter2Defined = 0;
+        printDebugMessage("\tLabel existence check for parameter", comparisons[i].parameter1);
+        printDebugMessage("\tLabel existence check for parameter", comparisons[i].parameter2);
+
+        for(int j = 0; j < comparisonJumpLabelsUsed; j++) {
+            printDebugMessage("\t\tComparing against parameter", comparisonJumpLabels[j].parameter);
+            if(strcmp(comparisons[i].parameter1, comparisonJumpLabels[j].parameter) == 0) {
+                parameter1Defined = 1;
+            }
+            if(strcmp(comparisons[i].parameter2, comparisonJumpLabels[j].parameter) == 0) {
+                parameter2Defined = 1;
+            }
+        }
+
+        if(parameter1Defined == 0) {
+            printSemanticError("No comparison jump marker defined for first parameter", comparisons[i].definedInLine);
+        }
+        if(parameter2Defined == 0) {
+            printSemanticError("No comparison jump marker defined for second parameter", comparisons[i].definedInLine);
+        }
+    }
+
+    printDebugMessage("\tChecks done, freeing memory", "");
+    free(comparisons);
+    free(comparisonJumpLabels);
+
+    printDebugMessage("\"Who would win\" comparison validity check done", "");
 }
 
 /**
