@@ -5,3 +5,5 @@ tmp
 tmp.o
 /examples/Stalinsort/stalinsort.S
 /examples/Stalinsort/.idea/
+test
+test.S
