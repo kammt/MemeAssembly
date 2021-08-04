@@ -19,6 +19,7 @@ struct monkeLabel {
  * @param monkeOpcode the opcode of the "monke" command. "return to monke" must be the following opcode
  */
 void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode) {
+    printDebugMessage("Beginning Monke jump label validity check", "");
     //First, traverse the array and count the number of appearences of the monke-command. This is how many array items we need to create
     int monkeFound = 0;
     int returnMonkeFound = 0;
@@ -31,6 +32,11 @@ void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeO
             returnMonkeFound++;
         }
     }
+
+    printDebugMessageWithNumber("\tJump label definitions found:", monkeFound);
+    printDebugMessageWithNumber("\tJumps found", returnMonkeFound);
+
+    printDebugMessage("\tAllocating memroy for structs", "");
 
     //Now we allocate memory for our monkeLabel structs
     struct monkeLabel *labelDefinitions = calloc(sizeof(struct monkeLabel), monkeFound);
@@ -52,27 +58,33 @@ void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeO
             if(parsedCommand.opcode == monkeOpcode) {
                 labelDefinitions[labelArrayIndex++] = monkeLabel;
             } else {
-                labelDefinitions[jumpArrayIndex++] = monkeLabel;
+                labelJumps[jumpArrayIndex++] = monkeLabel;
             }
         }
     }
 
+    printDebugMessage("\tstructs successfully added to arrays, beginning error checks", "");
     //First check: Did any monke labels get defined twice (i.e. two definitions with the same label)
     for(int i = 0; i < labelArrayIndex; i++) {
+        printDebugMessage("\tChecking jump label", labelDefinitions[i].labelName);
         for(int j = i + 1; j < labelArrayIndex; j++) {
+            printDebugMessage("\t\tComparing against jump label", labelDefinitions[j].labelName);
             if(strcmp(labelDefinitions[i].labelName, labelDefinitions[j].labelName) == 0) {
                 printSemanticErrorWithExtraLineNumber("Monke labels cannot be defined twice", labelDefinitions[j].definedInLine, labelDefinitions[i].definedInLine);
             }
         }
     }
 
+
     //Second check: Did any "return to monke"-commands use a label that doesn't exist?
     for(int i = 0; i < jumpArrayIndex; i++) {
         uint8_t labelFound = 0;
+        printDebugMessage("\tChecking return jump", labelJumps[i].labelName);
         //For every jump, traverse through the label array and see if that label is defined somewhere
         for(int j = 0; j < labelArrayIndex; j++) {
+            printDebugMessage("\t\tComparing against jump label", labelDefinitions[j].labelName);
             //If it is defined, set the value to 1 and escape the loop
-            if(strcmp(labelDefinitions[i].labelName, labelDefinitions[j].labelName) == 0) {
+            if(strcmp(labelJumps[i].labelName, labelDefinitions[j].labelName) == 0) {
                 labelFound = 1;
                 break;
             }
@@ -84,6 +96,7 @@ void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeO
         }
     }
 
+    printDebugMessage("Monke jump label validity check done, freeing memory", "");
     //Now, we free all memory again
     free(labelDefinitions);
     free(labelJumps);
@@ -123,4 +136,5 @@ void checkJumpLabelValidity(struct commandsArray *commandsArray, int labelOpcode
             }
         }
     }
+    printDebugMessage("Jump label validity check done", "");
 }
