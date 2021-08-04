@@ -70,7 +70,8 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "bitconneeeeeeect p p",
             .usedParameters = 2,
             .analysisFunction = NULL,
-            .allowedParamTypes = {0b111, 0b11111}
+            .allowedParamTypes = {0b111, 0b11111},
+            .translationPattern = "and 0, 1"
         },
 
         ///Register Manipulation
