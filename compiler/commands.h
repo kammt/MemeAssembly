@@ -17,11 +17,13 @@ struct parsedCommand {
     char *parameters[MAX_PARAMETER_COUNT];
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter, ...
     int lineNum;
+    uint8_t translate; //Default is 1 (true). Is set to false in case this command is selected for deletion by "perfectly balanced as all things should be"
 };
 
 struct commandsArray {
     struct parsedCommand* arrayPointer;
     size_t size;
+    int randomIndex; //A variable necessary for the "confused stonks" command
 };
 
 struct command {
