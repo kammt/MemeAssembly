@@ -8,8 +8,9 @@
  * Chooses a random line of code in which a random jump marker will be inserted. This is going to be the jump point for all
  * instances of "confused stonks"
  * @param commandsArray the parsed commands
+ * @param confusedStonksOpcode the opcode of this command. It is not used
  */
-void setConfusedStonksJumpLabel(struct commandsArray *commandsArray) {
+void setConfusedStonksJumpLabel(struct commandsArray *commandsArray, int confusedStonksOpcode) {
     srand(time(NULL));
     commandsArray -> randomIndex = (int) (rand() % (commandsArray ->size));
     printDebugMessageWithNumber("Chose random line for jump marker:", commandsArray -> randomIndex);

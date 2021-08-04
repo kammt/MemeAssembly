@@ -3,7 +3,7 @@
 
 #include "../commands.h"
 
-void setConfusedStonksJumpLabel(struct commandsArray *commandsArray);
+void setConfusedStonksJumpLabel(struct commandsArray *commandsArray, int confusedStonksOpcode);
 void chooseLinesToBeDeleted(struct commandsArray *commandsArray, int perfectlyBalancedOpcode);
 
 #endif //MEMEASSEMBLY_RANDOMCOMMANDS_H
