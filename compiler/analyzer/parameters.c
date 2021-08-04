@@ -72,7 +72,7 @@ char *escapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
         "\\n", "\\s", "space", "\\t", "\\f", "\\b", "\\v", "\\\"", "\\?", "\\\\"
 };
 char *translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
-        "\n", "' '", "' '", "\t", "\f", "\b", "\v", "\"", "\?", "\\"
+        "'\\n'", "' '", "' '", "'\\t'", "'\\f'", "'\\b'", "'\\v'", "'\\\"'", "'\\?'", "'\\\\'"
 };
 
 /**
