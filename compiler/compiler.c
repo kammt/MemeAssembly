@@ -235,11 +235,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "or draw 25",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "add eax, 25"
         },
         {
             .pattern = "",
             .usedParameters = 0,
+            .analysisFunction = NULL,
             .translationPattern = "0"
         }
 };
