@@ -6,7 +6,7 @@
 
 #include <string.h> //String functions
 
-void createExecutable(FILE *srcPTR);
-void compile(FILE *srcPTR, FILE *destPTR);
+void createExecutable(FILE *srcPTR, char *destFile);
+int compile(FILE *srcPTR, FILE *destPTR);
 
 #endif

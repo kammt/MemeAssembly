@@ -7,11 +7,12 @@
 
 #include "compiler.h" //Compiler related functions in a separate file
 
-#include "log.h"
+#include "logger/log.h"
 
-int mode = 0; //0 = Compile and Run, 1 = Compile only
 FILE *outputFile;
+char *outputFileString = NULL;
 FILE *inputFile;
+extern int compileMode;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
@@ -46,7 +47,7 @@ int main(int argc, char* argv[]) {
                 printHelpPage(argv[0]);
                 return 0;
             case 'c':
-                mode = 1;
+                compileMode = 0;
                 break;
             case 'd':
                 setLogLevel(3);
@@ -55,28 +56,12 @@ int main(int argc, char* argv[]) {
                 setLogLevel(2);
                 break;
             case 'o':
-                outputFile = fopen(optarg, "w");
-                //If the pointer is NULL, then the file failed to open. Print an error
-                if (outputFile == NULL) {
-                    perror("Error in option -o");
-                    printExplanationMessage(argv[0]);
-                    return 1;
-                }
-
-                //Create a stat struct to check if the file is a regular file. If we did not check for this, an argument like "-o /dev/urandom" would pass without errors
-                struct stat outputFileStat;
-                fstat(fileno(outputFile), &outputFileStat);
-                if (!S_ISREG(outputFileStat.st_mode)) {
-                    fprintf(stderr,
-                            "Error in option -o: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
-                    fclose(outputFile);
-                    printExplanationMessage(argv[0]);
-                    return 1;
-                }
+                outputFileString = optarg;
+                break;
         }
     }
 
-    if(outputFile == NULL) {
+    if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
         printExplanationMessage(argv[0]);
         return 1;
@@ -104,10 +89,30 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        if(mode == 0) {
-            createExecutable(inputFile);
+        if(compileMode == 1) {
+            createExecutable(inputFile, outputFileString);
         } else {
-            compile(inputFile, outputFile);
+            outputFile = fopen(outputFileString, "w");
+            //If the pointer is NULL, then the file failed to open. Print an error
+            if (outputFile == NULL) {
+                perror("Error in option -o");
+                printExplanationMessage(argv[0]);
+                return 1;
+            }
+
+            //Create a stat struct to check if the file is a regular file. If we did not check for this, an argument like "-o /dev/urandom" would pass without errors
+            struct stat outputFileStat;
+            fstat(fileno(outputFile), &outputFileStat);
+            if (!S_ISREG(outputFileStat.st_mode)) {
+                fprintf(stderr,
+                        "Error in option -o: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
+                fclose(outputFile);
+                printExplanationMessage(argv[0]);
+                return 1;
+            }
+
+
+            return compile(inputFile, outputFile);
         }
     }
 }

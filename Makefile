@@ -1,14 +1,14 @@
 CC=gcc
-CFLAGS+=-lm -std=gnu11 -O3
+CFLAGS+=-std=gnu11
 CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wshadow -Wdouble-promotion -Wformat=2 -Wformat-truncation -Wundef -fno-common -Wconversion -Wmisleading-indentation -g3
 
 .PHONY: all clean debug uninstall install
 
-all: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/log.c compiler/preprocessor.c
+all: compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
 	$(CC) -o memeasm $^ $(CFLAGS)
 
-debug: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/log.c compiler/preprocessor.c
-	$(CC) -o memeasm $^ $(CFLAGS) $(CLFAGS_DEBUG)
+debug: compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
+	$(CC) -o memeasm $^ $(CFLAGS) $(CFLAGS_DEBUG)
 
 clean: 
 	$(RM) memeasm
@@ -16,5 +16,5 @@ clean:
 uninstall: 
 	$(RM) /usr/bin/memeasm
 
-install: compiler/memeasm.c compiler/compiler.c compiler/analyser.c compiler/translator.c compiler/log.c compiler/preprocessor.c
+install: compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
 	$(CC) -o /usr/bin/memeasm $^ $(CFLAGS)
