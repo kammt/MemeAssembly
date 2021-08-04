@@ -206,7 +206,8 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "what can I say except p",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {0b110100}
+            .allowedParamTypes = {0b110100},
+            .translationPattern = "push eax\n\tmov al, 0\n\tcall writechar\n\tpop eax"
         },
 
 
@@ -246,8 +247,9 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
  * Attempts to convert the source file to an x86 Assembly file
  * @param srcPTR a pointer to the source file to be compiled
  * @param destPTR a pointer to the destination file. If nonexistent, it will be created
+ * @return 0 on success, 1 otherwise
  */
-void compile(FILE *srcPTR, FILE *destPTR) {
+int compile(FILE *srcPTR, FILE *destPTR) {
     printStatusMessage("Parsing input file");
     struct commandsArray commands = parseCommands(srcPTR);
 
@@ -289,22 +291,36 @@ void compile(FILE *srcPTR, FILE *destPTR) {
     free(commands.arrayPointer);
 
     printDebugMessage("All memory freed, compilation done", "");
+
+    if(getNumberOfCompilationErrors() > 0) {
+        return 1;
+    }
+    return 0;
 }
 
 /**
  * Compiles, links and runs the specified memeasm-file
  * @param srcPTR a pointer to the source file to be compiled
  */
-void createExecutable(FILE *srcPTR) {
-    FILE *destPTR = fopen("tmp.asm","w");
-    compile(srcPTR, destPTR);
+void createExecutable(FILE *srcPTR, char *destFile) {
+    FILE *tmpPTR = fopen("tmp.S","w");
+    int result = compile(srcPTR, tmpPTR);
 
-    printStatusMessage("Calling nasm...");
-    system("nasm -f elf32 -o tmp.o tmp.asm");
+    if(result == 0) {
+        printStatusMessage("Calling gcc");
+        char commandPrefix[] = "gcc tmp.S -o ";
+        size_t strLen = strlen(commandPrefix) + strlen(destFile);
+        char command[strLen];
+        command[0] = '\0';
 
-    printStatusMessage("Linking...");
-    system("gcc tmp.o -g -o tmp -m32 -fno-pie -no-pie");
+        strncat(command, commandPrefix, strLen);
+        strncat(command, destFile, strLen);
+        system(command);
 
-    //TODO delete temporary files
-    exit(EXIT_SUCCESS);
+        printDebugMessage("Removing temporary file", "");
+        //system("rm tmp.S");
+        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
+    }
 }
