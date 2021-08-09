@@ -1,3 +1,4 @@
+## Printing to the console
 ### Definition
 ```what can I say except [ASCII-character/8-bit register]```
 ### Description
@@ -18,47 +19,51 @@ Escape Sequence  | Usage
 
 ?> Printing Unicode-Characters directly is not possible. However, using [this program](https://play.golang.org/p/TojzlTMIcJe), you can get the sequence of commands needed to print your character.
 
-### Origin
-This command is derived from the "What can I say except you're welcome" meme. More information can be found [here](https://knowyourmeme.com/memes/youre-welcome). \
-![Bitconnect GIF](https://media.tenor.com/images/778ac5849626f52c2dd9a020b58ec55a/tenor.gif)
-
-
-### Examples
+## Examples
 #### 1. Hello World!
 ```
-what can I say except H
-what can I say except e
-what can I say except l
-what can I say except l
-what can I say except o
-what can I say except \s
-what can I say except W
-what can I say except o
-what can I say except r
-what can I say except l
-what can I say except d
-what can I say except !
-what can I say except \n
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
+    what can I say except H
+    what can I say except e
+    what can I say except l
+    what can I say except l
+    what can I say except o
+    what can I say except \s
+    what can I say except W
+    what can I say except o
+    what can I say except r
+    what can I say except l
+    what can I say except d
+    what can I say except !
+    what can I say except \n
+
+    I see this as an absolute win!
 ```
 #### 2. Print the Unicode-Character "😎"
 ```
-what can I say except 240
-what can I say except 159
-what can I say except 152
-what can I say except 142
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
+    what can I say except 240
+    what can I say except 159
+    what can I say except 152
+    what can I say except 142
+    
+    I see this as an absolute win!
 ```
 
 #### 3. Print the alphabet with spaces in between and a new line at the end
 ```
-eax is brilliant, but I like 65
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
+    eax is brilliant, but I like 65
 
-upgrade
-what can I say except al
-what can I say except \s
-upvote eax
-corporate needs you to find the difference between eax and 91
-fuck go back
+    upgrade
+    what can I say except al
+    what can I say except \s
+    upvote eax
+    corporate needs you to find the difference between eax and 91
+    fuck go back
 
-they're the same picture
-what can I say except \n
+    they're the same picture
+    what can I say except \n
+
+    I see this as an absolute win
 ```
