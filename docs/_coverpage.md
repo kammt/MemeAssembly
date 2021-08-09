@@ -1,9 +1,2 @@
-<style type="text/css">
- .cover-main {max-width:60em ! important;}
-</style> 
-<br>
-<img style="height: auto; width: auto; max-height: 60%; max-width: 90%;" src="casts/demo.svg" > 
-<br><br>
-
-# MemeAssembly <small>v0.2</small>
+# MemeAssembly <small>v1.0</small>
 > An x86-Assembly based programming language using only memes as commands
