@@ -41,7 +41,7 @@ int isLineOfInterest() {
         i++; //Increase our variable as long as there are only tabs or spaces
     }
 
-    if(lineLength != 1 && strncmp((line + i), commentStart, min(lineLength, strlen(commentStart))) != 0) {
+    if(lineLength != 1 && strncmp((line + i), commentStart, min((unsigned int) lineLength, strlen(commentStart))) != 0) {
         return 1;
     }
     return 0;
@@ -54,8 +54,8 @@ int isLineOfInterest() {
  * @param inputFile the input file
  * @return the number of lines of code in the file
  */
-int getLinesOfCode(FILE *inputFile) {
-    int loc = 0;
+size_t getLinesOfCode(FILE *inputFile) {
+    size_t loc = 0;
 
     while((lineLength = getline(&line, &len, inputFile)) != -1) {
         if(isLineOfInterest() == 1) {
@@ -63,7 +63,7 @@ int getLinesOfCode(FILE *inputFile) {
         }
     }
 
-    printDebugMessageWithNumber("The number of lines are", loc);
+    printDebugMessageWithNumber("The number of lines are", (int) loc);
     printDebugMessage("Rewinding source pointer", "");
     rewind(inputFile);
     return loc;
@@ -186,7 +186,7 @@ struct parsedCommand parseLine(int lineNum) {
 
 struct commandsArray parseCommands(FILE *inputFile) {
     //First, we create an array of command structs
-    int loc = getLinesOfCode(inputFile);
+    size_t loc = getLinesOfCode(inputFile);
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), (size_t) loc);
     if(commands == NULL) {
         fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
@@ -214,7 +214,7 @@ struct commandsArray parseCommands(FILE *inputFile) {
     }
 
     struct commandsArray result = {
-            commands, loc
+            commands, loc, 0
     };
 
     return result;

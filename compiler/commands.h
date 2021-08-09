@@ -23,7 +23,7 @@ struct parsedCommand {
 struct commandsArray {
     struct parsedCommand* arrayPointer;
     size_t size;
-    int randomIndex; //A variable necessary for the "confused stonks" command
+    size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
 struct command {

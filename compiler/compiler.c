@@ -257,7 +257,7 @@ int compile(FILE *srcPTR, FILE *destPTR) {
     struct commandsArray commands = parseCommands(srcPTR);
 
     printStatusMessage("Starting parameter check");
-    for (int i = 0; i < commands.size; ++i) {
+    for (size_t i = 0; i < commands.size; ++i) {
         checkParameters(&commands.arrayPointer[i]);
     }
 
@@ -276,9 +276,9 @@ int compile(FILE *srcPTR, FILE *destPTR) {
     }
 
     printDebugMessage("Freeing memory", "");
-    for(int i = 0; i < commands.size; i++) {
+    for(size_t i = 0; i < commands.size; i++) {
         struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
-        for(int j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
+        for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
             free(parsedCommand.parameters[j]);
         }
     }

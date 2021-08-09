@@ -262,7 +262,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             uint8_t a_used = 0;
             uint8_t u_used = 0;
             uint8_t unexpectedCharacter = 0;
-            for(int i = 0; i < strlen(parameter); i++) {
+            for(size_t i = 0; i < strlen(parameter); i++) {
                 if(parameter[i] == 'a') {
                     a_used = 1;
                 } else if(parameter[i] == 'u') {
@@ -284,7 +284,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
         }
         if((allowedTypes & 0b10000000) != 0) { //Function name
             uint8_t unexpectedCharacter = 0;
-            for(int i = 0; i < strlen(parameter); i++) {
+            for(size_t i = 0; i < strlen(parameter); i++) {
                 char character = parameter[i];
                 if(i == 0 && character >= '0' && character <= '9') {
                     unexpectedCharacter = 1;
@@ -293,7 +293,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
                 }
                 if(!(character == '_' || character == '$' || character == '.' || (character >= '0' && character <= '9') || (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
                     unexpectedCharacter = 1;
-                    printDebugMessageWithNumber("\t\tParameter is not a valid function name, unexpected character found at position", i);
+                    printDebugMessageWithNumber("\t\tParameter is not a valid function name, unexpected character found at position", (int) i);
                     break;
                 }
             }
