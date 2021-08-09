@@ -6,8 +6,8 @@
 
 struct function {
     char* name;
-    int definedInLine;
-    int numberOfCommands;
+    size_t definedInLine;
+    size_t numberOfCommands;
 };
 
 void checkFunctionValidity(struct commandsArray *commandsArray, int functionDeclarationOpcode);

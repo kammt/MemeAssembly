@@ -23,7 +23,7 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
     }
     translatedLine[0] = '\0';
 
-    for(int i = 0; i < strlen(translationPattern); i++) {
+    for(size_t i = 0; i < strlen(translationPattern); i++) {
         char character = translationPattern[i];
         if(character >= '0' && character <= (char) command.usedParameters + 47) {
             char *parameter = parsedCommand.parameters[character - 48];
@@ -73,7 +73,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     fprintf(outputFile, ".section .text\n");
 
     //Traverse the commandsArray to look for any functions
-    for(int i = 0; i < commandsArray -> size; i++) {
+    for(size_t i = 0; i < commandsArray -> size; i++) {
         if(commandsArray -> arrayPointer[i].opcode == 0 && commandsArray -> arrayPointer[i].translate == 1) {
             //Write the function name with the prefix ".global" to the file
             fprintf(outputFile, ".global %s\n", commandsArray -> arrayPointer[i].parameters[0]);
@@ -81,13 +81,13 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     }
     fprintf(outputFile, "\n\n");
 
-    for(int i = 0; i < commandsArray -> size; i++) {
+    for(size_t i = 0; i < commandsArray -> size; i++) {
         if(i == commandsArray -> randomIndex) {
             fprintf(outputFile, "\t.LConfusedStonks: ");
         }
 
         if(commandsArray -> arrayPointer[i].translate == 1) {
-            printDebugMessageWithNumber("Translating Index:", i);
+            printDebugMessageWithNumber("Translating Index:", (int) i);
             translateToAssembly(commandsArray -> arrayPointer[i], outputFile);
         }
     }

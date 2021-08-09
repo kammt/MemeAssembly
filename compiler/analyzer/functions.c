@@ -15,7 +15,7 @@ extern int compileMode;
  * @param functionDeclarationOpcode the opcode of the function declaration command. The three return commands must be the three consecutive opcodes
  * @return a function struct containing all parsed information
  */
-struct function parseFunction(struct commandsArray *commandsArray, int functionStartAtIndex, int functionDeclarationOpcode) {
+struct function parseFunction(struct commandsArray *commandsArray, size_t functionStartAtIndex, int functionDeclarationOpcode) {
     struct parsedCommand functionStart = *(commandsArray->arrayPointer + functionStartAtIndex);
 
     //Define the structs
@@ -25,11 +25,11 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
     function.name = functionStart.parameters[0];
 
     //Set the line number
-    function.definedInLine = functionStart.lineNum;
+    function.definedInLine = (size_t) functionStart.lineNum;
 
     printDebugMessage("\tParsing function:", functionStart.parameters[0]);
 
-    int index = 1;
+    size_t index = 1;
     uint8_t returnStatementFound = 0;
     //Iterate through all commands until a return statement is found or the end of the array is reached
     while (functionStartAtIndex + index < commandsArray -> size) {
@@ -47,7 +47,7 @@ struct function parseFunction(struct commandsArray *commandsArray, int functionS
         }
         index++;
     }
-    printDebugMessageWithNumber("\t\tIteration stopped at index", index);
+    printDebugMessageWithNumber("\t\tIteration stopped at index", (int) index);
 
     if(returnStatementFound == 0) {
         printSemanticError("No return statement found", functionStart.lineNum);
@@ -69,13 +69,13 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
     struct parsedCommand *arrayPointer = commandsArray->arrayPointer;
 
     //First, count how many function definitions there are
-    int functionDefinitions = 0;
-    for (int i = 0; i < commandsArray->size; ++i) {
+    size_t functionDefinitions = 0;
+    for (size_t i = 0; i < commandsArray -> size; ++i) {
         if(arrayPointer[i].opcode == functionDeclarationOpcode) {
             functionDefinitions++;
         }
     }
-    printDebugMessageWithNumber("Number of functions:", functionDefinitions);
+    printDebugMessageWithNumber("Number of functions:", (int) functionDefinitions);
 
     //Now we create our array of functions
     int functionArrayIndex = 0;
@@ -88,7 +88,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
     printDebugMessage("Starting function parsing", "");
 
     //We now traverse the commands array again, this time parsing the functions
-    int commandArrayIndex = 0; //At which command we currently are
+    size_t commandArrayIndex = 0; //At which command we currently are
     while (commandArrayIndex < commandsArray->size) {
         for (; commandArrayIndex < commandsArray->size; commandArrayIndex++) {
             //At this point, we are in between function definitions, so any commands that are not function definitions are illegal
@@ -117,16 +117,16 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
      * - that a main function exists (if checkForMainFunction is set to 1)
      */
     uint8_t mainFunctionExists = 0;
-    for(int i = 0; i < functionDefinitions; i++) {
+    for(size_t i = 0; i < functionDefinitions; i++) {
         struct function function = functions[i];
         if(strcmp(function.name, "main") == 0) {
             mainFunctionExists = 1;
         }
 
         //We now traverse through all other function names and check if their names match. If so, print an error
-        for(int j = i + 1; j < functionDefinitions; j++) {
+        for(size_t j = i + 1; j < functionDefinitions; j++) {
             if(strcmp(function.name, functions[j].name) == 0) {
-                printSemanticErrorWithExtraLineNumber("Duplicate function definition", functions[j].definedInLine, function.definedInLine);
+                printSemanticErrorWithExtraLineNumber("Duplicate function definition", (int) functions[j].definedInLine, (int) function.definedInLine);
             }
         }
     }

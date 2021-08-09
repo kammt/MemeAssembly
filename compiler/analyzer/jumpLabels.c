@@ -21,10 +21,10 @@ struct monkeLabel {
 void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode) {
     printDebugMessage("Beginning Monke jump label validity check", "");
     //First, traverse the array and count the number of appearences of the monke-command. This is how many array items we need to create
-    int monkeFound = 0;
-    int returnMonkeFound = 0;
+    size_t monkeFound = 0;
+    size_t returnMonkeFound = 0;
 
-    for(int i = 0; i < commandsArray->size; i++) {
+    for(size_t i = 0; i < commandsArray -> size; i++) {
         struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
         if(parsedCommand.opcode == monkeOpcode) {
             monkeFound++;
@@ -33,8 +33,8 @@ void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeO
         }
     }
 
-    printDebugMessageWithNumber("\tJump label definitions found:", monkeFound);
-    printDebugMessageWithNumber("\tJumps found", returnMonkeFound);
+    printDebugMessageWithNumber("\tJump label definitions found:", (int) monkeFound);
+    printDebugMessageWithNumber("\tJumps found", (int) returnMonkeFound);
 
     printDebugMessage("\tAllocating memroy for structs", "");
 
@@ -48,7 +48,7 @@ void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeO
 
     int labelArrayIndex = 0;
     int jumpArrayIndex = 0;
-    for(int i = 0; i < commandsArray->size; i++) {
+    for(size_t i = 0; i < commandsArray -> size; i++) {
         struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
         if(parsedCommand.opcode == monkeOpcode || parsedCommand.opcode == monkeOpcode + 1) {
             struct monkeLabel monkeLabel;
@@ -114,7 +114,7 @@ void checkJumpLabelValidity(struct commandsArray *commandsArray, int labelOpcode
     int jumpMarkerDefined = 0;
 
     //Traverse the command array and save the first occurrence of the jump label. If it then occurs another time, print an error
-    for(int i = 0; i < commandsArray->size; i++) {
+    for(size_t i = 0; i < commandsArray -> size; i++) {
         struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
         if(parsedCommand.opcode == labelOpcode) {
             if(jumpMarkerDefined == 0) {
@@ -129,7 +129,7 @@ void checkJumpLabelValidity(struct commandsArray *commandsArray, int labelOpcode
 
     //If no jump marker was defined, we traverse the array again and print an error if any jumps exist
     if(jumpMarkerDefined == 0) {
-        for(int i = 0; i < commandsArray->size; i++) {
+        for(size_t i = 0; i < commandsArray -> size; i++) {
             struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
             if(parsedCommand.opcode == labelOpcode + 1) {
                 printSemanticError("Marker definition missing", parsedCommand.lineNum);
