@@ -1,7 +1,7 @@
 ## v1.0
 This major release contains the following changes:
 - Added function support. It is now possible to not create an executable, but rather create a function in MemeAssembly that can then be used by other programming languages like C.
-- Since MemeAssembly is up to date on the latest technologies, it now contains a new feature before only found in Big Data and Machine Learning technologies: Pointers! Pointers.. point to stuff (duh). You can make the compiler interpret a register as a pointer by using the "do you know de wey prefix"
+- Since MemeAssembly is up to date on the latest technologies, it now contains a new feature before only found in Big Data and Machine Learning technologies: Pointers! Pointers.. point to stuff (duh). You can make the compiler interpret a register as a pointer by using the "do you know de wey" prefix
 - Implemented some shiny new commands, which include but are not limited to:
     - ```I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun [function name]``` \
         Defines a new function. If an executable is to be created, a main-function must exist
