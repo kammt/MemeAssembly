@@ -1,4 +1,3 @@
-# Changelogs
 ## v1.0
 This major release contains the following changes:
 - Added function support. It is now possible to not create an executable, but rather create a function in MemeAssembly that can then be used by other programming languages like C.
