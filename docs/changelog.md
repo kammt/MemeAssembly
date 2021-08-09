@@ -16,8 +16,8 @@ This major release contains the following changes:
          Jump to a monke jump label
     - ```who would win? [value/register] or [value/register]``` \
         Compares the two parameters provided and jumps to a label defined by using ```[value/register] wins```
-
-- The copiler has been rewritten. While it is most likely not faster (admittedly, it is already faster than light) it brings better compatibility with new commands in the future and has improved error handling (Rest assured: It still does not print compiler warnings).
+- MemeAssembly code is now translated into x86_64 Assembly
+- The copiler has been rewritten. While it is most likely not faster (admittedly, it is already faster than light) it brings better compatibility with new commands in the future and has improved error handling (Rest assured: It still does not print compiler warnings). Also, it no longer depends on NASM!
 
 Things that probably no one cares about - Minor fixes:
 - Getopt is now used instead of manual string parsing. Yes, I used strcmp and yes, I'm sorry.
