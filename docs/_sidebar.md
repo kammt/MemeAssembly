@@ -19,3 +19,9 @@
         * [Balancing your code](README.md)
         * [Crashing your program](README.md)
         * [Jumping randomly](README.md)
+* Code examples
+    * Stalinsort
+    * "The link"
+    * The Alphabet
+* [Changelogs](changelog.md)    
+* Contributing
