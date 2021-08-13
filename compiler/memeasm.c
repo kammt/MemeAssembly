@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
             {"O-1",     no_argument,      &optimisationLevel, -1},
             {"O-2",     no_argument,      &optimisationLevel, -2},
             {"O-3",     no_argument,      &optimisationLevel,-3},
-            {"O69",     no_argument,      &optimisationLevel,69},
+            {"O69420",     no_argument,      &optimisationLevel,69420},
     };
 
     int opt;
