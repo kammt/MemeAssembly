@@ -1,5 +1,5 @@
 What the hell happened here? This program takes a pointer to the array in rdi, the number of elements as a pointer in rsi. No value is returned, but the array and the array size are modified
-I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun stalinsort
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun stalinSort
 
     What the hell happened here? The following register setup is defined:
     What the hell happened here?    - rdi   pointer to the array
