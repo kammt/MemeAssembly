@@ -16,6 +16,8 @@ FILE *inputFile;
 extern int compileMode;
 extern int optimisationLevel;
 
+int unknownCommand = 0;
+
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
  */
@@ -42,6 +44,7 @@ int main(int argc, char* argv[]) {
             {"O-2",     no_argument,      &optimisationLevel, -2},
             {"O-3",     no_argument,      &optimisationLevel,-3},
             {"O69420",     no_argument,      &optimisationLevel,69420},
+            { 0, 0, 0, 0 }
     };
 
     int opt;
@@ -65,13 +68,18 @@ int main(int argc, char* argv[]) {
                 outputFileString = optarg;
                 break;
             case '?':
+            default:
                 fprintf(stderr, "Error: Unknown option provided\n");
                 printExplanationMessage(argv[0]);
                 return 1;
         }
     }
 
-    if(outputFileString == NULL) {
+    if(unknownCommand == 1) {
+        fprintf(stderr, "Error: Unknown option provided\n");
+        printExplanationMessage(argv[0]);
+        return 1;
+    } else if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
         printExplanationMessage(argv[0]);
         return 1;
