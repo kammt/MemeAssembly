@@ -231,6 +231,12 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = &chooseLinesToBeDeleted,
             .translationPattern = ""
         },
+        {
+            .pattern = "wait, that's illegal",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
+        },
         //Insert commands above this one
         {
             .pattern = "or draw 25",
