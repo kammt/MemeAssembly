@@ -1,0 +1,12 @@
+* [Getting Started](getting-started.md)
+* Commands
+    * [Functions](commands/functions.md)
+    * [Arithmetic Operations](commands/arithmetic-operations.md)
+    * [Logical Operations](commands/logical-operations.md)
+    * [Stack Operations](commands/stack-operations.md)
+    * [Register Manipulation](commands/register-manipulation.md)
+    * [I/O Operations](commands/io-operations.md)
+    * [Jump Markers](commands/jump-markers.md) 
+    * [Random Commands](commands/random-commands.md)
+* [MemeAssembly Standard](memeasm-standard.md)
+* [Changelogs](changelog.md)    
