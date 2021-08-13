@@ -10,7 +10,11 @@
 FILE *outputFile;
 char *outputFileString = NULL;
 FILE *inputFile;
+
 extern int compileMode;
+extern int optimisationLevel;
+
+int unknownCommand = 0;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
@@ -24,22 +28,27 @@ void printHelpPage(char* programName) {
 }
 
 void printExplanationMessage(char* programName) {
-    printf("Usage: %s [-d | -i] inputFile\n", programName);
+    printf("Usage: %s -o outputFile [-d | -i] inputFile\n", programName);
 }
 
 int main(int argc, char* argv[]) {
     static struct option long_options[] = {
-            {"output",      required_argument, 0,      'o'},
-            {"help",        no_argument,       0,      'h'},
-            {"debug",       no_argument,       0,      'd'},
-            {"compile",     no_argument,       0,      'c'},
-            {"info",        no_argument,       0,      'i'},
+            {"output",  required_argument, 0, 'o'},
+            {"help",    no_argument,       0, 'h'},
+            {"debug",   no_argument,       0, 'd'},
+            {"compile", no_argument,       0, 'c'},
+            {"info",    no_argument,       0, 'i'},
+            {"O-1",     no_argument,      &optimisationLevel, -1},
+            {"O-2",     no_argument,      &optimisationLevel, -2},
+            {"O-3",     no_argument,      &optimisationLevel,-3},
+            {"O69420",     no_argument,      &optimisationLevel,69420},
+            { 0, 0, 0, 0 }
     };
 
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long(argc, argv, "o:hcdi", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hcdi", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printHelpPage(argv[0]);
@@ -56,10 +65,19 @@ int main(int argc, char* argv[]) {
             case 'o':
                 outputFileString = optarg;
                 break;
+            case '?':
+            default:
+                fprintf(stderr, "Error: Unknown option provided\n");
+                printExplanationMessage(argv[0]);
+                return 1;
         }
     }
 
-    if(outputFileString == NULL) {
+    if(unknownCommand == 1) {
+        fprintf(stderr, "Error: Unknown option provided\n");
+        printExplanationMessage(argv[0]);
+        return 1;
+    } else if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
         printExplanationMessage(argv[0]);
         return 1;
@@ -86,6 +104,8 @@ int main(int argc, char* argv[]) {
             printExplanationMessage(argv[0]);
             return 1;
         }
+
+        printDebugMessageWithNumber("Optimisation level is", optimisationLevel);
 
         if(compileMode == 1) {
             createExecutable(inputFile, outputFileString);

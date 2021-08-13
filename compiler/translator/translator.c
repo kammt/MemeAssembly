@@ -7,7 +7,14 @@
 extern char* version_string;
 extern struct command commandList[];
 
+int optimisationLevel = 0;
+
 void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
+    if(parsedCommand.opcode != 0 && optimisationLevel == 69420) {
+        printDebugMessage("\tCommand is not a function declaration, abort.", "");
+        return;
+    }
+
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
@@ -61,6 +68,21 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
 
     printDebugMessage("\tDone, freeing memory", "");
     free(translatedLine);
+
+    //Now, we need to insert more commands based on the current optimisation level
+    if (optimisationLevel == -1) {
+        //Insert a nop
+        fprintf(outputFile, "\tnop\n");
+    } else if (optimisationLevel == -2) {
+        //Push and pop rax
+        fprintf(outputFile, "\tpush rax\n\tpop rax\n");
+    } else if (optimisationLevel == -3) {
+        //Save and restore xmm0 on the stack using movups
+        fprintf(outputFile, "\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n");
+    } else if(optimisationLevel == 69420) {
+        //If we get here, then this was a function declaration. Insert a ret-statement and exit
+        fprintf(outputFile, "\txor rax, rax\n\tret\n");
+    }
 }
 
 void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
@@ -92,7 +114,10 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
         }
     }
 
-    fprintf(outputFile, "\n\nwritechar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rax, 1\n\tsyscall\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\t\n\tret");
+    //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
+    if(optimisationLevel != 42069) {
+        fprintf(outputFile, "\n\nwritechar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rax, 1\n\tsyscall\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\t\n\tret");
+    }
 
     printDebugMessage("Done, closing output file", "");
     fclose(outputFile);
