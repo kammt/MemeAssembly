@@ -179,7 +179,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 2,
             .allowedParamTypes = {0b1111, 0b111111},
             .analysisFunction = &checkWhoWouldWinValidity,
-            .translationPattern = "cmp 0, 1\n\tjg .L0Wins\n\tjmp .L1Wins"
+            .translationPattern = "cmp 0, 1\n\tjg .L0Wins\n\tjl .L1Wins"
         },
         {
             .pattern = "p wins",
