@@ -22,9 +22,16 @@ int unknownCommand = 0;
 void printHelpPage(char* programName) {
     printInformationHeader();
     printf("Usage:\n");
-    printf("  %s -o outputFile [-i | -d] path/to/fileName\t\t\tCompiles the specified file into an executable\n", programName);
-    printf("  %s -c -o outputFile [-i | -d] path/to/fileName\t\t\tOnly compiles the specified file and saves it as Assembly code\n", programName);
-    printf("  %s (-h | --help)\t\t\t\t\t\tDisplays this help page\n", programName);
+    printf("  %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
+    printf("  %s [options] -c -o outputFile [-i | -d] inputFile\t\tOnly compiles the specified file and saves it as Assembly code\n", programName);
+    printf("  %s (-h | --help)\t\t\t\t\t\t\t\t\t\tDisplays this help page\n\n", programName);
+    printf("Compiler options:\n");
+    printf("  -O-1 \t\t- reverse optimisation stage 1: A nop is inserted after every command\n");
+    printf("  -O-2 \t\t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
+    printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
+    printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
+    printf("  -i \t\t- enables information logs\n");
+    printf("  -d \t\t- enables debug logs\n");
 }
 
 void printExplanationMessage(char* programName) {
