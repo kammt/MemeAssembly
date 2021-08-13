@@ -247,7 +247,8 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             char* endPtr;
             long result = strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
-            if(*endPtr == '\0' && result >= 0 && result <= 127) {
+            //We allow values greater than 128 so that it is possible to print unicode in multiple steps. See https://play.golang.org/p/TojzlTMIcJe
+            if(*endPtr == '\0' && result >= 0 && result <= 255) {
                 printDebugMessage("\t\tParameter is an ASCII-code", "");
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printSyntaxErrorWithoutString("An ASCII-code cannot be a pointer", parsedCommand -> lineNum);
