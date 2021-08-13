@@ -1,7 +1,5 @@
 #include <stdio.h>  //Printf() function
-#include <stdlib.h> //Exit() function
 #include <sys/stat.h>
-
 
 #include <getopt.h> //Getopt_long function
 
