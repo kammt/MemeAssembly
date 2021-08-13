@@ -1,5 +1,4 @@
-* [Getting Started](getting_started.md)
-* [MemeAssembly Standard](memeasm-standard.md)
+* [Getting Started](getting-started.md)
 * Commands
     * [I/O Operations](commands/io-operations.md)
     * [Stack Operations](commands/stack-operations.md)
@@ -18,9 +17,6 @@
         * [Balancing your code](README.md)
         * [Crashing your program](README.md)
         * [Jumping randomly](README.md)
-* Code examples
-    * Stalinsort
-    * "The link"
-    * The Alphabet
+* [MemeAssembly Standard](memeasm-standard.md)
 * [Changelogs](changelog.md)    
 * Contributing
