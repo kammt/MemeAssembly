@@ -43,7 +43,7 @@ So let's create our first program!
         what can I say except !
         what can I say except \n
         
-        I see this as an absolute win!
+        I see this as an absolute win
     ```
 3. Open a terminal in the directory of your file and type ```memeasm -o helloWorld HelloWorld.memeasm```
 4. Run the program using ```./helloWorld```

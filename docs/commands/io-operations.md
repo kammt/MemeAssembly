@@ -37,7 +37,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     what can I say except !
     what can I say except \n
 
-    I see this as an absolute win!
+    I see this as an absolute win
 ```
 #### 2. Print the Unicode-Character "😎"
 ```
@@ -47,7 +47,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     what can I say except 152
     what can I say except 142
     
-    I see this as an absolute win!
+    I see this as an absolute win
 ```
 
 #### 3. Print the alphabet with spaces in between and a new line at the end
