@@ -1,4 +1,5 @@
 * [Getting Started](getting_started.md)
+* [MemeAssembly Standard](memeasm-standard.md)
 * Commands
     * [I/O Operations](commands/io-operations.md)
     * [Stack Operations](commands/stack-operations.md)
