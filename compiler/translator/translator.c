@@ -63,6 +63,18 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
 
     printDebugMessage("\tDone, freeing memory", "");
     free(translatedLine);
+
+    //Now, we need to insert more commands based on the current optimisation level
+    if (optimisationLevel == -1) {
+        //Insert a nop
+        fprintf(outputFile, "\tnop\n");
+    } else if (optimisationLevel == -2) {
+        //Push and pop rax
+        fprintf(outputFile, "\tpush rax\n\tpop rax\n");
+    } else if (optimisationLevel == -3) {
+        //Save and restore xmm0 on the stack using movups
+        fprintf(outputFile, "\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n");
+    }
 }
 
 void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
