@@ -7,6 +7,8 @@
 extern char* version_string;
 extern struct command commandList[];
 
+int optimisationLevel = 0;
+
 void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
