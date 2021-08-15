@@ -9,6 +9,9 @@
     <a href="https://github.com/kammt/MemeAssembly/actions/workflows/compilation_test.yml">
       <img src="https://github.com/kammt/MemeAssembly/actions/workflows/compilation_test.yml/badge.svg" alt="Compilation Test" />
    </a>
+   <a href="https://github.com/kammt/MemeAssembly/actions/workflows/compile_and_run_test.yml">
+      <img src="https://github.com/kammt/MemeAssembly/actions/workflows/compile_and_run_test.yml/badge.svg" alt="Compile and Run Test" />
+   </a>
   </p>
     
 ## What is MemeAssembly?
