@@ -86,7 +86,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 You can also check the [examples](examples/) directory to find more.
 
 ## Badge of honor
-<img alt="MemeAssembly award Meme" src="docs/images/award_meme.png" width="50%"> \
+<img alt="MemeAssembly award Meme" src="https://github.com/kammt/MemeAssembly/blob/gh-pages/images/award_meme.png" width="50%"> \
 Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
 ![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)\
 To do so, insert this code block into your ReadMe file: \
