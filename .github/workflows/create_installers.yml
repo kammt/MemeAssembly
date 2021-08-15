@@ -23,11 +23,15 @@ jobs:
         
       - name: Replace VERSION_STRING in nfpm configuration file with parameter
         run: |
-          sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm/nfpm.yaml
+          cd nfpm
+          sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
+          cd ..
 
       - name: Generate installer files
         run: |
-          ./nfpm/generateInstallers.sh
+          cd nfpm
+          ./generateInstallers.sh
+          cd ..
           
       - name: Archive debian installer
         uses: actions/upload-artifact@v2
@@ -39,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: rpm-installer
-          path: memeassembly_${{ github.event.inputs.version }}_x86_64.rpm
+          path: memeassembly-${{ github.event.inputs.version }}.x86_64.rpm
