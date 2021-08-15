@@ -4,6 +4,12 @@
 ### Description
 Performs a logical and on a register with a given value or register.
 
+## Logical Not
+### Definition
+`[register] \s`
+### Description
+Performs a logical not on the specified register
+
 ## Examples
 #### 1. Calculate eax mod 16
 ```
