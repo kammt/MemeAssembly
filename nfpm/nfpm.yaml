@@ -1,0 +1,27 @@
+#
+# check https://nfpm.goreleaser.com/configuration for detailed usage
+#
+name: "memeassembly"
+arch: "amd64"
+platform: "linux"
+version: VERSION_STRING
+section: "default"
+priority: "extra"
+depends:
+- gcc
+- make
+maintainer: "Tobias Kamm <tobias.kamm@tutanota.de>"
+description: |
+  A x86_64 Assembly based programming language that only uses Memes as commands
+homepage: "https://kammt.github.io/MemeAssembly"
+license: "GPLv3"
+# Contents to add to the package
+# This can be binaries or any other files.
+contents:
+  - src: ../compiler
+    dst: /compiler
+  - src: ../Makefile
+    dst: Makefile
+scripts:
+  postinstall: ./postinstall.sh
+  postremove: ./postremove.sh
