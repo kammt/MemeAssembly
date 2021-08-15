@@ -23,11 +23,15 @@ jobs:
         
       - name: Replace VERSION_STRING in nfpm configuration file with parameter
         run: |
-          sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm/nfpm.yaml
+          cd nfpm
+          sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
+          cd ..
 
       - name: Generate installer files
         run: |
+          cd nfpm
           ./nfpm/generateInstallers.sh
+          cd ..
           
       - name: Archive debian installer
         uses: actions/upload-artifact@v2
