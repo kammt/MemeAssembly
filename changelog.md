@@ -21,7 +21,7 @@ This major release contains the following changes:
      -  `-O-1` Inserts a nop after every command      
      -  `-O-2` Pushes and pops a register after every command
      -  `-O-3` Saves and restores an xmm register onto the Stack using *movups* after every command
-- Added the optimisation flag `-O42069` which makes your code faster than lightning! \
+- Added the optimisation flag `-O69420` which makes your code faster than lightning! \
      When using this flag, the MemeAssembly compiler reduces your run time to 0s by optimising out your entire code.
 - MemeAssembly code is now translated into x86_64 Assembly
 - The copiler has been rewritten. While it is most likely not faster (admittedly, it is already faster than light) it brings better compatibility with new commands in the future and has improved error handling (Rest assured: It still does not print compiler warnings). Also, it no longer depends on NASM and uses the GNU Assembler!
