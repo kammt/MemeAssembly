@@ -16,7 +16,10 @@ jobs:
       - uses: actions/checkout@v2
       
       - name: Install nfpm
-        run: sudo apt-get install nfpm
+        run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt update
+          sudo apt install nfpm
         
       - name: Replace VERSION_STRING in nfpm configuration file with parameter
         run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
