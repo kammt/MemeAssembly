@@ -43,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: rpm-installer
-          path: memeassembly-${{ github.event.inputs.version }}_x86_64.rpm
+          path: memeassembly-${{ github.event.inputs.version }}.x86_64.rpm
