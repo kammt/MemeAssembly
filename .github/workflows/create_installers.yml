@@ -22,11 +22,12 @@ jobs:
           sudo apt install nfpm
         
       - name: Replace VERSION_STRING in nfpm configuration file with parameter
-        run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
+        run: |
+          cd nfpm
+          sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
 
       - name: Generate installer files
         run: |
-          cd nfpm
           ./generateInstallers.sh
           cd ..
           
