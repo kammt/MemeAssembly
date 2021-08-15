@@ -1,0 +1,40 @@
+name: Create Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version String'     
+        required: true
+
+jobs:
+  create-installers:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      
+      - name: Install nfpm
+        run: sudo apt-get install nfpm
+        
+      - name: Replace VERSION_STRING in nfpm configuration file with parameter
+        run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
+
+      - name: Generate installer files
+        run: |
+          cd nfpm
+          ./generateInstallers.sh
+          cd ..
+          
+      - name: Archive debian installer
+        uses: actions/upload-artifact@v2
+        with:
+          name: debian-installer
+          path: memeassembly_${{ github.event.inputs.version }}_amd64.deb
+          
+      - name: Archive rpm installer
+        uses: actions/upload-artifact@v2
+        with:
+          name: rpm-installer
+          path: memeassembly_${{ github.event.inputs.version }}_x86_64.rpm
