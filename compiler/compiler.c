@@ -172,7 +172,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 1,
             .allowedParamTypes = {0b1000000},
             .analysisFunction = NULL,
-            .translationPattern = "jmp .L0:"
+            .translationPattern = "jmp .L0"
         },
         {
             .pattern = "who would win? p or p",
