@@ -244,6 +244,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
         },
+        //Debug commands
+        {
+            .pattern = "it's a trap",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "int3"
+        },
         //Insert commands above this one
         {
             .pattern = "or draw 25",

@@ -7,3 +7,5 @@ tmp.o
 /examples/Stalinsort/.idea/
 test
 test.S
+#compiledb used by clang tooling
+compile_commands.json
