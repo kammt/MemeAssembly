@@ -73,6 +73,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .allowedParamTypes = {0b1111, 0b111111},
             .translationPattern = "and 0, 1"
         },
+        {
+            .pattern = "p \\s",
+            .usedParameters = 1,
+            .analysisFunction = NULL,
+            .allowedParamTypes = {0b1111},
+            .translationPattern = "not 0"
+        },
 
         ///Register Manipulation
         {
