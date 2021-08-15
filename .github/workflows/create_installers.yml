@@ -30,7 +30,7 @@ jobs:
       - name: Generate installer files
         run: |
           cd nfpm
-          ./nfpm/generateInstallers.sh
+          ./generateInstallers.sh
           cd ..
           
       - name: Archive debian installer
