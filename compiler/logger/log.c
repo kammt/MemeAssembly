@@ -10,11 +10,16 @@
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
+int compilationErrors = 0;
 int logLevel = 1; //Default value
-char version_string[] = "v0.1";
+char *version_string = "v1.0";
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
+}
+
+int getNumberOfCompilationErrors() {
+    return compilationErrors;
 }
 
 /**
@@ -47,9 +52,6 @@ void printErrorASCII() {
     printf("     \\/  \\/ \\__,_|_|\\__( )  \\__|_| |_|\\__,_|\\__| |___/ |_|_|_|\\___|\\__, |\\__,_|_(_) \n");
     printf("                       |/                                           __/ |           \n");
     printf("                                                                   |___/  \n" RESET);
-    printf("\nYour program failed to compile because of errors in your code. Please check your input file and try again.\n");
-    printf(" Exiting....\n");
-    exit(EXIT_FAILURE);
 }
 
 /**
@@ -86,12 +88,14 @@ void printSuccessMessage(char message[]) {
  * @param message the message
  */
 void printStatusMessage(char message[]) {
-    printf(YEL "%s \n" RESET, message);
-    fflush( stdout );   
+    if(logLevel >= 2) {
+        printf(YEL "%s \n" RESET, message);
+        fflush( stdout );
+    }
 }
 
 /**
- * An information message. Will only be printed if -v or -vv is active
+ * An information message. Will only be printed if -d or -i is active
  * @param message the message
  */
 void printInfoMessage(char message[]) {
@@ -102,7 +106,7 @@ void printInfoMessage(char message[]) {
 }
 
 /**
- * A debug message. Will only be printed if -vv is active
+ * A debug message. Will only be printed if -d is active
  * @param message the message
  * @param variable an optional string variable
  */
@@ -114,7 +118,7 @@ void printDebugMessage(char message[], char *variable) {
 }
 
 /**
- * A debug message. Will only be printed if -vv is active
+ * A debug message. Will only be printed if -d is active
  * @param message the message
  * @param variable an optional integer variable
  */
@@ -131,8 +135,8 @@ void printDebugMessageWithNumber(char message[], int variable) {
  * @param lineNum the line number
  */
 void printSemanticError(char message[], int lineNum) {
-    printf(RED "Semantic Error in line %d: %s", lineNum, message);
-    printErrorASCII();
+    compilationErrors += 1;
+    fprintf(stderr, RED "Semantic Error in line %d: %s\n" RESET, lineNum, message);
 }
 
 /**
@@ -142,8 +146,8 @@ void printSemanticError(char message[], int lineNum) {
  * @param originalDefinition the line Number in which the original definition was
  */
 void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
-    printf(RED "Semantic Error in line %d: %s (already defined in line %d)", lineNum, message, originalDefinition);
-    printErrorASCII();
+    compilationErrors += 1;
+    fprintf(stderr, RED "Semantic Error in line %d: %s (already defined in line %d)\n" RESET, lineNum, message, originalDefinition);
 }
 
 /**
@@ -153,7 +157,8 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
  * @param lineNum the line number
  */
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
-    printf(RED "Syntax Error in line %d: Expected %s, but got %s" RESET, lineNum, expected, got);
+    compilationErrors += 1;
+    fprintf(stderr, RED "Syntax Error in line %d: Expected %s, but got %s\n" RESET, lineNum, expected, got);
 }
 
 /**
@@ -163,5 +168,16 @@ void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
  * @param lineNum the line number
  */
 void printSyntaxError(char message[], char got[], int lineNum) {
-    printf(RED "Syntax Error in line %d: %s '%s'", lineNum, message, got);
-}    
+    compilationErrors += 1;
+    fprintf(stderr, RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
+}
+
+/**
+ * Prints a generic syntax error
+ * @param message the error message
+ * @param lineNum the line number
+ */
+void printSyntaxErrorWithoutString(char message[], int lineNum) {
+    compilationErrors += 1;
+    fprintf(stderr, RED "Syntax Error in line %d: %s\n" RESET, lineNum, message);
+}

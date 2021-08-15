@@ -1,10 +1,13 @@
 #ifndef LOG_H
 #define LOG_H
+#define compilationErrors
 
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
 void setLogLevel(int newLogLevel);
+
+int getNumberOfCompilationErrors();
 
 void printInformationHeader();
 
@@ -23,5 +26,6 @@ void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int orig
 
 void printUnexpectedCharacterError(char expected[], char got[], int lineNum);
 void printSyntaxError(char message[], char got[], int lineNum);
+void printSyntaxErrorWithoutString(char message[], int lineNum);
 
 #endif

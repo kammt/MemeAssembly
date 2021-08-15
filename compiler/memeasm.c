@@ -1,122 +1,143 @@
 #include <stdio.h>  //Printf() function
-#include <stdlib.h> //Exit() function
+#include <sys/stat.h>
 
-#include <string.h> //String functions
+#include <getopt.h> //Getopt_long function
 
-#include "compiler.h" //Compiler related functions in a seperate file
+#include "compiler.h" //Compiler related functions in a separate file
 
-#include "log.h"
+#include "logger/log.h"
 
-char help1[] = "-h", help2[] = "--help";
-char compile1[] = "-c", compile2[] = "--compile";
-char log_info[] = "-v", log_debug[] = "-vv";
+FILE *outputFile;
+char *outputFileString = NULL;
+FILE *inputFile;
+
+extern int compileMode;
+extern int optimisationLevel;
+
+int unknownCommand = 0;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
  */
-void printHelpPage() {
-    //https://stackoverflow.com/questions/9725675/is-there-a-standard-format-for-command-line-shell-help-text
+void printHelpPage(char* programName) {
     printInformationHeader();
     printf("Usage:\n");
-    printf("  memeasm path/to/fileName [-v | -vv]\t\t\t\t\tCompiles and runs the specified file\n");
-    printf("  memeasm (-c | --compile) [-v | -vv] path/to/fileName outputFile\tOnly compiles the specified file and saves it as x86-Assembly code\n");
-    printf("  memeasm (-h | --help)\t\t\t\t\t\t\tDisplays this help page\n");
+    printf("  %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
+    printf("  %s [options] -c -o outputFile [-i | -d] inputFile\t\tOnly compiles the specified file and saves it as Assembly code\n", programName);
+    printf("  %s (-h | --help)\t\t\t\t\t\t\t\t\t\tDisplays this help page\n\n", programName);
+    printf("Compiler options:\n");
+    printf("  -O-1 \t\t- reverse optimisation stage 1: A nop is inserted after every command\n");
+    printf("  -O-2 \t\t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
+    printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
+    printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
+    printf("  -i \t\t- enables information logs\n");
+    printf("  -d \t\t- enables debug logs\n");
 }
 
-/**
- * Attempts to interpret the options for a 'compile' command
- * @param argc the number of arguments
- * @param argv an array of arguments specified
- * @returns 0 if command was interpreted successfully, 1 otherwise
- */
-int interpretCompile(int argc, char *argv[]) {
-    if(argc == 4 || argc == 5) {
-        if(argc == 5) {
-            if(strcmp(argv[2], log_info) == 0) {
-                setLogLevel(2);
-            } else if(strcmp(argv[2], log_debug) == 0) {
-                setLogLevel(3);
-            } else {
-                printf("Command interpretation failed. (-c / --compile) requires 2 additional parameters, but instead got %d\n", argc-2);
-                return 1;
-            }
-        }
-
-        //There are enough arguments. Now we need to check if the first is a correct path
-        FILE *srcPTR = fopen(argv[argc-2], "r");
-        FILE *destPTR = fopen(argv[argc-1], "w");
-
-        if(srcPTR == NULL) {
-            printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[2]);
-            return 1;
-        }
-        if(destPTR == NULL) {
-            printf("Command interpretation failed. '%s' is not a valid destination path.\n", argv[3]);
-            return 1;
-        }
-        printInformationHeader();
-        compile(srcPTR, destPTR);
-        return 0;
-    } else {
-        printf("Command interpretation failed. (-c / --compile) requires 2 additional parameters, but instead got %d\n", argc-2);
-        return 1;
-    }
-}
-
-/**
- * Attempts to interpret the options for a 'compile and run' command
- * @param argc the number of arguments
- * @param argv an array of arguments specified
- * @returns 0 if command was interpreted successfully, 1 otherwise
- */
-int interpretCompileAndRun(int argc, char *argv[]) {
-    if(argc == 3) {
-        if(strcmp(argv[1], log_info) == 0) {
-            setLogLevel(2);
-        } else if(strcmp(argv[1], log_debug) == 0) {
-            setLogLevel(3);
-        } else {
-            printf("Command interpretation failed. One parameter required, but instead got %d\n", argc-2);
-            return 1;
-        }
-    }
-
-    FILE *srcPTR = fopen(argv[argc-1], "r");
-    if(srcPTR == NULL) {
-        printf("Command interpretation failed. '%s' is not a valid source path.\n", argv[1]);
-    } else {
-        printInformationHeader();
-        compileAndRun(srcPTR);
-        return 0;
-    }
-    return 1;    
-}
-
-/**
- * Parses the command-line arguments specified.
- * @param argc the number of arguments
- * @param argv an array of arguments specified
- * @returns 0 if command was interpreted successfully, 1 otherwise
- */
-int interpretArguments(int argc, char* argv[]) {
-    if (argc > 1) {
-        if (strcmp(argv[1], help1) == 0 || strcmp(argv[1], help2) == 0){
-            printHelpPage();
-            return 0;
-        } else if (strcmp(argv[1], compile1) == 0 || strcmp(argv[1], compile2) == 0) {
-            //Compile-option used. Check if there are enough arguments
-            return interpretCompile(argc, argv);
-        } else if(argc == 2 || argc == 3) {
-            return interpretCompileAndRun(argc, argv);
-        }
-    }
-    return 1; //There are no arguments, it cannot be a correct command
+void printExplanationMessage(char* programName) {
+    printf("Usage: %s -o outputFile [-d | -i] inputFile\n", programName);
 }
 
 int main(int argc, char* argv[]) {
-    int result = interpretArguments(argc, argv);
-    if(result == 1) {
-        printf("Error! No arguments specified or unknown parameters. Type memeasm -h to open the help page. \n Exiting...\n");
-        exit(EXIT_FAILURE);
+    static struct option long_options[] = {
+            {"output",  required_argument, 0, 'o'},
+            {"help",    no_argument,       0, 'h'},
+            {"debug",   no_argument,       0, 'd'},
+            {"compile", no_argument,       0, 'c'},
+            {"info",    no_argument,       0, 'i'},
+            {"O-1",     no_argument,      &optimisationLevel, -1},
+            {"O-2",     no_argument,      &optimisationLevel, -2},
+            {"O-3",     no_argument,      &optimisationLevel,-3},
+            {"O69420",     no_argument,      &optimisationLevel,69420},
+            { 0, 0, 0, 0 }
+    };
+
+    int opt;
+    int option_index = 0;
+
+    while ((opt = getopt_long_only(argc, argv, "o:hcdi", long_options, &option_index)) != -1) {
+        switch (opt) {
+            case 'h':
+                printHelpPage(argv[0]);
+                return 0;
+            case 'c':
+                compileMode = 0;
+                break;
+            case 'd':
+                setLogLevel(3);
+                break;
+            case 'i':
+                setLogLevel(2);
+                break;
+            case 'o':
+                outputFileString = optarg;
+                break;
+            case '?':
+            default:
+                fprintf(stderr, "Error: Unknown option provided\n");
+                printExplanationMessage(argv[0]);
+                return 1;
+        }
+    }
+
+    if(unknownCommand == 1) {
+        fprintf(stderr, "Error: Unknown option provided\n");
+        printExplanationMessage(argv[0]);
+        return 1;
+    } else if(outputFileString == NULL) {
+        fprintf(stderr, "Error: No output file specified\n");
+        printExplanationMessage(argv[0]);
+        return 1;
+    } else if(argc < optind + 1) {
+        fprintf(stderr, "Error: No input file specified\n");
+        printExplanationMessage(argv[0]);
+        return 1;
+    } else {
+        inputFile = fopen(argv[optind], "r");
+        //If the pointer is NULL, then the file failed to open. Print an error
+        if (inputFile == NULL) {
+            perror("Error while opening input file");
+            printExplanationMessage(argv[0]);
+            return 1;
+        }
+
+        //Create a stat struct to check if the file is a regular file. If we did not check for this, an argument like "-o /dev/urandom" would pass without errors
+        struct stat inputFileStat;
+        fstat(fileno(inputFile), &inputFileStat);
+        if (!S_ISREG(inputFileStat.st_mode)) {
+            fprintf(stderr,
+                    "Error while opening input file: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
+            fclose(inputFile);
+            printExplanationMessage(argv[0]);
+            return 1;
+        }
+
+        printDebugMessageWithNumber("Optimisation level is", optimisationLevel);
+
+        if(compileMode == 1) {
+            createExecutable(inputFile, outputFileString);
+        } else {
+            outputFile = fopen(outputFileString, "w");
+            //If the pointer is NULL, then the file failed to open. Print an error
+            if (outputFile == NULL) {
+                perror("Error in option -o");
+                printExplanationMessage(argv[0]);
+                return 1;
+            }
+
+            //Create a stat struct to check if the file is a regular file. If we did not check for this, an argument like "-o /dev/urandom" would pass without errors
+            struct stat outputFileStat;
+            fstat(fileno(outputFile), &outputFileStat);
+            if (!S_ISREG(outputFileStat.st_mode)) {
+                fprintf(stderr,
+                        "Error in option -o: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
+                fclose(outputFile);
+                printExplanationMessage(argv[0]);
+                return 1;
+            }
+
+
+            return compile(inputFile, outputFile);
+        }
     }
 }

@@ -1,7 +1,9 @@
-compiler/memeasm
 memeasm
 tmp.asm
 example.memeasm
 tmp
 tmp.o
-opcodes
+/examples/Stalinsort/stalinsort.S
+/examples/Stalinsort/.idea/
+test
+test.S
