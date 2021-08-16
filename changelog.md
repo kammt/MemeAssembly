@@ -1,3 +1,12 @@
+## v1.0.1
+Bug fixes:
+- Fixed allocating less memory than needed for escape character translation
+- Fixed allocating less memory than needed for Assembly translation, resulting in a crash
+
+For all other new features, check the changelog of v1.0.0
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.0.1)
+
 ## v1.0
 This major release contains the following changes:
 - Added function support. It is now possible to not create an executable, but rather create a function in MemeAssembly that can then be used by other programming languages like C. To see an example of this, check out the StalinSort example.

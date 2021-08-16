@@ -15,7 +15,7 @@
 In short, MemeAssembly is the revolution the tech industry has been waiting for. Combining the emerging trend of minimalism with rememberable memes, Big Data, AI and co. won't be the same without it!
 
 ## What are the perks of using MemeASM?
-- **Execution Time: <span style="color:orange">Stonks</span>** \
+- **Execution Time: <span style="color:#ff5050">Not Stonks</span>** \
     The MemeASM-compiler converts your code into x86_64-Assembly to make it run blazingly fast!
 - **Fun-Factor: <span style="color:orange">Stonks</span>** \
     Consider this: Your code might be simple to understand, but is it fun to understand? With MemeAssembly, your code will be much more fun to look at!
