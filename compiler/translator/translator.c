@@ -18,7 +18,7 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    size_t strLen = strlen(translationPattern) - command.usedParameters;
+    size_t strLen = strlen(translationPattern);
     for(int i = 0; i < command.usedParameters; i++) {
         strLen += strlen(parsedCommand.parameters[i]);
     }
