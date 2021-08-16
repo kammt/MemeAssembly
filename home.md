@@ -26,7 +26,7 @@ Even if the game is great, low performance can be a deal-breaker for most if not
 Motivating children to join Computer Science related studies or simply learning to code has been a challenge for years. The solution for this problem is simple yet effective: Learn to code using MemeAssembly. \
 [Numerous studies](https://www.youtube.com/watch?v=dQw4w9WgXcQ) have already proven the effectivity of MemeAssembly. Parents often praise MemeAssembly's apprach of combining low-level programming languages with Memes that are easy to remember. 
 
-> Convinced? Visit the ["Getting Started"-page](getting_started?id=getting-started) to find out more about how to start coding with MemeAssembly!
+> Convinced? Visit the ["Getting Started"-page](getting-started) to find out more about how to start coding with MemeAssembly!
 
 ## Badge of honor
 <img alt="MemeAssembly award Meme" src="images/award_meme.png" width="50%"> \
