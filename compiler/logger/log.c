@@ -12,7 +12,7 @@
 
 int compilationErrors = 0;
 int logLevel = 1; //Default value
-char *version_string = "v1.0";
+char *version_string = "v1.0.1";
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
