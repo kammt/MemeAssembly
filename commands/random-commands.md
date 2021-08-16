@@ -22,7 +22,7 @@ Restore balance to your code by randomly deleting half the commands at compile-t
 ### Definition
 `wait, that's illegal`
 ### Description
-Intentionally violates the System V ABI by modifying calle-saved registers without restoring their original value.
+Intentionally violates the System V ABI by modifying callee-saved registers without restoring their original value.
 
 ## Ignore commands
 ### Definition
