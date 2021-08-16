@@ -119,7 +119,7 @@ int isInArray(char* parameter, char **array, int arraySize) {
  */
 void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
-    char *modifiedParameter = malloc(2);
+    char *modifiedParameter = malloc(5);
     if(modifiedParameter == NULL) {
         fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
         exit(EXIT_FAILURE);
