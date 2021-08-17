@@ -24,14 +24,15 @@ void printHelpPage(char* programName) {
     printInformationHeader();
     printf("Usage:\n");
     printf("  %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
-    printf("  %s [options] -c -o outputFile [-i | -d] inputFile\t\tOnly compiles the specified file and saves it as Assembly code\n", programName);
-    printf("  %s (-h | --help)\t\t\t\t\t\t\t\t\t\tDisplays this help page\n\n", programName);
+    printf("  %s [options] -S -o outputFile.S [-i | -d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n", programName);
+    printf("  %s [options] -O -o outputFile.o [-i | -d] inputFile\tOnly compiles the specified file and saves it an object file\n", programName);
+    printf("  %s (-h | --help)\t\t\t\t\tDisplays this help page\n\n", programName);
     printf("Compiler options:\n");
     printf("  -O-1 \t\t- reverse optimisation stage 1: A nop is inserted after every command\n");
     printf("  -O-2 \t\t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
     printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
     printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
-    printf("  -g \t\t- write debug info into the compiled file. Currently, only the stabs format is supported\n");
+    printf("  -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported\n");
     printf("  -i \t\t- enables information logs\n");
     printf("  -d \t\t- enables debug logs\n");
 }
@@ -45,7 +46,6 @@ int main(int argc, char* argv[]) {
             {"output",  required_argument, 0, 'o'},
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
-            {"compile", no_argument,       0, 'c'},
             {"info",    no_argument,       0, 'i'},
             {"O-1",     no_argument,      &optimisationLevel, -1},
             {"O-2",     no_argument,      &optimisationLevel, -2},
@@ -58,13 +58,16 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hcdig", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hOdigS", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printHelpPage(argv[0]);
                 return 0;
-            case 'c':
+            case 'S':
                 compileMode = 0;
+                break;
+            case 'O':
+                compileMode = 1;
                 break;
             case 'd':
                 setLogLevel(3);
@@ -117,8 +120,10 @@ int main(int argc, char* argv[]) {
 
         printDebugMessageWithNumber("Optimisation level is", optimisationLevel);
 
-        if(compileMode == 1) {
+        if(compileMode == 2) {
             createExecutable(inputFile, outputFileString);
+        } else if(compileMode == 1) {
+            createObjectFile(inputFile, outputFileString);
         } else {
             outputFile = fopen(outputFileString, "w");
             //If the pointer is NULL, then the file failed to open. Print an error
