@@ -19,7 +19,7 @@
  * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
  */
 
-int compileMode = 1; //1 = Create Executable, 0 = Compile only
+int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
 
 struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
@@ -311,6 +311,32 @@ int compile(FILE *srcPTR, FILE *destPTR) {
         return 1;
     }
     return 0;
+}
+
+void createObjectFile(FILE *srcPTR, char *destFile) {
+    FILE *tmpPTR = fopen("tmp.S","w");
+    int result = compile(srcPTR, tmpPTR);
+
+    if(result == 0) {
+        printStatusMessage("Calling gcc");
+        system("gcc -O -c tmp.S");
+
+        //The file will now be called tmp.o, we hence have to rename it
+        char commandPrefix[] = "mv tmp.o ";
+        size_t strLen = strlen(commandPrefix) + strlen(destFile);
+        char command[strLen];
+        command[0] = '\0';
+
+        strncat(command, commandPrefix, strLen);
+        strncat(command, destFile, strLen);
+        system(command);
+
+        printDebugMessage("Removing temporary file", "");
+        system("rm tmp.S");
+        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
+    }
 }
 
 /**

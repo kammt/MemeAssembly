@@ -131,7 +131,7 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
         }
     }
 
-    if(compileMode == 1 && mainFunctionExists == 0) {
+    if(compileMode == 2 && mainFunctionExists == 0) {
         printSemanticError("An executable cannot be created if no main-function exists", 1);
     }
 
