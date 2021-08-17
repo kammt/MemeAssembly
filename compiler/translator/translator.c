@@ -14,11 +14,16 @@ extern char *inputFileString;
 int optimisationLevel = 0;
 int useStabs = 0;
 
+///STABS flags
 //Required for stabs so that the function name can be inserted into the return label
 char *currentFunctionName;
 //If the previous command was ignored and the next label was already printed, this variable is set to 1 so that the label isn't printed twice
 int DNLABEL = 0;
 
+/**
+ * Creates the first STABS entry in which the origin file is stored
+ * @param outputFile the output file
+ */
 void stabs_writeFileInfo(FILE *outputFile) {
     //Check if the input file string starts with a /. If it does, it is an absolute path
     char cwd[PATH_MAX + 1];
@@ -29,6 +34,11 @@ void stabs_writeFileInfo(FILE *outputFile) {
     }
 }
 
+/**
+ * Checks if the current command should not receive a separate STABS line info. Currently, this only affects breakpoints
+ * @param opcode the opcode
+ * @return 1 if it should be ignored, 0 if it needs line info
+ */
 int stabs_ignore(int opcode) {
     if(strcmp(commandList[opcode].translationPattern, "int3") == 0) {
         return 1;
@@ -36,24 +46,49 @@ int stabs_ignore(int opcode) {
     return 0;
 }
 
+/**
+ * Creates a function info STABS of a given function
+ * @param outputFile the output file
+ * @param functionName the name of the function
+ */
 void stabs_writeFunctionInfo(FILE *outputFile, char* functionName) {
     fprintf(outputFile, ".stabs \"%s:F1\", %d, 0, 0, %s\n", functionName, N_FUN, functionName);
     fprintf(outputFile, ".stabn %d, 0, 0, %s\n", N_LBRAC, functionName);
     fprintf(outputFile, ".stabn %d, 0, 0, .Lret_%s\n", N_RBRAC, functionName);
 }
 
+/**
+ * Is called after a function return command is found. Creates a label for the function info stab to use
+ * @param outputFile the output file
+ */
 void stabs_writeFunctionEndLabel(FILE *outputFile) {
     fprintf(outputFile, "\t.Lret_%s:\n", currentFunctionName);
 }
 
+/**
+ * Creates a label for the line number STABS to use
+ * @param outputFile the output file
+ * @param parsedCommand the command that requires a line number info
+ */
 void stabs_writeLineLabel(FILE *outputFile, struct parsedCommand parsedCommand) {
     fprintf(outputFile, "\t.Lcmd_%d:\n", parsedCommand.lineNum);
 }
 
+/**
+ * Creates a line number STABS of the provided command
+ * @param outputFile the output file
+ * @param parsedCommand the command that requires a line number info
+ */
 void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
     fprintf(outputFile, "\t.stabn %d, 0, %d, .Lcmd_%d\n", N_SLINE, parsedCommand.lineNum, parsedCommand.lineNum);
 }
 
+/**
+ * Translates a given command into assembly. This includes inserting parameters and creating STABS info if necessary
+ * @param commandsArray all commands that were parsed
+ * @param index the index of the current command
+ * @param outputFile the output file
+ */
 void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE *outputFile) {
     struct parsedCommand parsedCommand = commandsArray -> arrayPointer[index];
     if(parsedCommand.opcode != 0 && optimisationLevel == 69420) {
@@ -61,16 +96,21 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
         return;
     }
 
+    //If we are supposed to create STABS info, we now need to create labels
     if(useStabs) {
+        //If this is a function declaration, update the current function name
         if(parsedCommand.opcode == 0) {
             currentFunctionName = parsedCommand.parameters[0];
+        //If this command is supposed to be ignored
         } else if (stabs_ignore(parsedCommand.opcode)) {
             //Already print the start label of the next command
             stabs_writeLineLabel(outputFile, commandsArray -> arrayPointer[index + 1]);
             //Set the DNLABEL variable
             DNLABEL = 1;
-        } else if (DNLABEL == 0){
+        //If it is a regular command
+        } else if (DNLABEL == 0) {
             stabs_writeLineLabel(outputFile, parsedCommand);
+        //If the previous command was ignored, i.e. DNLABEL was set, reset it to 0
         } else {
             DNLABEL = 0;
         }
