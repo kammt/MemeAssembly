@@ -313,6 +313,11 @@ int compile(FILE *srcPTR, FILE *destPTR) {
     return 0;
 }
 
+/**
+ * Compiles the specified memeasm file into an object file
+ * @param srcPTR a pointer to the source file to be compiled
+ * @param destFile the name of the destination file
+ */
 void createObjectFile(FILE *srcPTR, char *destFile) {
     FILE *tmpPTR = fopen("tmp.S","w");
     int result = compile(srcPTR, tmpPTR);
@@ -340,8 +345,9 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
 }
 
 /**
- * Compiles, links and runs the specified memeasm-file
+ * Compiles and links the specified memeasm file into an executable
  * @param srcPTR a pointer to the source file to be compiled
+ * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
     FILE *tmpPTR = fopen("tmp.S","w");
