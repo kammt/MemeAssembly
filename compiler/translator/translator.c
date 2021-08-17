@@ -8,6 +8,7 @@ extern char* version_string;
 extern struct command commandList[];
 
 int optimisationLevel = 0;
+int useStabs = 0;
 
 void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
     if(parsedCommand.opcode != 0 && optimisationLevel == 69420) {

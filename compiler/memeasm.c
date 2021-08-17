@@ -13,6 +13,7 @@ FILE *inputFile;
 
 extern int compileMode;
 extern int optimisationLevel;
+extern int useStabs;
 
 int unknownCommand = 0;
 
@@ -30,6 +31,7 @@ void printHelpPage(char* programName) {
     printf("  -O-2 \t\t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
     printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
     printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
+    printf("  -g \t\t- write debug info into the compiled file. Currently, only the stabs format is supported\n");
     printf("  -i \t\t- enables information logs\n");
     printf("  -d \t\t- enables debug logs\n");
 }
@@ -49,13 +51,14 @@ int main(int argc, char* argv[]) {
             {"O-2",     no_argument,      &optimisationLevel, -2},
             {"O-3",     no_argument,      &optimisationLevel,-3},
             {"O69420",     no_argument,      &optimisationLevel,69420},
+            {"g",     no_argument,      &useStabs,1},
             { 0, 0, 0, 0 }
     };
 
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hcdi", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hcdig", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printHelpPage(argv[0]);
@@ -71,6 +74,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'o':
                 outputFileString = optarg;
+                break;
+            case 'g':
+                useStabs = 1;
                 break;
             case '?':
             default:
