@@ -9,13 +9,13 @@
 
 FILE *outputFile;
 char *outputFileString = NULL;
+char *inputFileString = NULL;
 FILE *inputFile;
 
 extern int compileMode;
 extern int optimisationLevel;
 extern int useStabs;
 
-int unknownCommand = 0;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
@@ -86,11 +86,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if(unknownCommand == 1) {
-        fprintf(stderr, "Error: Unknown option provided\n");
-        printExplanationMessage(argv[0]);
-        return 1;
-    } else if(outputFileString == NULL) {
+    if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
         printExplanationMessage(argv[0]);
         return 1;
@@ -99,6 +95,7 @@ int main(int argc, char* argv[]) {
         printExplanationMessage(argv[0]);
         return 1;
     } else {
+        inputFileString = argv[optind];
         inputFile = fopen(argv[optind], "r");
         //If the pointer is NULL, then the file failed to open. Print an error
         if (inputFile == NULL) {
