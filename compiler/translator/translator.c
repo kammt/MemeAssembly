@@ -16,6 +16,8 @@ int useStabs = 0;
 
 //Required for stabs so that the function name can be inserted into the return label
 char *currentFunctionName;
+//If the previous command was ignored and the next label was already printed, this variable is set to 1 so that the label isn't printed twice
+int DNLABEL = 0;
 
 void stabs_writeFileInfo(FILE *outputFile) {
     //Check if the input file string starts with a /. If it does, it is an absolute path
@@ -25,6 +27,13 @@ void stabs_writeFileInfo(FILE *outputFile) {
     } else {
         fprintf(outputFile, ".stabs \"%s/%s\", %d, 0, 0, .Ltext0\n", getcwd(cwd, PATH_MAX), inputFileString, N_SO);
     }
+}
+
+int stabs_ignore(int opcode) {
+    if(strcmp(commandList[opcode].translationPattern, "int3") == 0) {
+        return 1;
+    }
+    return 0;
 }
 
 void stabs_writeFunctionInfo(FILE *outputFile, char* functionName) {
@@ -45,7 +54,8 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
     fprintf(outputFile, "\t.stabn %d, 0, %d, .Lcmd_%d\n", N_SLINE, parsedCommand.lineNum, parsedCommand.lineNum);
 }
 
-void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
+void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE *outputFile) {
+    struct parsedCommand parsedCommand = commandsArray -> arrayPointer[index];
     if(parsedCommand.opcode != 0 && optimisationLevel == 69420) {
         printDebugMessage("\tCommand is not a function declaration, abort.", "");
         return;
@@ -54,8 +64,15 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
     if(useStabs) {
         if(parsedCommand.opcode == 0) {
             currentFunctionName = parsedCommand.parameters[0];
-        } else {
+        } else if (stabs_ignore(parsedCommand.opcode)) {
+            //Already print the start label of the next command
+            stabs_writeLineLabel(outputFile, commandsArray -> arrayPointer[index + 1]);
+            //Set the DNLABEL variable
+            DNLABEL = 1;
+        } else if (DNLABEL == 0){
             stabs_writeLineLabel(outputFile, parsedCommand);
+        } else {
+            DNLABEL = 0;
         }
     }
 
@@ -134,7 +151,9 @@ void translateToAssembly(struct parsedCommand parsedCommand, FILE *outputFile) {
             stabs_writeFunctionEndLabel(outputFile);
         }
         //In any case, we now need to write the line info to the file
-        stabs_writeLineInfo(outputFile, parsedCommand);
+        if(!stabs_ignore(parsedCommand.opcode)) {
+            stabs_writeLineInfo(outputFile, parsedCommand);
+        }
     }
 }
 
@@ -169,7 +188,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
 
         if(commandsArray -> arrayPointer[i].translate == 1) {
             printDebugMessageWithNumber("Translating Index:", (int) i);
-            translateToAssembly(commandsArray -> arrayPointer[i], outputFile);
+            translateToAssembly(commandsArray, i, outputFile);
         }
     }
 
