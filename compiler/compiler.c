@@ -244,7 +244,8 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
         },
-        //Debug commands
+
+        ///Debug commands
         {
             .pattern = "it's a trap",
             .usedParameters = 0,
