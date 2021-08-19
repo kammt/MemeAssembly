@@ -355,7 +355,7 @@ void createExecutable(FILE *srcPTR, char *destFile) {
 
     if(result == 0) {
         printStatusMessage("Calling gcc");
-        char commandPrefix[] = "gcc tmp.S -o ";
+        char commandPrefix[] = "gcc -no-pie tmp.S -o ";
         size_t strLen = strlen(commandPrefix) + strlen(destFile);
         char command[strLen];
         command[0] = '\0';
