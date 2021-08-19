@@ -10,15 +10,18 @@
     - Simply compile the project by typing ```make all```. The executable is now in the current working directory.
 
 ## Compiler usage
-- ```memeasm [options] (-c | --compile) -o destinationFile.S sourceFile``` - compiles the specified file into x86_64 Assembly
+- ```memeasm [options] -S -o destinationFile.S sourceFile``` - compiles the specified file into x86_64 Assembly
+- ```memeasm [options] -O -o destinationFile.o sourceFile``` - compiles the specified file and saves it as an object file
 - ```memeasm [options] -o destinationFile sourceFile``` - compiles the specified file and saves it as an executable 
 - ```memeasm --help``` - opens a help page with this information
 <br><br>
 
 Compiler options:
+- `g` - write debug info into the compiled file. Currently, only the STABS format is supported.
 - `-O-1` - reverse optimisation stage 1: A nop is inserted after every command.
 - `-O-2` - reverse optimisation stage 2: A register is moved to and from the stack
 - `-O-3` - reverse optimisation stage 3: A xmm-register is moved to and from the stack using *movups*
+- `-O-s` - reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B
 - `-O69420` - maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code
 - `-i` - enables information logs
 - `-d` - enables debug logs

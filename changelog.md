@@ -1,3 +1,18 @@
+## v1.1
+New Features:
+- Debugging support. When using the new `-g`-Flag, the MemeASM-compiler inserts Debug information in the stabs-Format to make it possible to debug your MemeASM code with e.g. gdb
+- New command: `it's a trap` - raises SIGTRAP. If a debugger is attached, this breaks into the debugger. If no debugger is attached, the process is terminated and a core dump is generated (Thanks @RobinMarchart!)
+- Reverse Storage Optimisation - When using `-O-s`, your code is "optimised" to use as much storage space as possible by aligning the end of your code to 536870912B 
+
+Improvements:
+- The `-c`-Flag no longer exists. It has been replaced by `-S` to create an Assembly-file and `-O` to create an object-file
+- The StalinSort example has been updated to support Debugging
+
+Bug fixes:
+- Fixed a bug where it was not possible to use some long options such as -O-1
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.1)
+
 ## v1.0.1
 Bug fixes:
 - Fixed allocating less memory than needed for escape character translation
