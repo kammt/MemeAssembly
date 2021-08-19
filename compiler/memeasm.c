@@ -83,7 +83,6 @@ int main(int argc, char* argv[]) {
                 useStabs = 1;
                 break;
             case '?':
-            default:
                 fprintf(stderr, "Error: Unknown option provided\n");
                 printExplanationMessage(argv[0]);
                 return 1;
