@@ -248,6 +248,9 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                 stabs_writeFunctionInfo(outputFile, commandsArray -> arrayPointer[i].parameters[0]);
             }
         }
+
+        fprintf(outputFile, "\n.LEOF:\n");
+        fprintf(outputFile, ".stabs \"\", %d, 0, 0, .LEOF\n", N_SO);
     }
 
     printDebugMessage("Done, closing output file", "");
