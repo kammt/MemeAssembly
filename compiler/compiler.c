@@ -19,7 +19,7 @@
  * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
  */
 
-int compileMode = 1; //1 = Create Executable, 0 = Compile only
+int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
 
 struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
@@ -244,7 +244,8 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
         },
-        //Debug commands
+
+        ///Debug commands
         {
             .pattern = "it's a trap",
             .usedParameters = 0,
@@ -313,8 +314,40 @@ int compile(FILE *srcPTR, FILE *destPTR) {
 }
 
 /**
- * Compiles, links and runs the specified memeasm-file
+ * Compiles the specified memeasm file into an object file
  * @param srcPTR a pointer to the source file to be compiled
+ * @param destFile the name of the destination file
+ */
+void createObjectFile(FILE *srcPTR, char *destFile) {
+    FILE *tmpPTR = fopen("tmp.S","w");
+    int result = compile(srcPTR, tmpPTR);
+
+    if(result == 0) {
+        printStatusMessage("Calling gcc");
+        system("gcc -O -c tmp.S");
+
+        //The file will now be called tmp.o, we hence have to rename it
+        char commandPrefix[] = "mv tmp.o ";
+        size_t strLen = strlen(commandPrefix) + strlen(destFile);
+        char command[strLen];
+        command[0] = '\0';
+
+        strncat(command, commandPrefix, strLen);
+        strncat(command, destFile, strLen);
+        system(command);
+
+        printDebugMessage("Removing temporary file", "");
+        system("rm tmp.S");
+        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/**
+ * Compiles and links the specified memeasm file into an executable
+ * @param srcPTR a pointer to the source file to be compiled
+ * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
     FILE *tmpPTR = fopen("tmp.S","w");
@@ -322,7 +355,7 @@ void createExecutable(FILE *srcPTR, char *destFile) {
 
     if(result == 0) {
         printStatusMessage("Calling gcc");
-        char commandPrefix[] = "gcc tmp.S -o ";
+        char commandPrefix[] = "gcc -no-pie tmp.S -o ";
         size_t strLen = strlen(commandPrefix) + strlen(destFile);
         char command[strLen];
         command[0] = '\0';

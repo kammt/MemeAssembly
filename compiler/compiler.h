@@ -7,6 +7,7 @@
 #include <string.h> //String functions
 
 void createExecutable(FILE *srcPTR, char *destFile);
+void createObjectFile(FILE *srcPTR, char *destFile);
 int compile(FILE *srcPTR, FILE *destPTR);
 
 #endif
