@@ -1,10 +1,10 @@
 CC=gcc
-CFLAGS+=-gstabs
+CFLAGS+=-gstabs -no-pie
 
 .PHONY: all clean
 
 all: stalinsort_test.c
-	memeasm -g -O -o stalinsort.o stalin-sort.memeasm
+	memeasm  -O -o stalinsort.o stalin-sort.memeasm -g
 	$(CC) -o stalinsort $^ stalinsort.o $(CFLAGS)
 
 clean:
