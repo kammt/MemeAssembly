@@ -31,7 +31,7 @@ void printHelpPage(char* programName) {
     printf("  -O-1 \t\t- reverse optimisation stage 1: A nop is inserted after every command\n");
     printf("  -O-2 \t\t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
     printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
-    printf("  -O-s \t\t- reverse storage optimisation: The compiled Assembly-code is aligned to 536870912B, creating a 1.5GB executable\n");
+    printf("  -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
     printf("  -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported\n");
     printf("  -i \t\t- enables information logs\n");
