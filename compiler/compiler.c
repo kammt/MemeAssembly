@@ -263,7 +263,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "",
             .usedParameters = 0,
             .analysisFunction = NULL,
-            .translationPattern = "0"
+            .translationPattern = ""
         }
 };
 
