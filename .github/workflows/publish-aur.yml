@@ -31,5 +31,16 @@ jobs:
       - name: Replace 256SUM in PKGBUILD file with parameter
         run: sed -i 's/256SUM/${{ github.event.inputs.sha256sum }}/g' PKGBUILD  
 
-      - name: Output PKGBUILD for testing purposes
+      - name: Output PKGBUILD for debugging purposes
         run: cat PKGBUILD
+
+      - name: Publish AUR package with modified PKGBUILD
+        uses: KSXGitHub/github-actions-deploy-aur@v2.2.5
+        with:
+          pkgname: memeassembly
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,dsa,ecdsa,ed25519
