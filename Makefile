@@ -1,6 +1,7 @@
 CC=gcc
 CFLAGS+=-std=gnu11
 CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wshadow -Wdouble-promotion -Wformat=2 -Wformat-truncation -Wundef -fno-common -Wconversion -Wmisleading-indentation -g3
+DESTDIR=/usr/bin
 
 .PHONY: all clean debug uninstall install
 
@@ -14,7 +15,7 @@ clean:
 	$(RM) memeasm
 
 uninstall: 
-	$(RM) /usr/bin/memeasm
+	$(RM) $(DESTDIR)/memeasm
 
 install: compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
-	$(CC) -o /usr/bin/memeasm $^ $(CFLAGS)
+	$(CC) -o $(DESTDIR)/memeasm $^ $(CFLAGS)
