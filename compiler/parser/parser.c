@@ -41,7 +41,7 @@ int isLineOfInterest() {
         i++; //Increase our variable as long as there are only tabs or spaces
     }
 
-    if(lineLength != 1 && strncmp((line + i), commentStart, min((unsigned int) lineLength, strlen(commentStart))) != 0) {
+    if(lineLength != i + 1 && lineLength != 1 && strncmp((line + i), commentStart, min((unsigned int) lineLength, strlen(commentStart))) != 0) {
         return 1;
     }
     return 0;
@@ -94,7 +94,7 @@ struct parsedCommand parseLine(int lineNum) {
     char *savePtrPattern;
 
     //Iterate through all possible commands
-    for(int i = 0; i < NUMBER_OF_COMMANDS; i++) {
+    for(int i = 0; i < NUMBER_OF_COMMANDS - 2; i++) {
         strncpy(lineCpy, line, strlen(line) + 1);
         savePtrLine = NULL;
         savePtrPattern = NULL;
