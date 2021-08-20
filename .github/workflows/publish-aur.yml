@@ -10,30 +10,15 @@ on:
         description: pkgrel
         required: true
         default: "1"
+      sha256sum:
+        description: sha256 Checksum of .tar.gz file
+        required: true
 
 jobs:
   aur-publish:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install pacman-contrib dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install libarchive
-      
-      - name: Install pacman-contrib  
-        run: |
-          git clone https://gitlab.archlinux.org/pacman/pacman-contrib.git
-          cd pacman-contrib
-          ./autogen.sh
-          ./configure --prefix=/usr \
-           --sysconfdir=/etc \
-           --localstatedir=/var
-          make
-          make check
-          make install DESTDIR="$pkgdir"
-          cd ..
-
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
       
@@ -43,8 +28,8 @@ jobs:
       - name: Replace PKGREL in PKGBUILD file with parameter
         run: sed -i 's/PKGREL/${{ github.event.inputs.pkgrel }}/g' PKGBUILD  
         
-      - name: Create md5sum  
-        run: updpkgsums
+      - name: Replace 256SUM in PKGBUILD file with parameter
+        run: sed -i 's/256SUM/${{ github.event.inputs.sha256sum }}/g' PKGBUILD  
 
       - name: Output PKGBUILD for testing purposes
         run: cat PKGBUILD
