@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install pacman-contrib dependencies
+      - run: |
+          sudo apt-get install libarchive
+      
       - name: Install pacman-contrib  
         run: |
           git clone https://gitlab.archlinux.org/pacman/pacman-contrib.git
