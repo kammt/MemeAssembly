@@ -1,0 +1,50 @@
+name: Publish to AUR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version String'     
+        required: true
+      pkgrel:
+        description: pkgrel
+        required: true
+        default: "1"
+
+jobs:
+  aur-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install pacman-contrib dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install libarchive
+      
+      - name: Install pacman-contrib  
+        run: |
+          git clone https://gitlab.archlinux.org/pacman/pacman-contrib.git
+          cd pacman-contrib
+          ./autogen.sh
+          ./configure --prefix=/usr \
+           --sysconfdir=/etc \
+           --localstatedir=/var
+          make
+          make check
+          make install DESTDIR="$pkgdir"
+          cd ..
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      
+      - name: Replace VERSION_STRING in PKGBUILD file with parameter
+        run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' PKGBUILD
+        
+      - name: Replace PKGREL in PKGBUILD file with parameter
+        run: sed -i 's/PKGREL/${{ github.event.inputs.pkgrel }}/g' PKGBUILD  
+        
+      - name: Create md5sum  
+        run: updpkgsums
+
+      - name: Output PKGBUILD for testing purposes
+        run: cat PKGBUILD
