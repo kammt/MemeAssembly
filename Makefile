@@ -18,4 +18,5 @@ uninstall:
 	$(RM) $(DESTDIR)/memeasm
 
 install: compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
+	mkdir $(DESTDIR) -p
 	$(CC) -o $(DESTDIR)/memeasm $^ $(CFLAGS)
