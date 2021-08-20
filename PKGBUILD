@@ -19,7 +19,7 @@ install=
 changelog=
 source=(https://github.com/kammt/MemeAssembly/archive/refs/tags/v$pkgver.tar.gz)
 noextract=()
-md5sums=() #autofill using updpkgsums
+sha256sums=('256SUM')
 
 build() {
   cd "MemeAssembly-$pkgver"
