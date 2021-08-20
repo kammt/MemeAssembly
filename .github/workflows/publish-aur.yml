@@ -17,7 +17,9 @@ jobs:
 
     steps:
       - name: Install pacman-contrib dependencies
-        run: sudo apt-get install libarchive
+        run: |
+          sudo apt-get update
+          sudo apt-get install libarchive
       
       - name: Install pacman-contrib  
         run: |
