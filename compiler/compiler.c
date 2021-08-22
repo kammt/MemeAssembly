@@ -20,6 +20,7 @@
  */
 
 int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
+extern int compilationErrors;
 
 struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
@@ -267,6 +268,19 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         }
 };
 
+void freeCommandsArray(struct commandsArray *commands) {
+    printDebugMessage("Freeing memory", "");
+    for(size_t i = 0; i < commands -> size; i++) {
+        struct parsedCommand parsedCommand = *(commands -> arrayPointer + i);
+        for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
+            free(parsedCommand.parameters[j]);
+        }
+    }
+    free(commands -> arrayPointer);
+
+    printDebugMessage("All memory freed, compilation done", "");
+}
+
 /**
  * Attempts to convert the source file to an x86 Assembly file
  * @param srcPTR a pointer to the source file to be compiled
@@ -277,37 +291,33 @@ int compile(FILE *srcPTR, FILE *destPTR) {
     printStatusMessage("Parsing input file");
     struct commandsArray commands = parseCommands(srcPTR);
 
-    printStatusMessage("Starting parameter check");
-    for (size_t i = 0; i < commands.size; ++i) {
-        checkParameters(&commands.arrayPointer[i]);
-    }
-
-    printStatusMessage("Analyzing commands");
-    for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
-        if(commandList[opcode].analysisFunction != NULL) {
-            commandList[opcode].analysisFunction(&commands, opcode);
+    if(commands.size > 0) {
+        printStatusMessage("Starting parameter check");
+        for (size_t i = 0; i < commands.size; ++i) {
+            checkParameters(&commands.arrayPointer[i]);
         }
-    }
 
-    if(getNumberOfCompilationErrors() > 0) {
-        printErrorASCII();
-        fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", getNumberOfCompilationErrors());
+        printStatusMessage("Analyzing commands");
+        for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
+            if(commandList[opcode].analysisFunction != NULL) {
+                commandList[opcode].analysisFunction(&commands, opcode);
+            }
+        }
+
+        if(compilationErrors > 0) {
+            printErrorASCII();
+            fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compilationErrors);
+        } else {
+            writeToFile(&commands, destPTR);
+        }
     } else {
-        writeToFile(&commands, destPTR);
+        fprintf(stderr, "File is empty, nothing to do");
+        compilationErrors++;
     }
 
-    printDebugMessage("Freeing memory", "");
-    for(size_t i = 0; i < commands.size; i++) {
-        struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
-        for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
-            free(parsedCommand.parameters[j]);
-        }
-    }
-    free(commands.arrayPointer);
+    freeCommandsArray(&commands);
 
-    printDebugMessage("All memory freed, compilation done", "");
-
-    if(getNumberOfCompilationErrors() > 0) {
+    if(compilationErrors > 0) {
         return 1;
     }
     return 0;

@@ -1,13 +1,10 @@
 #ifndef LOG_H
 #define LOG_H
-#define compilationErrors
 
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
 void setLogLevel(int newLogLevel);
-
-int getNumberOfCompilationErrors();
 
 void printInformationHeader();
 

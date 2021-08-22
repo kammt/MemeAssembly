@@ -18,10 +18,6 @@ void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
 }
 
-int getNumberOfCompilationErrors() {
-    return compilationErrors;
-}
-
 /**
  * Prints an ASCII-Art title and version information.
  */
