@@ -1,4 +1,17 @@
 ## Installation
+?> Windows is currently not supported by the MemeASM compiler. If Windows 10 support is important to you, open a [new issue](https://github.com/kammt/MemeAssembly/issues/new) on GitHub.
+
+### Debian-based distributions (Ubuntu, Linux Mint etc.)
+Download the latest installer file (*.deb) at https://github.com/kammt/MemeAssembly/releases/latest
+
+### RPM-based distributions (Fedora, OpenSUSE, Red Hat etc.)
+Download the latest installer file (*.rpm) at https://github.com/kammt/MemeAssembly/releases/latest
+
+### Arch-based Distributions (Arch Linux, Manjaro etc.)
+1. If not already done, install a package manager that is able to access the AUR. [Yay](https://github.com/Jguer/yay) is recommended.
+2. Open a terminal and type `yay -S memeassembly`
+
+### Manual Installation (Linux)
 1. Make sure that [GCC](https://gcc.gnu.org/) is installed on your computer.
 2. Download MemeAssembly. This can be done either by 
     - [downloading the latest release](https://github.com/kammt/MemeAssembly/releases/latest) 
@@ -7,6 +20,7 @@
 3. Open a terminal and set the current directory so that you are in the root directory of the project
 4. 
     - Install the compiler in */usr/bin* by typing ```sudo make install```. Root priveleges are required for this.
+    - Install to a custom location by modifying the DESTDIR variable. For example `sudo make DESTDIR="/usr/local/bin" install`
     - Simply compile the project by typing ```make all```. The executable is now in the current working directory.
 
 ## Compiler usage
