@@ -1,3 +1,15 @@
+## v1.1.1
+Bug Fixes:
+- A line only containing spaces was wrongly treated as a command and translated, leading to error messages by the Assembler (#38, thanks @xarantolus!)
+
+Other news:
+- @xarantolus created an awesome VSCode extension for MemeAssembly, which can be found at https://github.com/xarantolus/MemeAssembly-vscode!
+- MemeAssembly is now available to download from the AUR! It is available at https://aur.archlinux.org/packages/memeassembly/
+
+For all other new features, check the changelog of v1.1.0
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.1.1)
+
 ## v1.1
 New Features:
 - Debugging support. When using the new `-g`-Flag, the MemeASM-compiler inserts Debug information in the stabs-Format to make it possible to debug your MemeASM code with e.g. gdb
