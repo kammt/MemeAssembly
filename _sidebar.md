@@ -7,6 +7,7 @@
     * [Register Manipulation](commands/register-manipulation.md)
     * [I/O Operations](commands/io-operations.md)
     * [Jump Markers](commands/jump-markers.md) 
+    * [Debugging](commands/debugging.md) 
     * [Random Commands](commands/random-commands.md)
 * [MemeAssembly Standard](memeasm-standard.md)
 * [Changelogs](changelog.md)    
