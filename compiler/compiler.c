@@ -1,3 +1,22 @@
+/*
+This file is part of the MemeAssembly compiler.
+
+ Copyright © 2021 Tobias Kamm and contributors
+
+MemeAssembly is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+MemeAssembly is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
@@ -14,10 +33,6 @@
 #include "translator/translator.h"
 #include "logger/log.h"
 
-/**
- * compiler.c:
- * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
- */
 
 int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
 extern int compilationErrors;
