@@ -49,29 +49,30 @@ struct function parseFunction(struct commandsArray *commandsArray, size_t functi
     printDebugMessage("\tParsing function:", functionStart.parameters[0]);
 
     size_t index = 1;
-    uint8_t returnStatementFound = 0;
+    size_t functionEndIndex = 0; //This points to the last found returns statement and is 0 if no return statement was found until now
     //Iterate through all commands until a return statement is found or the end of the array is reached
     while (functionStartAtIndex + index < commandsArray -> size) {
         struct parsedCommand parsedCommand = *(commandsArray -> arrayPointer + (functionStartAtIndex + index));
         //Get the opcode
         uint8_t opcode = parsedCommand.opcode;
 
-        if(opcode == functionDeclarationOpcode) { //If it is a function definition, throw an error since there was no return statement until now
-            printSemanticError("Expected a return statement, but got a new function definition", parsedCommand.lineNum);
+        if(opcode == functionDeclarationOpcode) {
+            //If there hasn't been a return statement until now, throw an error since there was no return statement until now
+            if(functionEndIndex == 0) {
+                printSemanticError("Expected a return statement, but got a new function definition", parsedCommand.lineNum);
+            }
             break;
-        } if(opcode > functionDeclarationOpcode && opcode <= functionDeclarationOpcode + 3) { //Function is a return statement, abort
-            returnStatementFound = 1;
-            index++;
-            break;
+        } if(opcode > functionDeclarationOpcode && opcode <= functionDeclarationOpcode + 3) { //Function is a return statement
+            functionEndIndex = index;
         }
         index++;
     }
     printDebugMessageWithNumber("\t\tIteration stopped at index", (int) index);
 
-    if(returnStatementFound == 0) {
+    if(functionEndIndex == 0) {
         printSemanticError("No return statement found", functionStart.lineNum);
     }
-    function.numberOfCommands = index - 1;
+    function.numberOfCommands = functionEndIndex;
     return function;
 }
 
