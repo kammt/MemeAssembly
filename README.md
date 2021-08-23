@@ -1,5 +1,5 @@
 <p align="center">
- <h1 align="center">MemeAssembly</h1> 
+ <img src="images/logo.png"> 
  <p align="center">or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.</p>
 </p>
   <p align="center">
@@ -12,6 +12,9 @@
    <a href="https://github.com/kammt/MemeAssembly/actions/workflows/compile_and_run_test.yml">
       <img src="https://github.com/kammt/MemeAssembly/actions/workflows/compile_and_run_test.yml/badge.svg" alt="Compile and Run Test" />
    </a>
+   <a href="https://github.com/auchenberg/volkswagen">
+      <img src="https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1" alt="Volkswagen Build Status">
+   </a> 
   </p>
     
 ## What is MemeAssembly?
