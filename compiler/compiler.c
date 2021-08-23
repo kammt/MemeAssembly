@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,10 +33,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "translator/translator.h"
 #include "logger/log.h"
 
-/**
- * compiler.c:
- * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
- */
 
 int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
 extern int compilationErrors;
