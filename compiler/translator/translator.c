@@ -205,8 +205,8 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     }
 
     if(useStabs && parsedCommand.opcode != 0) {
-        //If this was a return statemtent, we reached the end of the function. Define the label for the N_RBRAC stab
-        if(parsedCommand.opcode > 0 && parsedCommand.opcode <= 3) {
+        //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
+        if(parsedCommand.opcode > 0 && parsedCommand.opcode <= 3 && commandsArray -> arrayPointer[index + 1].opcode == 0) {
             stabs_writeFunctionEndLabel(outputFile);
         }
         //In any case, we now need to write the line info to the file
