@@ -1,5 +1,5 @@
 <p align="center">
- <h1 align="center">MemeAssembly</h1> 
+ <img src="images/logo.png"> 
  <p align="center">or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.</p>
 </p>
   <p align="center">
@@ -12,6 +12,9 @@
    <a href="https://github.com/kammt/MemeAssembly/actions/workflows/compile_and_run_test.yml">
       <img src="https://github.com/kammt/MemeAssembly/actions/workflows/compile_and_run_test.yml/badge.svg" alt="Compile and Run Test" />
    </a>
+   <a href="https://github.com/auchenberg/volkswagen">
+      <img src="https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1" alt="Volkswagen Build Status">
+   </a> 
   </p>
     
 ## What is MemeAssembly?
@@ -89,15 +92,17 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 You can also check the [examples](examples/) directory to find more.
 
 ## Badge of honor
-<img alt="MemeAssembly award Meme" src="https://github.com/kammt/MemeAssembly/blob/gh-pages/images/award_meme.png" width="50%"> \
 Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
 ![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)\
 To do so, insert this code block into your ReadMe file: \
 ```![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)```
 
-## License and Contributing
-This project is licensed under the GPLv3 license. For more information, check the [LICENSE file](https://github.com/kammt/MemeAssembly/LICENSE) of the MemeAssembly GitHub-Repo. \
+## Contributing
 Contributions to this repository are welcome! Especially ideas for new (and hopefully idiotic) commands. To add a new command, either create an issue with the tag "new-command" or add it yourself and create a pull-request.
 
 ### Current Contributors:
 ![GitHub Contributors Image](https://contrib.rocks/image?repo=kammt/MemeAssembly)
+
+## Copyright
+Copyright :copyright: 2021 Tobias Kamm \
+The MemeAssembly project is licensed under the GPLv3 license. For more information, consult the [LICENSE file](https://github.com/kammt/MemeAssembly/LICENSE) of the MemeAssembly GitHub-Repo or visit https://www.gnu.org/licenses/gpl-3.0.txt.
