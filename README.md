@@ -103,6 +103,6 @@ Contributions to this repository are welcome! Especially ideas for new (and hope
 ### Current Contributors:
 ![GitHub Contributors Image](https://contrib.rocks/image?repo=kammt/MemeAssembly)
 
-## Copyright
-Copyright :copyright: 2021 Tobias Kamm \
+## Copyright and License
+Copyright :copyright: 2021 Tobias Kamm and contributors \
 The MemeAssembly project is licensed under the GPLv3 license. For more information, consult the [LICENSE file](https://github.com/kammt/MemeAssembly/LICENSE) of the MemeAssembly GitHub-Repo or visit https://www.gnu.org/licenses/gpl-3.0.txt.
