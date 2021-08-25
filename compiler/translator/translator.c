@@ -283,7 +283,4 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     if(optimisationLevel == -4) {
         fprintf(outputFile, ".align 536870912\n");
     }
-
-    printDebugMessage("Done, closing output file", "");
-    fclose(outputFile);
 }
