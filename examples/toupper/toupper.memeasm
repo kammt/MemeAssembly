@@ -1,0 +1,40 @@
+What the hell happened here? This program takes a pointer to a string in rdi, the string is modified in-place
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun toupper_str
+
+    eax is brilliant, but I like 97
+
+    What the hell happened here? Loop over all lower case chars between 97 and 123
+    upgrade
+        stonks rdi
+
+        What the hell happened here? We search for the current char in the string
+        banana
+            sneak 100 edx
+            dl is brilliant, but I like rdi do you know de wey
+            who would win? edx or 1
+
+            What the hell happened here? We get here if edx is zero
+            edx wins
+            who would win? dl or al
+            What the hell happened here? Jump below if al is not equal to dl
+
+            What the hell happened here? Clear one bit to make it UPPER CASE
+            bitconneeeeeeect dl 223
+            rdi do you know de wey is brilliant, but I like dl
+
+            dl wins
+            al wins
+
+            upvote rdi
+        where banana
+
+        1 wins
+        not stonks rdi
+
+        upvote eax
+        corporate needs you to find the difference between eax and 123
+
+    fuck go back
+
+    they're the same picture
+    right back at ya, buckaroo
