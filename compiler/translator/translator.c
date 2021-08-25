@@ -173,18 +173,18 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
                 translatedLine[currentStrLen] = '[';
                 translatedLine[currentStrLen + 1] = '\0';
                 //Append the parameter
-                strncat(translatedLine, parameter, strLen);
+                strcat(translatedLine, parameter);
                 //Append a ']'
                 currentStrLen = strlen(translatedLine);
                 translatedLine[currentStrLen] = ']';
                 translatedLine[currentStrLen + 1] = '\0';
             } else {
                 printDebugMessage("\tAppending parameter", parameter);
-                strncat(translatedLine, parameter, strLen);
+                strcat(translatedLine, parameter);
             }
         } else {
             char appendix[2] = {character, '\0'};
-            strncat(translatedLine, appendix, strLen);
+            strcat(translatedLine, appendix);
         }
     }
 
