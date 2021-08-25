@@ -138,9 +138,17 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    size_t strLen = strlen(translationPattern);
-    for(int i = 0; i < command.usedParameters; i++) {
-        strLen += strlen(parsedCommand.parameters[i]);
+    size_t patternLen = strlen(translationPattern);
+    size_t strLen = patternLen;
+    for(size_t i = 0; i < patternLen; i++) {
+        char character = translationPattern[i];
+        if(character >= '0' && character <= (char) command.usedParameters + 47) {
+            char *parameter = parsedCommand.parameters[character - 48];
+            strLen += strlen(parameter);
+            if(parsedCommand.isPointer == (character - 48) + 1) {
+                strLen += 2; // for [ and ]
+            }
+        }
     }
 
     char *translatedLine = malloc(strLen + 3); //Include an extra byte for the null-Pointer and two extra bytes in case []-brackets are needed for a pointer
@@ -150,7 +158,7 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     }
     translatedLine[0] = '\0';
 
-    for(size_t i = 0; i < strlen(translationPattern); i++) {
+    for(size_t i = 0; i < patternLen; i++) {
         char character = translationPattern[i];
         if(character >= '0' && character <= (char) command.usedParameters + 47) {
             char *parameter = parsedCommand.parameters[character - 48];
