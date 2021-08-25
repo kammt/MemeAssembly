@@ -344,28 +344,20 @@ int compile(FILE *srcPTR, FILE *destPTR) {
  * @param destFile the name of the destination file
  */
 void createObjectFile(FILE *srcPTR, char *destFile) {
-    FILE *tmpPTR = fopen("tmp.S","w");
-    int result = compile(srcPTR, tmpPTR);
+    const char* commandPrefix = "gcc -O -c -x assembler - -o";
+    char command[strlen(commandPrefix) + strlen(destFile) + 1];
+    strcpy(command, commandPrefix);
+    strcat(command, destFile);
 
-    if(result == 0) {
-        printStatusMessage("Calling gcc");
-        system("gcc -O -c tmp.S");
+    // Pipe assembler code directly to GCC via stdin
+    FILE* gccPTR = popen(command, "w");
+    int result = compile(srcPTR, gccPTR);
+    int gccres = pclose(gccPTR);
 
-        //The file will now be called tmp.o, we hence have to rename it
-        char commandPrefix[] = "mv tmp.o ";
-        size_t strLen = strlen(commandPrefix) + strlen(destFile);
-        char command[strLen];
-        command[0] = '\0';
-
-        strncat(command, commandPrefix, strLen);
-        strncat(command, destFile, strLen);
-        system(command);
-
-        printDebugMessage("Removing temporary file", "");
-        system("rm tmp.S");
-        exit(EXIT_SUCCESS);
-    } else {
+    if(result != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
     }
 }
 
@@ -375,24 +367,19 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
-    FILE *tmpPTR = fopen("tmp.S","w");
-    int result = compile(srcPTR, tmpPTR);
+    const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
+    char command[strlen(commandPrefix) + strlen(destFile) + 1];
+    strcpy(command, commandPrefix);
+    strcat(command, destFile);
 
-    if(result == 0) {
-        printStatusMessage("Calling gcc");
-        char commandPrefix[] = "gcc -no-pie tmp.S -o ";
-        size_t strLen = strlen(commandPrefix) + strlen(destFile);
-        char command[strLen];
-        command[0] = '\0';
+    // Pipe assembler code directly to GCC via stdin
+    FILE* gccPTR = popen(command, "w");
+    int result = compile(srcPTR, gccPTR);
+    int gccres = pclose(gccPTR);
 
-        strncat(command, commandPrefix, strLen);
-        strncat(command, destFile, strLen);
-        system(command);
-
-        printDebugMessage("Removing temporary file", "");
-        system("rm tmp.S");
-        exit(EXIT_SUCCESS);
-    } else {
+    if(result != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
     }
 }

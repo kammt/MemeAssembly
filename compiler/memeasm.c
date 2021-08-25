@@ -164,7 +164,9 @@ int main(int argc, char* argv[]) {
             }
 
 
-            return compile(inputFile, outputFile);
+            int res = compile(inputFile, outputFile);
+            fclose(outputFile);
+            return res;
         }
     }
 }
