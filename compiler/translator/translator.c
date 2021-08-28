@@ -256,6 +256,8 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
     if(optimisationLevel != 42069) {
         fprintf(outputFile, "\n\nwritechar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rax, 1\n\tsyscall\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\t\n\tret\n");
+
+        fprintf(outputFile, "\n\nreadchar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rdi, 0\n\tmov rax, 0\n\tsyscall\n\t\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\tret\n");
     }
 
     //If we are using stabs, we now need to save all function info to the file

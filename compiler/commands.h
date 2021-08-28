@@ -23,7 +23,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include <stddef.h>
 
-#define NUMBER_OF_COMMANDS 34
+#define NUMBER_OF_COMMANDS 35
 #define COMMAND_PATTERN_LIST_MAX_STRING_LENGTH 66
 #define COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH 54
 #define MAX_PARAMETER_COUNT 2
