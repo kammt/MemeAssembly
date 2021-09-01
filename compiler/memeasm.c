@@ -164,9 +164,7 @@ int main(int argc, char* argv[]) {
             }
 
 
-            int res = createAssemblyFile(inputFile, outputFile);
-            fclose(outputFile);
-            return res;
+            createAssemblyFile(inputFile, outputFile);
         }
     }
 }

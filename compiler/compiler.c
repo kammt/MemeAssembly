@@ -335,15 +335,21 @@ struct commandsArray compile(FILE *srcPTR) {
  * Attempts to convert the source file to an x86 Assembly file
  * @param srcPTR a pointer to the source file to be compiled
  * @param destPTR a pointer to the destination file.
- * @return 0 on success, 1 otherwise
  */
 int createAssemblyFile(FILE *srcPTR, FILE *destPTR) {
     struct commandsArray commands = compile(srcPTR);
     if(compilationErrors == 0) {
         writeToFile(&commands, destPTR);
-        return 0;
     }
-    return 1;
+
+    fclose(destPTR);
+    freeCommandsArray(&commands);
+
+    if(compilationErrors == 0) {
+        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
+    }
 }
 
 /**
@@ -366,6 +372,7 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
         gccres = pclose(gccPTR);
     }
 
+    freeCommandsArray(&commands);
     if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
     } else {
@@ -393,6 +400,7 @@ void createExecutable(FILE *srcPTR, char *destFile) {
         gccres = pclose(gccPTR);
     }
 
+    freeCommandsArray(&commands);
     if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
     } else {

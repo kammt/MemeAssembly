@@ -26,6 +26,4 @@ void createExecutable(FILE *srcPTR, char *destFile);
 void createObjectFile(FILE *srcPTR, char *destFile);
 int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
 
-void freeCommandsArray(struct commandsArray *commands);
-
 #endif
