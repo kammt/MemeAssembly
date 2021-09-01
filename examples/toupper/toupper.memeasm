@@ -13,7 +13,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun toupper_str
             dl is brilliant, but I like rdi do you know de wey
             who would win? edx or 1
 
-            What the hell happened here? We get here if edx is zero
+            What the hell happened here? We get here if edx is greater than 1 => not zero
             edx wins
             who would win? dl or al
             What the hell happened here? Jump below if al is not equal to dl
@@ -28,6 +28,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun toupper_str
             upvote rdi
         where banana
 
+        What the hell happened here? edx contained 0, meaning this is the end of the string
         1 wins
         not stonks rdi
 
