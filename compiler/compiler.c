@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "compiler.h"
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
@@ -297,12 +298,12 @@ void freeCommandsArray(struct commandsArray *commands) {
 }
 
 /**
- * Attempts to convert the source file to an x86 Assembly file
- * @param srcPTR a pointer to the source file to be compiled
- * @param destPTR a pointer to the destination file. If nonexistent, it will be created
- * @return 0 on success, 1 otherwise
+ * Parses the provided source file, converts it into a commandsArray struct and runs all the required semantic analysis functions
+ * @param srcPTR a pointer to the input file
+ * @return the commandsArray struct. Note that this struct is also returned when a compilation error occurred.
+ *          compilationErrors (defined in log.c) counts the number of compilation errors.
  */
-int compile(FILE *srcPTR, FILE *destPTR) {
+struct commandsArray compile(FILE *srcPTR) {
     printStatusMessage("Parsing input file");
     struct commandsArray commands = parseCommands(srcPTR);
 
@@ -322,20 +323,34 @@ int compile(FILE *srcPTR, FILE *destPTR) {
         if(compilationErrors > 0) {
             printErrorASCII();
             fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compilationErrors);
-        } else {
-            writeToFile(&commands, destPTR);
         }
     } else {
-        fprintf(stderr, "File is empty, nothing to do");
+        fprintf(stderr, "File is empty, nothing to do\n");
         compilationErrors++;
     }
 
+    return commands;
+}
+
+/**
+ * Attempts to convert the source file to an x86 Assembly file
+ * @param srcPTR a pointer to the source file to be compiled
+ * @param destPTR a pointer to the destination file.
+ */
+int createAssemblyFile(FILE *srcPTR, FILE *destPTR) {
+    struct commandsArray commands = compile(srcPTR);
+    if(compilationErrors == 0) {
+        writeToFile(&commands, destPTR);
+    }
+
+    fclose(destPTR);
     freeCommandsArray(&commands);
 
-    if(compilationErrors > 0) {
-        return 1;
+    if(compilationErrors == 0) {
+        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
     }
-    return 0;
 }
 
 /**
@@ -344,28 +359,25 @@ int compile(FILE *srcPTR, FILE *destPTR) {
  * @param destFile the name of the destination file
  */
 void createObjectFile(FILE *srcPTR, char *destFile) {
-    FILE *tmpPTR = fopen("tmp.S","w");
-    int result = compile(srcPTR, tmpPTR);
+    const char* commandPrefix = "gcc -O -c -x assembler - -o";
+    char command[strlen(commandPrefix) + strlen(destFile) + 1];
+    strcpy(command, commandPrefix);
+    strcat(command, destFile);
 
-    if(result == 0) {
-        printStatusMessage("Calling gcc");
-        system("gcc -O -c tmp.S");
+    // Pipe assembler code directly to GCC via stdin
+    struct commandsArray commands = compile(srcPTR);
+    int gccres = 1;
+    if(compilationErrors == 0) {
+        FILE *gccPTR = popen(command, "w");
+        writeToFile(&commands, gccPTR);
+        gccres = pclose(gccPTR);
+    }
 
-        //The file will now be called tmp.o, we hence have to rename it
-        char commandPrefix[] = "mv tmp.o ";
-        size_t strLen = strlen(commandPrefix) + strlen(destFile);
-        char command[strLen];
-        command[0] = '\0';
-
-        strncat(command, commandPrefix, strLen);
-        strncat(command, destFile, strLen);
-        system(command);
-
-        printDebugMessage("Removing temporary file", "");
-        system("rm tmp.S");
-        exit(EXIT_SUCCESS);
-    } else {
+    freeCommandsArray(&commands);
+    if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
     }
 }
 
@@ -375,24 +387,24 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
-    FILE *tmpPTR = fopen("tmp.S","w");
-    int result = compile(srcPTR, tmpPTR);
+    const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
+    char command[strlen(commandPrefix) + strlen(destFile) + 1];
+    strcpy(command, commandPrefix);
+    strcat(command, destFile);
 
-    if(result == 0) {
-        printStatusMessage("Calling gcc");
-        char commandPrefix[] = "gcc -no-pie tmp.S -o ";
-        size_t strLen = strlen(commandPrefix) + strlen(destFile);
-        char command[strLen];
-        command[0] = '\0';
+    // Pipe assembler code directly to GCC via stdin
+    struct commandsArray commands = compile(srcPTR);
+    int gccres = 1;
+    if(compilationErrors == 0) {
+        FILE *gccPTR = popen(command, "w");
+        writeToFile(&commands, gccPTR);
+        gccres = pclose(gccPTR);
+    }
 
-        strncat(command, commandPrefix, strLen);
-        strncat(command, destFile, strLen);
-        system(command);
-
-        printDebugMessage("Removing temporary file", "");
-        system("rm tmp.S");
-        exit(EXIT_SUCCESS);
-    } else {
+    freeCommandsArray(&commands);
+    if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
     }
 }

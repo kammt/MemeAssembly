@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -138,9 +138,17 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    size_t strLen = strlen(translationPattern);
-    for(int i = 0; i < command.usedParameters; i++) {
-        strLen += strlen(parsedCommand.parameters[i]);
+    size_t patternLen = strlen(translationPattern);
+    size_t strLen = patternLen;
+    for(size_t i = 0; i < patternLen; i++) {
+        char character = translationPattern[i];
+        if(character >= '0' && character <= (char) command.usedParameters + 47) {
+            char *parameter = parsedCommand.parameters[character - 48];
+            strLen += strlen(parameter);
+            if(parsedCommand.isPointer == (character - 48) + 1) {
+                strLen += 2; // for [ and ]
+            }
+        }
     }
 
     char *translatedLine = malloc(strLen + 3); //Include an extra byte for the null-Pointer and two extra bytes in case []-brackets are needed for a pointer
@@ -150,7 +158,7 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     }
     translatedLine[0] = '\0';
 
-    for(size_t i = 0; i < strlen(translationPattern); i++) {
+    for(size_t i = 0; i < patternLen; i++) {
         char character = translationPattern[i];
         if(character >= '0' && character <= (char) command.usedParameters + 47) {
             char *parameter = parsedCommand.parameters[character - 48];
@@ -165,18 +173,18 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
                 translatedLine[currentStrLen] = '[';
                 translatedLine[currentStrLen + 1] = '\0';
                 //Append the parameter
-                strncat(translatedLine, parameter, strLen);
+                strcat(translatedLine, parameter);
                 //Append a ']'
                 currentStrLen = strlen(translatedLine);
                 translatedLine[currentStrLen] = ']';
                 translatedLine[currentStrLen + 1] = '\0';
             } else {
                 printDebugMessage("\tAppending parameter", parameter);
-                strncat(translatedLine, parameter, strLen);
+                strcat(translatedLine, parameter);
             }
         } else {
             char appendix[2] = {character, '\0'};
-            strncat(translatedLine, appendix, strLen);
+            strcat(translatedLine, appendix);
         }
     }
 
@@ -275,7 +283,4 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     if(optimisationLevel == -4) {
         fprintf(outputFile, ".align 536870912\n");
     }
-
-    printDebugMessage("Done, closing output file", "");
-    fclose(outputFile);
 }

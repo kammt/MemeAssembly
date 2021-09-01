@@ -106,7 +106,7 @@ struct parsedCommand parseLine(int lineNum) {
 
     //Temporarily save the line on the stack to be able to restore when a comparison failed
     char lineCpy[strlen(line) + 1];
-    strncpy(lineCpy, line, strlen(line) + 1);
+    strcpy(lineCpy, line);
 
     //Define save pointers for strtok_r
     char *savePtrLine;
@@ -114,7 +114,7 @@ struct parsedCommand parseLine(int lineNum) {
 
     //Iterate through all possible commands
     for(int i = 0; i < NUMBER_OF_COMMANDS - 2; i++) {
-        strncpy(lineCpy, line, strlen(line) + 1);
+        strcpy(lineCpy, line);
         savePtrLine = NULL;
         savePtrPattern = NULL;
 
