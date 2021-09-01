@@ -20,6 +20,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #ifndef COMPILER_H
 #define COMPILER_H
 
+#include <stdio.h>
+
 #include "commands.h"
 
 void createExecutable(FILE *srcPTR, char *destFile);

@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "compiler.h"
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
