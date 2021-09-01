@@ -297,12 +297,12 @@ void freeCommandsArray(struct commandsArray *commands) {
 }
 
 /**
- * Attempts to convert the source file to an x86 Assembly file
- * @param srcPTR a pointer to the source file to be compiled
- * @param destPTR a pointer to the destination file. If nonexistent, it will be created
- * @return 0 on success, 1 otherwise
+ * Parses the provided source file, converts it into a commandsArray struct and runs all the required semantic analysis functions
+ * @param srcPTR a pointer to the input file
+ * @return the commandsArray struct. Note that this struct is also returned when a compilation error occurred.
+ *          compilationErrors (defined in log.c) counts the number of compilation errors.
  */
-int compile(FILE *srcPTR, FILE *destPTR) {
+struct commandsArray compile(FILE *srcPTR) {
     printStatusMessage("Parsing input file");
     struct commandsArray commands = parseCommands(srcPTR);
 
@@ -322,20 +322,28 @@ int compile(FILE *srcPTR, FILE *destPTR) {
         if(compilationErrors > 0) {
             printErrorASCII();
             fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compilationErrors);
-        } else {
-            writeToFile(&commands, destPTR);
         }
     } else {
-        fprintf(stderr, "File is empty, nothing to do");
+        fprintf(stderr, "File is empty, nothing to do\n");
         compilationErrors++;
     }
 
-    freeCommandsArray(&commands);
+    return commands;
+}
 
-    if(compilationErrors > 0) {
-        return 1;
+/**
+ * Attempts to convert the source file to an x86 Assembly file
+ * @param srcPTR a pointer to the source file to be compiled
+ * @param destPTR a pointer to the destination file.
+ * @return 0 on success, 1 otherwise
+ */
+int createAssemblyFile(FILE *srcPTR, FILE *destPTR) {
+    struct commandsArray commands = compile(srcPTR);
+    if(compilationErrors == 0) {
+        writeToFile(&commands, destPTR);
+        return 0;
     }
-    return 0;
+    return 1;
 }
 
 /**
@@ -350,11 +358,15 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
     strcat(command, destFile);
 
     // Pipe assembler code directly to GCC via stdin
-    FILE* gccPTR = popen(command, "w");
-    int result = compile(srcPTR, gccPTR);
-    int gccres = pclose(gccPTR);
+    struct commandsArray commands = compile(srcPTR);
+    int gccres = 1;
+    if(compilationErrors == 0) {
+        FILE *gccPTR = popen(command, "w");
+        writeToFile(&commands, gccPTR);
+        gccres = pclose(gccPTR);
+    }
 
-    if(result != 0 || gccres != 0) {
+    if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
     } else {
         exit(EXIT_SUCCESS);
@@ -373,11 +385,15 @@ void createExecutable(FILE *srcPTR, char *destFile) {
     strcat(command, destFile);
 
     // Pipe assembler code directly to GCC via stdin
-    FILE* gccPTR = popen(command, "w");
-    int result = compile(srcPTR, gccPTR);
-    int gccres = pclose(gccPTR);
+    struct commandsArray commands = compile(srcPTR);
+    int gccres = 1;
+    if(compilationErrors == 0) {
+        FILE *gccPTR = popen(command, "w");
+        writeToFile(&commands, gccPTR);
+        gccres = pclose(gccPTR);
+    }
 
-    if(result != 0 || gccres != 0) {
+    if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
     } else {
         exit(EXIT_SUCCESS);

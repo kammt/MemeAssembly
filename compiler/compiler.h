@@ -27,6 +27,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 void createExecutable(FILE *srcPTR, char *destFile);
 void createObjectFile(FILE *srcPTR, char *destFile);
-int compile(FILE *srcPTR, FILE *destPTR);
+int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
 
 #endif

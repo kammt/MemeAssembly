@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        //Create a stat struct to check if the file is a regular file. If we did not check for this, an argument like "-o /dev/urandom" would pass without errors
+        //Create a stat struct to check if the file is a regular file. If we did not check for this, an input file like "/dev/urandom" would pass without errors
         struct stat inputFileStat;
         fstat(fileno(inputFile), &inputFileStat);
         if (!S_ISREG(inputFileStat.st_mode)) {
@@ -164,7 +164,7 @@ int main(int argc, char* argv[]) {
             }
 
 
-            int res = compile(inputFile, outputFile);
+            int res = createAssemblyFile(inputFile, outputFile);
             fclose(outputFile);
             return res;
         }
