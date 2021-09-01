@@ -24,8 +24,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "commands.h"
 
-void createExecutable(FILE *srcPTR, char *destFile);
-void createObjectFile(FILE *srcPTR, char *destFile);
-int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
+_Noreturn void createExecutable(FILE *srcPTR, char *destFile);
+_Noreturn void createObjectFile(FILE *srcPTR, char *destFile);
+_Noreturn int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
 
 #endif
