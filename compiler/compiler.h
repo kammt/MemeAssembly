@@ -20,13 +20,12 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include <stdio.h>  //Printf() function
-#include <stdlib.h> //Exit() function
-
-#include <string.h> //String functions
+#include "commands.h"
 
 void createExecutable(FILE *srcPTR, char *destFile);
 void createObjectFile(FILE *srcPTR, char *destFile);
 int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
+
+void freeCommandsArray(struct commandsArray *commands);
 
 #endif

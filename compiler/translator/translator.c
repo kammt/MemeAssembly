@@ -19,6 +19,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "translator.h"
 #include "../logger/log.h"
+#include "../compiler.h"
 
 #include <time.h>
 #include <string.h>
@@ -283,4 +284,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     if(optimisationLevel == -4) {
         fprintf(outputFile, ".align 536870912\n");
     }
+
+    printDebugMessage("Done, freeing commandsArray struct", "");
+    freeCommandsArray(commandsArray);
 }
