@@ -234,7 +234,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .allowedParamTypes = {0b101000},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], 0\n\tcall writechar"
         },
-
+        {
+            .pattern = "let me in. LET ME IIIIIIIIN p",
+            .usedParameters = 1,
+            .analysisFunction = NULL,
+            .allowedParamTypes = {0b1000},
+            .translationPattern = "call readchar\n\tmov 0, BYTE PTR [rip + .LCharacter]"
+        },
 
         ///Random commands
         {
