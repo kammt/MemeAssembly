@@ -234,7 +234,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], 0\n\tcall writechar"
         },
         {
-            .pattern = "RTFM p",
+            .pattern = "let me in. LET ME IIIIIIIIN p",
             .usedParameters = 1,
             .analysisFunction = NULL,
             .allowedParamTypes = {0b1000},
