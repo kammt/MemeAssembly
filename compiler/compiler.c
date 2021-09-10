@@ -157,6 +157,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "shr 0, 1"
         },
+        {
+                .pattern = "p is getting out of hand, now there are p of them",
+                .usedParameters = 2,
+                .allowedParamTypes = {0b11, 0b10011},
+                .analysisFunction = NULL,
+                .translationPattern = "imul 0, 1"
+        },
 
 
         ///Jumps and Jump Markers

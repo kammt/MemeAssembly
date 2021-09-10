@@ -23,7 +23,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include <stddef.h>
 
-#define NUMBER_OF_COMMANDS 35
+#define NUMBER_OF_COMMANDS 36
 #define MAX_PARAMETER_COUNT 2
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
