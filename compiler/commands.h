@@ -24,8 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stddef.h>
 
 #define NUMBER_OF_COMMANDS 35
-#define COMMAND_PATTERN_LIST_MAX_STRING_LENGTH 66
-#define COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH 54
 #define MAX_PARAMETER_COUNT 2
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
@@ -46,7 +44,7 @@ struct commandsArray {
 };
 
 struct command {
-    char pattern[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH];
+    char *pattern;
     uint8_t usedParameters;
     /*
      * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
@@ -62,7 +60,7 @@ struct command {
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
     void (*analysisFunction)(struct commandsArray*, int);
-    char translationPattern[COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH];
+    char *translationPattern;
 };
 
 #define commentStart "What the hell happened here?"

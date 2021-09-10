@@ -119,8 +119,8 @@ struct parsedCommand parseLine(int lineNum) {
         savePtrPattern = NULL;
 
         //Copy the current command pattern out of read-only memory
-        char commandString[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH + 1];
-        strncpy(commandString, commandList[i].pattern, COMMAND_PATTERN_LIST_MAX_STRING_LENGTH);
+        char commandString[strlen(commandList[i].pattern) + 1];
+        strcpy(commandString, commandList[i].pattern);
 
         //Tokenize both strings. Tabs at the beginning are allowed and should be ignored, hence they are a delimiter
         char *commandToken = strtok_r(commandString, " \t", &savePtrPattern);
