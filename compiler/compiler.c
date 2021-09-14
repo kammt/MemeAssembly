@@ -158,11 +158,30 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "shr 0, 1"
         },
         {
-                .pattern = "p is getting out of hand, now there are p of them",
-                .usedParameters = 2,
-                .allowedParamTypes = {0b11, 0b10011},
-                .analysisFunction = NULL,
-                .translationPattern = "imul 0, 1"
+            .pattern = "p is getting out of hand, now there are p of them",
+            .usedParameters = 2,
+            .allowedParamTypes = {0b11, 0b110011},
+            .analysisFunction = NULL,
+            .translationPattern = "imul 0, 1"
+        },
+        {
+            .pattern = "look at what p needs to mimic a fraction of p",
+            .usedParameters = 2,
+            .allowedParamTypes = {0b110001, 0b1},
+            .analysisFunction = NULL,
+            .translationPattern = "push r8\n\t"
+                                  "mov r8, 0\n\t"
+                                  "push rdx\n\t"
+                                  "xor rdx, rdx\n\t"
+                                  "push rax\n\t"
+                                  "mov rax, 1\n\t"
+                                  "idiv r8\n\t"
+                                  "push rax\n\t"
+                                  "mov rax, [rsp + 8]\n\t"
+                                  "pop 1\n\t"
+                                  "sub rsp, 8\n\t"
+                                  "pop rdx\n\t"
+                                  "pop r8"
         },
 
 
