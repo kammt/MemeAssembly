@@ -1,4 +1,4 @@
-?> MemeAssembly v1.1 is out! Check out the [changelog page](changelog) for more information
+?> MemeAssembly v1.2 is out! Check out the [changelog page](changelog) for more information
     
 ## What is MemeAssembly?
 In short, MemeAssembly is the revolution the tech industry has been waiting for. Combining the emerging trend of minimalism with rememberable memes, Big Data, AI and co. won't be the same without it!
@@ -29,7 +29,6 @@ Motivating children to join Computer Science related studies or simply learning 
 > Convinced? Visit the ["Getting Started"-page](getting-started?id=getting-started) to find out more about how to start coding with MemeAssembly!
 
 ## Badge of honor
-<img alt="MemeAssembly award Meme" src="images/award_meme.png" width="50%"> \
 Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
 ![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)\
 To do so, insert this code block into your ReadMe file: \
