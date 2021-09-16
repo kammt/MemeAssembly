@@ -1,5 +1,5 @@
 What the hell happened here? This program reads a decimal number from stdin and tells the user whether is is nice or not (meaning that it is equal to 69 or 420)
-What the hell happened here? It does not feature any error handling whatsoever, however it does not crash when providing illegal symbols (e.g. characters) as input
+What the hell happened here? It does not feature any error handling whatsoever, however it does not crash when providing illegal symbols (e.g. characters) or nothing as input
 I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 
    what can I say except E
@@ -24,38 +24,47 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 
     sneak 100 r8
 
-    al wins
-    218 wins
+    upgrade
         sneak 100 rax
         let me in. LET ME IIIIIIIIN al
+
+        who would win? al or 10
+
+        What the hell happened here? If we land here, the user pressed enter, i.e. al = 10 (\n), meaning that we escape the loop
+        where banana
+
+        al wins
+        10 wins
         parry 48 you filthy casual al
 
         upvote r8
         stonks rax
-    What the hell happened here? We now check if we got \n. \n is 10 in ASCII, but since we just deducted 48, it is 218
-    who would win? al or 218
-    What the hell happened here? We land here if al was \n, so we stop reading from stdin
+    fuck go back
 
-
+    banana
     What the hell happened here? Now, we recreate the number, which will be stored in rdx. rcx contains the factor that the current digit must be multiplied by, starting at 1, then 10, ...
     sneak 100 rdx
     rcx is brilliant, but I like 1
 
-    What the hell happened here? We also pushed \n to the stack, we hence have to remove it first
-    rsp units are ready, with 8 more well on the way
+    monke uuaauauaua
+        who would win? r8 or 0
+        What the hell happened here? If we land here, our loop counter is 0. Escape the loop
+        return to monke uauauauauaaa
 
-    r8 wins
-    1 wins
+        r8 wins
+        0 wins
         not stonks rax
 
         rax is getting out of hand, now there are rcx of them
         rdx units are ready, with rax more well on the way
 
         rcx is getting out of hand, now there are 10 of them
+        What the hell happened here? Decrease the loop counter and jump back to the loop condition
         downvote r8
-    who would win? r8 or 1
-    What the hell happened here? Our loop counter is now at 1, meaning we are done translating the number (The loop counter is not 0 since we also incremented when we received \n)
+    return to monke uuaauauaua
 
+    What the hell happened here? Our loop counter is now at 0, meaning we are done translating the number
+    monke uauauauauaaa
     corporate needs you to find the difference between rdx and 69
     corporate needs you to find the difference between rdx and 420
 
