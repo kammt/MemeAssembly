@@ -1,3 +1,22 @@
+## v1.2
+New features:
+- New command: `let me in. LET ME IIIIIIIIN [8-bit register]`. Reads a single character from stdin into the specified register (#45, Thanks @xarantolus!)
+- New command: `[register] is getting out of hand, now there are [value/register] of them`. Performs a signed multiplication
+- New command: `look at what [value/register] needs to mimic a fraction of [register]`. Performs a signed division without changing the state of any registers except for the destination register
+
+Improvements:
+- MemeAssembly now has its own logo (#42)
+- Compilation now does not require temporary files, but rather directly pipes the generated code to gcc (#43, Thanks @aengelke!)
+- Fixed some buffer overruns during compilation (#43, Thanks @aengelke!)
+- Added a new code example: toUpper (#44, Thanks @aengelke!)
+- Added a new code example: is_nice
+
+Bug fixes:
+- Function analysis did not support branching functions, i.e. with multiple return statements (#41)
+- Fixed crash when providing an empty file as input (#40)
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.2)
+
 ## v1.1.1
 Bug Fixes:
 - A line only containing spaces was wrongly treated as a command and translated, leading to error messages by the Assembler (#38, thanks @xarantolus!)
