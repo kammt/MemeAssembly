@@ -1,12 +1,29 @@
+/*
+This file is part of the MemeAssembly compiler.
+
+ Copyright © 2021 Tobias Kamm
+
+MemeAssembly is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+MemeAssembly is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #ifndef MEMEASSEMBLY_COMMANDS_H
 #define MEMEASSEMBLY_COMMANDS_H
 
 #include <stdint.h>
 #include <stddef.h>
 
-#define NUMBER_OF_COMMANDS 34
-#define COMMAND_PATTERN_LIST_MAX_STRING_LENGTH 66
-#define COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH 54
+#define NUMBER_OF_COMMANDS 37
 #define MAX_PARAMETER_COUNT 2
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
@@ -27,7 +44,7 @@ struct commandsArray {
 };
 
 struct command {
-    char pattern[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH];
+    char *pattern;
     uint8_t usedParameters;
     /*
      * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
@@ -43,7 +60,7 @@ struct command {
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
     void (*analysisFunction)(struct commandsArray*, int);
-    char translationPattern[COMMAND_TRANSLATION_LIST_MAX_STRING_LENGTH];
+    char *translationPattern;
 };
 
 #define commentStart "What the hell happened here?"

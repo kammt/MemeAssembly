@@ -1,3 +1,23 @@
+/*
+This file is part of the MemeAssembly compiler.
+
+ Copyright © 2021 Tobias Kamm and contributors
+
+MemeAssembly is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+MemeAssembly is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include "compiler.h"
 #include <stdio.h>  //Printf() function
 #include <stdlib.h> //Exit() function
 
@@ -14,12 +34,9 @@
 #include "translator/translator.h"
 #include "logger/log.h"
 
-/**
- * compiler.c:
- * This file simply provides the functions compile and compileAndRun. The main functionality of these functions is implemented in translate.c and analyse.c
- */
 
 int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
+extern int compilationErrors;
 
 struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
@@ -140,6 +157,32 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "shr 0, 1"
         },
+        {
+            .pattern = "p is getting out of hand, now there are p of them",
+            .usedParameters = 2,
+            .allowedParamTypes = {0b11, 0b110011},
+            .analysisFunction = NULL,
+            .translationPattern = "imul 0, 1"
+        },
+        {
+            .pattern = "look at what p needs to mimic a fraction of p",
+            .usedParameters = 2,
+            .allowedParamTypes = {0b110001, 0b1},
+            .analysisFunction = NULL,
+            .translationPattern = "push r8\n\t"
+                                  "mov r8, 0\n\t"
+                                  "push rdx\n\t"
+                                  "xor rdx, rdx\n\t"
+                                  "push rax\n\t"
+                                  "mov rax, 1\n\t"
+                                  "idiv r8\n\t"
+                                  "push rax\n\t"
+                                  "mov rax, [rsp + 8]\n\t"
+                                  "pop 1\n\t"
+                                  "sub rsp, 8\n\t"
+                                  "pop rdx\n\t"
+                                  "pop r8"
+        },
 
 
         ///Jumps and Jump Markers
@@ -217,7 +260,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .allowedParamTypes = {0b101000},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], 0\n\tcall writechar"
         },
-
+        {
+            .pattern = "let me in. LET ME IIIIIIIIN p",
+            .usedParameters = 1,
+            .analysisFunction = NULL,
+            .allowedParamTypes = {0b1000},
+            .translationPattern = "call readchar\n\tmov 0, BYTE PTR [rip + .LCharacter]"
+        },
 
         ///Random commands
         {
@@ -267,50 +316,73 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         }
 };
 
-/**
- * Attempts to convert the source file to an x86 Assembly file
- * @param srcPTR a pointer to the source file to be compiled
- * @param destPTR a pointer to the destination file. If nonexistent, it will be created
- * @return 0 on success, 1 otherwise
- */
-int compile(FILE *srcPTR, FILE *destPTR) {
-    printStatusMessage("Parsing input file");
-    struct commandsArray commands = parseCommands(srcPTR);
-
-    printStatusMessage("Starting parameter check");
-    for (size_t i = 0; i < commands.size; ++i) {
-        checkParameters(&commands.arrayPointer[i]);
-    }
-
-    printStatusMessage("Analyzing commands");
-    for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
-        if(commandList[opcode].analysisFunction != NULL) {
-            commandList[opcode].analysisFunction(&commands, opcode);
-        }
-    }
-
-    if(getNumberOfCompilationErrors() > 0) {
-        printErrorASCII();
-        fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", getNumberOfCompilationErrors());
-    } else {
-        writeToFile(&commands, destPTR);
-    }
-
+void freeCommandsArray(struct commandsArray *commands) {
     printDebugMessage("Freeing memory", "");
-    for(size_t i = 0; i < commands.size; i++) {
-        struct parsedCommand parsedCommand = *(commands.arrayPointer + i);
+    for(size_t i = 0; i < commands -> size; i++) {
+        struct parsedCommand parsedCommand = *(commands -> arrayPointer + i);
         for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
             free(parsedCommand.parameters[j]);
         }
     }
-    free(commands.arrayPointer);
+    free(commands -> arrayPointer);
 
     printDebugMessage("All memory freed, compilation done", "");
+}
 
-    if(getNumberOfCompilationErrors() > 0) {
-        return 1;
+/**
+ * Parses the provided source file, converts it into a commandsArray struct and runs all the required semantic analysis functions
+ * @param srcPTR a pointer to the input file
+ * @return the commandsArray struct. Note that this struct is also returned when a compilation error occurred.
+ *          compilationErrors (defined in log.c) counts the number of compilation errors.
+ */
+struct commandsArray compile(FILE *srcPTR) {
+    printStatusMessage("Parsing input file");
+    struct commandsArray commands = parseCommands(srcPTR);
+
+    if(commands.size > 0) {
+        printStatusMessage("Starting parameter check");
+        for (size_t i = 0; i < commands.size; ++i) {
+            checkParameters(&commands.arrayPointer[i]);
+        }
+
+        printStatusMessage("Analyzing commands");
+        for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
+            if(commandList[opcode].analysisFunction != NULL) {
+                commandList[opcode].analysisFunction(&commands, opcode);
+            }
+        }
+
+        if(compilationErrors > 0) {
+            printErrorASCII();
+            fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compilationErrors);
+        }
+    } else {
+        fprintf(stderr, "File is empty, nothing to do\n");
+        compilationErrors++;
     }
-    return 0;
+
+    return commands;
+}
+
+/**
+ * Attempts to convert the source file to an x86 Assembly file
+ * @param srcPTR a pointer to the source file to be compiled
+ * @param destPTR a pointer to the destination file.
+ */
+int createAssemblyFile(FILE *srcPTR, FILE *destPTR) {
+    struct commandsArray commands = compile(srcPTR);
+    if(compilationErrors == 0) {
+        writeToFile(&commands, destPTR);
+    }
+
+    fclose(destPTR);
+    freeCommandsArray(&commands);
+
+    if(compilationErrors == 0) {
+        exit(EXIT_SUCCESS);
+    } else {
+        exit(EXIT_FAILURE);
+    }
 }
 
 /**
@@ -319,28 +391,25 @@ int compile(FILE *srcPTR, FILE *destPTR) {
  * @param destFile the name of the destination file
  */
 void createObjectFile(FILE *srcPTR, char *destFile) {
-    FILE *tmpPTR = fopen("tmp.S","w");
-    int result = compile(srcPTR, tmpPTR);
+    const char* commandPrefix = "gcc -O -c -x assembler - -o";
+    char command[strlen(commandPrefix) + strlen(destFile) + 1];
+    strcpy(command, commandPrefix);
+    strcat(command, destFile);
 
-    if(result == 0) {
-        printStatusMessage("Calling gcc");
-        system("gcc -O -c tmp.S");
+    // Pipe assembler code directly to GCC via stdin
+    struct commandsArray commands = compile(srcPTR);
+    int gccres = 1;
+    if(compilationErrors == 0) {
+        FILE *gccPTR = popen(command, "w");
+        writeToFile(&commands, gccPTR);
+        gccres = pclose(gccPTR);
+    }
 
-        //The file will now be called tmp.o, we hence have to rename it
-        char commandPrefix[] = "mv tmp.o ";
-        size_t strLen = strlen(commandPrefix) + strlen(destFile);
-        char command[strLen];
-        command[0] = '\0';
-
-        strncat(command, commandPrefix, strLen);
-        strncat(command, destFile, strLen);
-        system(command);
-
-        printDebugMessage("Removing temporary file", "");
-        system("rm tmp.S");
-        exit(EXIT_SUCCESS);
-    } else {
+    freeCommandsArray(&commands);
+    if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
     }
 }
 
@@ -350,24 +419,24 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
-    FILE *tmpPTR = fopen("tmp.S","w");
-    int result = compile(srcPTR, tmpPTR);
+    const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
+    char command[strlen(commandPrefix) + strlen(destFile) + 1];
+    strcpy(command, commandPrefix);
+    strcat(command, destFile);
 
-    if(result == 0) {
-        printStatusMessage("Calling gcc");
-        char commandPrefix[] = "gcc -no-pie tmp.S -o ";
-        size_t strLen = strlen(commandPrefix) + strlen(destFile);
-        char command[strLen];
-        command[0] = '\0';
+    // Pipe assembler code directly to GCC via stdin
+    struct commandsArray commands = compile(srcPTR);
+    int gccres = 1;
+    if(compilationErrors == 0) {
+        FILE *gccPTR = popen(command, "w");
+        writeToFile(&commands, gccPTR);
+        gccres = pclose(gccPTR);
+    }
 
-        strncat(command, commandPrefix, strLen);
-        strncat(command, destFile, strLen);
-        system(command);
-
-        printDebugMessage("Removing temporary file", "");
-        system("rm tmp.S");
-        exit(EXIT_SUCCESS);
-    } else {
+    freeCommandsArray(&commands);
+    if(compilationErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
+    } else {
+        exit(EXIT_SUCCESS);
     }
 }

@@ -1,3 +1,22 @@
+/*
+This file is part of the MemeAssembly compiler.
+
+ Copyright © 2021 Tobias Kamm and contributors
+
+MemeAssembly is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+MemeAssembly is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "translator.h"
 #include "../logger/log.h"
 
@@ -119,9 +138,17 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    size_t strLen = strlen(translationPattern);
-    for(int i = 0; i < command.usedParameters; i++) {
-        strLen += strlen(parsedCommand.parameters[i]);
+    size_t patternLen = strlen(translationPattern);
+    size_t strLen = patternLen;
+    for(size_t i = 0; i < patternLen; i++) {
+        char character = translationPattern[i];
+        if(character >= '0' && character <= (char) command.usedParameters + 47) {
+            char *parameter = parsedCommand.parameters[character - 48];
+            strLen += strlen(parameter);
+            if(parsedCommand.isPointer == (character - 48) + 1) {
+                strLen += 2; // for [ and ]
+            }
+        }
     }
 
     char *translatedLine = malloc(strLen + 3); //Include an extra byte for the null-Pointer and two extra bytes in case []-brackets are needed for a pointer
@@ -131,7 +158,7 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     }
     translatedLine[0] = '\0';
 
-    for(size_t i = 0; i < strlen(translationPattern); i++) {
+    for(size_t i = 0; i < patternLen; i++) {
         char character = translationPattern[i];
         if(character >= '0' && character <= (char) command.usedParameters + 47) {
             char *parameter = parsedCommand.parameters[character - 48];
@@ -146,18 +173,18 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
                 translatedLine[currentStrLen] = '[';
                 translatedLine[currentStrLen + 1] = '\0';
                 //Append the parameter
-                strncat(translatedLine, parameter, strLen);
+                strcat(translatedLine, parameter);
                 //Append a ']'
                 currentStrLen = strlen(translatedLine);
                 translatedLine[currentStrLen] = ']';
                 translatedLine[currentStrLen + 1] = '\0';
             } else {
                 printDebugMessage("\tAppending parameter", parameter);
-                strncat(translatedLine, parameter, strLen);
+                strcat(translatedLine, parameter);
             }
         } else {
             char appendix[2] = {character, '\0'};
-            strncat(translatedLine, appendix, strLen);
+            strcat(translatedLine, appendix);
         }
     }
 
@@ -186,8 +213,8 @@ void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE
     }
 
     if(useStabs && parsedCommand.opcode != 0) {
-        //If this was a return statemtent, we reached the end of the function. Define the label for the N_RBRAC stab
-        if(parsedCommand.opcode > 0 && parsedCommand.opcode <= 3) {
+        //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
+        if(parsedCommand.opcode > 0 && parsedCommand.opcode <= 3 && (commandsArray -> size == index + 1 || commandsArray -> arrayPointer[index + 1].opcode == 0)) {
             stabs_writeFunctionEndLabel(outputFile);
         }
         //In any case, we now need to write the line info to the file
@@ -237,6 +264,8 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
     if(optimisationLevel != 42069) {
         fprintf(outputFile, "\n\nwritechar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rax, 1\n\tsyscall\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\t\n\tret\n");
+
+        fprintf(outputFile, "\n\nreadchar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rdi, 0\n\tmov rax, 0\n\tsyscall\n\t\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\tret\n");
     }
 
     //If we are using stabs, we now need to save all function info to the file
@@ -256,7 +285,4 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     if(optimisationLevel == -4) {
         fprintf(outputFile, ".align 536870912\n");
     }
-
-    printDebugMessage("Done, closing output file", "");
-    fclose(outputFile);
 }

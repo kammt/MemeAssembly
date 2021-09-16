@@ -1,3 +1,22 @@
+/*
+This file is part of the MemeAssembly compiler.
+
+ Copyright © 2021 Tobias Kamm
+
+MemeAssembly is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+MemeAssembly is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "parser.h"
 #include <stdio.h>
 #include <string.h>
@@ -87,7 +106,7 @@ struct parsedCommand parseLine(int lineNum) {
 
     //Temporarily save the line on the stack to be able to restore when a comparison failed
     char lineCpy[strlen(line) + 1];
-    strncpy(lineCpy, line, strlen(line) + 1);
+    strcpy(lineCpy, line);
 
     //Define save pointers for strtok_r
     char *savePtrLine;
@@ -95,13 +114,13 @@ struct parsedCommand parseLine(int lineNum) {
 
     //Iterate through all possible commands
     for(int i = 0; i < NUMBER_OF_COMMANDS - 2; i++) {
-        strncpy(lineCpy, line, strlen(line) + 1);
+        strcpy(lineCpy, line);
         savePtrLine = NULL;
         savePtrPattern = NULL;
 
         //Copy the current command pattern out of read-only memory
-        char commandString[COMMAND_PATTERN_LIST_MAX_STRING_LENGTH + 1];
-        strncpy(commandString, commandList[i].pattern, COMMAND_PATTERN_LIST_MAX_STRING_LENGTH);
+        char commandString[strlen(commandList[i].pattern) + 1];
+        strcpy(commandString, commandList[i].pattern);
 
         //Tokenize both strings. Tabs at the beginning are allowed and should be ignored, hence they are a delimiter
         char *commandToken = strtok_r(commandString, " \t", &savePtrPattern);
