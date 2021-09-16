@@ -19,6 +19,13 @@ Escape Sequence  | Usage
 
 ?> Printing Unicode-Characters directly is not possible. However, using [this program](https://play.golang.org/p/TojzlTMIcJe), you can get the sequence of commands needed to print your character.
 
+## Reading from stdin
+### Definition
+`let me in. LET ME IIIIIIIIN [8-bit register]`
+
+### Description
+Reads a single character from stdin into the specified register. If the user pressed enter, the register will contain \n, which is 10 in ASCII.
+
 ## Examples
 #### 1. Hello World!
 ```

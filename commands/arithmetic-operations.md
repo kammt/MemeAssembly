@@ -10,6 +10,20 @@ Adds a value to the specified destination register
 ### Description
 Subtracts a value from the specified destination register
 
+## Signed Multiplication
+### Definition
+`[register] is getting out of hand, now there are [value/register] of them`
+
+### Description
+Performs a signed multiplication while only changing the state of the destination register
+
+## Signed Division
+### Definition
+`look at what [value/register] needs to mimic a fraction of [register]`
+
+### Description
+Performs a signed division without changing the state of any registers except for the destination register
+
 ## Divide by two
 ### Definition
 ```they had us in the first half, not gonna lie [register]```
