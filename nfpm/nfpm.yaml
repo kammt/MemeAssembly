@@ -12,7 +12,7 @@ depends:
 - make
 maintainer: "Tobias Kamm <tobias.kamm@tutanota.de>"
 description: |
-  A x86_64 Assembly based programming language that only uses Memes as commands
+  A Meme-based programming language
 homepage: "https://kammt.github.io/MemeAssembly"
 license: "GPLv3"
 # Contents to add to the package
