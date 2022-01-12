@@ -1,5 +1,5 @@
 <p align="center">
- <img src="images/logo.png"> 
+ <img src="images/logo.png">
  <p align="center">or MemeASM for short, is a highly advanced x86-Assembly based programming language using only memes as commands.</p>
 </p>
   <p align="center">
@@ -14,9 +14,9 @@
    </a>
    <a href="https://github.com/auchenberg/volkswagen">
       <img src="https://auchenberg.github.io/volkswagen/volkswargen_ci.svg?v=1" alt="Volkswagen Build Status">
-   </a> 
+   </a>
   </p>
-    
+
 ## What is MemeAssembly?
 In short, MemeAssembly is the revolution the tech industry has been waiting for. Combining the emerging trend of minimalism with rememberable memes, Big Data, AI and co. won't be the same without it!
 
@@ -31,7 +31,7 @@ In short, MemeAssembly is the revolution the tech industry has been waiting for.
 ## Who is it for?
 MemeAssembly is the best choice for...
 ### ...Silicon Valley Developers :iphone:
-When it comes to programs, speed is everything. No user wants to wait minutes for their app to start or to calculate a result. 
+When it comes to programs, speed is everything. No user wants to wait minutes for their app to start or to calculate a result.
 Thanks to MemeAssembly, these worries are no more! Due to MemeAssembly's high level of optimisation, your code will be blazingly fast!
 
 ### ...Game Developers :video_game:
@@ -41,7 +41,7 @@ Even if the game is great, low performance can be a deal-breaker for most if not
 
 ### ...children learning to code :boy: :girl:
 Motivating children to join Computer Science related studies or simply learning to code has been a challenge for years. The solution for this problem is simple yet effective: Learn to code using MemeAssembly. \
-[Numerous studies](https://www.youtube.com/watch?v=dQw4w9WgXcQ) have alredy proven the effectivity of MemeAssembly. Parents often praise MemeAssembly's apprach of combining low-level programming languages with Memes that are easy to remember. 
+[Numerous studies](https://www.youtube.com/watch?v=dQw4w9WgXcQ) have alredy proven the effectivity of MemeAssembly. Parents often praise MemeAssembly's apprach of combining low-level programming languages with Memes that are easy to remember.
 
 > Convinced? Visit the ["Getting Started"-page](https://kammt.github.io/MemeAssembly/#/getting-started) to find out more about how to start coding with MemeAssembly!
 
@@ -90,6 +90,12 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 ```
 
 You can also check the [examples](examples/) directory to find more.
+
+## Famous Quotes
+
+> ❝ MemeAssembly is going to revolutionize the world. -- Rob Jobs ❞
+
+> ❝ My kids love coding in MemeAssembly, they have a lot of fun while coding. --- Mark Cookemburg ❞
 
 ## Badge of honor
 Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
