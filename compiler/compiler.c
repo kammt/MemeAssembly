@@ -184,7 +184,7 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "p UNLIMITED POWER p",
             .usedParameters = 2,
-            .allowedParamTypes = {0b1, 0b110011},
+            .allowedParamTypes = {0b1, 0b100011},
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], 1\n\t"
                                   //Check if y=0. We cannot use 0 constants, as they would be replaced by the first parameter. So we just add and then subtract one to compare the flags
