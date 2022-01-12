@@ -181,6 +181,29 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
                                   "add rsp, 8\n\t"
                                   "pop rdx\n\t"
         },
+        {
+            .pattern = "p UNLIMITED POWER p",
+            .usedParameters = 2,
+            .allowedParamTypes = {0b1, 0b110011},
+            .analysisFunction = NULL,
+            .translationPattern = "mov QWORD PTR [rip + .Ltmp64], 1\n\t"
+                                  //Check if y=0. We cannot use 0 constants, as they would be replaced by the first parameter. So we just add and then subtract one to compare the flags
+                                  "inc QWORD PTR [rip + .Ltmp64]\n\t"
+                                  "dec QWORD PTR [rip + .Ltmp64]\n\t"
+                                  "jnz 2f\n\t" //Jump forward to 2 if not zero
+                                  //y is zero, load 1 and jump to the end (numeric label 4)
+                                  "xor 0, 0\n\t"
+                                  "inc 0\n\t"
+                                  "jmp 4f\n\t"
+                                  //Now loop until our y is zero
+                                  "2: push 0\n\t" //Preparation: push x to the stack to remember it for later
+                                  "dec QWORD PTR [rip + .Ltmp64]\n\t"
+                                  "3: imul 0, [rsp]\n\t"
+                                  "dec QWORD PTR [rip + .Ltmp64]\n\t"
+                                  "jnz 3b\n\t" //If the result was not zero (ZF set from subtraction), jump back
+                                  "add rsp, 8\n\t"
+                                  "4:\n\t"
+        },
 
 
         ///Jumps and Jump Markers
