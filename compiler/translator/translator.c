@@ -239,7 +239,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
         }
     }
 
-    fprintf(outputFile, "\n.section .data\n\t.LCharacter: .ascii \"a\"\n");
+    fprintf(outputFile, "\n.section .data\n\t.LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
 
     //Write the file info if we are using stabs
     if(useStabs) {

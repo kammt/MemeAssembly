@@ -201,35 +201,35 @@ void checkParameters(struct parsedCommand *parsedCommand) {
         //Get the allowed parameter types for this parameter
         uint8_t allowedTypes = commandList[(*parsedCommand).opcode].allowedParamTypes[parameterNum];
 
-        if((allowedTypes & 0b1) != 0) { //64 bit registers
+        if((allowedTypes & REG64) != 0) { //64 bit registers
             if(isInArray(parameter, registers_64_bit, NUMBER_OF_64_BIT_REGISTERS)) {
                 printDebugMessage("\t\tParameter is a 64 bit register", "");
                 continue;
             }
             printDebugMessage("\t\tParameter is not a 64 bit register", "");
         }
-        if((allowedTypes & 0b10) != 0) { //32 bit registers
+        if((allowedTypes & REG32) != 0) { //32 bit registers
             if(isInArray(parameter, registers_32_bit, NUMBER_OF_32_BIT_REGISTERS)) {
                 printDebugMessage("\t\tParameter is a 32 bit register", "");
                 continue;
             }
             printDebugMessage("\t\tParameter is not a 32 bit register", "");
         }
-        if((allowedTypes & 0b100) != 0) { //16 bit registers
+        if((allowedTypes & REG16) != 0) { //16 bit registers
             if(isInArray(parameter, registers_16_bit, NUMBER_OF_16_BIT_REGISTERS)) {
                 printDebugMessage("\t\tParameter is a 16 bit register", "");
                 continue;
             }
             printDebugMessage("\t\tParameter is not a 16 bit register", "");
         }
-        if((allowedTypes & 0b1000) != 0) { //8 bit registers
+        if((allowedTypes & REG8) != 0) { //8 bit registers
             if(isInArray(parameter, registers_8_bit, NUMBER_OF_8_BIT_REGISTERS)) {
                 printDebugMessage("\t\tParameter is an 8 bit register", "");
                 continue;
             }
             printDebugMessage("\t\tParameter is not an 8 bit register", "");
         }
-        if((allowedTypes & 0b10000) != 0) { //Decimal number
+        if((allowedTypes & DECIMAL) != 0) { //Decimal number
             char* endPtr;
             strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
@@ -242,7 +242,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             }
             printDebugMessage("\t\tParameter is not a decimal number", "");
         }
-        if((allowedTypes & 0b100000) != 0) { //Characters (including escape sequences) / ASCII-code
+        if((allowedTypes & CHAR) != 0) { //Characters (including escape sequences) / ASCII-code
             //Check if any of the escape sequences match
             if(isInArray(parameter, (char **) escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES)) {
                 translateEscapeSequence(parameter, parameterNum, parsedCommand);
@@ -276,7 +276,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             }
             printDebugMessage("\t\tParameter is not an ASCII-code", "");
         }
-        if((allowedTypes & 0b1000000) != 0) { //Monke Jump label
+        if((allowedTypes & MONKE_LABEL) != 0) { //Monke Jump label
             //Iterate through each character and check if it is either a U or an A
             //Define variables that are set to 1 if either a U or an A are found. That way, you can check if both of them occurred at least once
             uint8_t a_used = 0;
@@ -302,7 +302,7 @@ void checkParameters(struct parsedCommand *parsedCommand) {
             }
             printDebugMessage("\t\tParameter is not a valid Monke jump label", "");
         }
-        if((allowedTypes & 0b10000000) != 0) { //Function name
+        if((allowedTypes & FUNC_NAME) != 0) { //Function name
             uint8_t unexpectedCharacter = 0;
             for(size_t i = 0; i < strlen(parameter); i++) {
                 char character = parameter[i];
