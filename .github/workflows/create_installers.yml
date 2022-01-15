@@ -27,11 +27,11 @@ jobs:
           sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' nfpm.yaml
           cd ..
 
-      - name: Generate installer files
+      - name: Generate *.deb/*.rmp installer files
         run: |
           cd nfpm
           ./generateInstallers.sh
-          cd ..
+          cd ..    
           
       - name: Archive debian installer
         uses: actions/upload-artifact@v2
@@ -44,3 +44,12 @@ jobs:
         with:
           name: rpm-installer
           path: memeassembly-${{ github.event.inputs.version }}.x86_64.rpm
+
+      - name: Compile for Windows
+        run: make windows
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v2
+        with:
+          name: memeasm.exe
+          path: memeasm.exe
