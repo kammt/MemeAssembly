@@ -24,7 +24,14 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-#include <stab.h>
+
+///STABS flags
+#define N_SO 100
+#define N_SLINE 68
+#define N_FUN 36
+#define N_LBRAC 0xc0
+#define N_RBRAC 0xe0
+
 
 extern char* version_string;
 extern struct command commandList[];
@@ -239,7 +246,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
         }
     }
 
-    fprintf(outputFile, "\n.section .data\n\t.LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
+    fprintf(outputFile, "\n.section .data\n\t.LCharacter: .ascii \"a\"\n");
 
     //Write the file info if we are using stabs
     if(useStabs) {
