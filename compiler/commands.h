@@ -43,6 +43,15 @@ struct commandsArray {
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
+#define REG64 1
+#define REG32 2
+#define REG16 4
+#define REG8 8
+#define DECIMAL 16
+#define CHAR 32
+#define MONKE_LABEL 64
+#define FUNC_NAME 128
+
 struct command {
     char *pattern;
     uint8_t usedParameters;
