@@ -11,9 +11,8 @@ test
 test.S
 
 #IDE files
-/examples/Stalinsort/.idea/
-.idea
-.vscode
+**/.idea/
+**/.vscode/
 
 #compiledb used by clang tooling
 compile_commands.json
