@@ -1,5 +1,6 @@
 #Executable
 memeasm
+memeasm.exe
 
 #Temporary files for local testing
 tmp.asm
