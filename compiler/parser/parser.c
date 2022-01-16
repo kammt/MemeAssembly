@@ -24,6 +24,12 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "../logger/log.h"
 #include "../commands.h"
 
+#ifdef WINDOWS
+/* strtok_r does not exist on Windows and instead is strtok_s. Use a preprocessor directive to replace all occurences */
+# define strtok_r strtok_s
+#endif
+
+
 char *line = NULL;
 size_t len = 0;
 ssize_t lineLength;
