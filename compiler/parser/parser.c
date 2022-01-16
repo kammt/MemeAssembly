@@ -25,7 +25,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "../commands.h"
 
 #ifdef WINDOWS
-/* strtok_r does not exist on Windows and instead is strtok_s. Use a preprocessor directive to replace all occurences */
+/* strtok_r does not exist on Windows and instead is strtok_s. Use a preprocessor directive to replace all occurrences */
 # define strtok_r strtok_s
 #endif
 
