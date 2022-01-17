@@ -456,7 +456,7 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
-    const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
+    const char* commandPrefix = "gcc -O -e main -no-pie -x assembler - -o";
     char command[strlen(commandPrefix) + strlen(destFile) + 1];
     strcpy(command, commandPrefix);
     strcat(command, destFile);
