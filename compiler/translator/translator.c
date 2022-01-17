@@ -285,6 +285,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                 "\tpush r8\n"
                 "\tpush r9\n"
                 //Get Handle of stdout
+                "\tsub rsp, 32\n"
                 "\tmov rcx, -11\n" //-11=stdout
                 "\tcall GetStdHandle\n"//return value is in rax
                 //Prepare the parameters for output
@@ -292,8 +293,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                 "\tlea rdx, [rip + .LCharacter]\n"
                 "\tmov r8, 1\n" //Length of message = 1 character
                 "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes written, just discard that value
-                "\tsub rsp, 32\n"
-                "\tmov QWORD PTR [rsp + 20], 0\n"
+                "\tmov QWORD PTR [rsp + 32], 0\n"
                 "\tcall WriteFile\n"
                 "\tadd rsp, 32\n"
 
@@ -313,6 +313,7 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                 "\tpush r8\n"
                 "\tpush r9\n"
                 //Get Handle of stdin
+                "\tsub rsp, 32\n"
                 "\tmov rcx, -10\n" //-10=stdin
                 "\tcall GetStdHandle\n"//return value is in rax
                 //Prepare the parameters for reading from input
@@ -320,9 +321,8 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                 "\tlea rdx, [rip + .LCharacter]\n"
                 "\tmov r8, 1\n" //Bytes to read = 1 character
                 "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes read, just discard that value
-                "\tsub rsp, 32\n"
                 //Parameter 5 and then 4 Bytes of emptiness on the stack
-                "\tmov QWORD PTR [rsp + 20], 0\n"
+                "\tmov QWORD PTR [rsp + 32], 0\n"
                 "\tcall ReadFile\n"
                 "\tadd rsp, 32\n"
 
