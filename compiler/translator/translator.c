@@ -251,14 +251,25 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     fprintf(outputFile, "\n.extern GetStdHandle\n.extern WriteFile\n.extern ReadFile\n");
     #endif
 
-    fprintf(outputFile, "\n.section .data\n\t.LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
+    #ifdef MACOS
+    fprintf(outputFile, "\n.data\n\t");
+    #else
+    fprintf(outputFile, "\n.section .data\n\t");
+    #endif
+
+    fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
 
     //Write the file info if we are using stabs
     if(useStabs) {
         stabs_writeFileInfo(outputFile);
     }
 
+   
+    #ifdef MACOS
+    fprintf(outputFile, "\n\n.text\n\t");
+    #else    
     fprintf(outputFile, "\n\n.section .text\n");
+    #endif
 
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
