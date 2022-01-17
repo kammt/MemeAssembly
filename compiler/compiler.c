@@ -57,21 +57,13 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "no, I don't think I will",
             .usedParameters = 0,
             .analysisFunction = NULL,
-            #ifdef WINDOWS
-            .translationPattern = "mov rcx, 1\n\tret"
-            #else
             .translationPattern = "mov rax, 1\n\tret"
-            #endif
         },
         {
             .pattern = "I see this as an absolute win",
             .usedParameters = 0,
             .analysisFunction = NULL,
-            #ifdef WINDOWS
-            .translationPattern = "xor rcx, rcx\n\tret"
-            #else
             .translationPattern = "xor rax, rax\n\tret"
-            #endif
         },
 
         ///Stack operations
