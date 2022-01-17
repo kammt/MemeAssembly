@@ -52,7 +52,7 @@ void printHelpPage(char* programName) {
     printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
     printf("  -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
-    printf("  -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported\n");
+    printf("  -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf("  -i \t\t- enables information logs\n");
     printf("  -d \t\t- enables debug logs\n");
 }
@@ -99,7 +99,12 @@ int main(int argc, char* argv[]) {
                 outputFileString = optarg;
                 break;
             case 'g':
+                #ifdef WINDOWS
+                //If we use Windows, STABS does not work - output a warning, but don't do anything
+                fprintf(stderr, YEL"Warning: -g is not supported under Windows, ignoring..\n"RESET);
+                #else
                 useStabs = 1;
+                #endif
                 break;
             case '?':
                 fprintf(stderr, "Error: Unknown option provided\n");
