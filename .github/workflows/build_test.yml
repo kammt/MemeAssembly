@@ -55,5 +55,5 @@ jobs:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: Build Linux
+      - name: Build MacOS
         run: make CFLAGS+=-Werror debug
