@@ -355,7 +355,11 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                             "push rdx\n\t"
                             "mov rdx, 1\n\t"
                             "lea rsi, [rip + .LCharacter]\n\t"
+			    #ifdef LINUX
                             "mov rax, 1\n\t"
+ 			    #else
+			    "mov rax, 0x2000004\n\t"
+			    #endif
                             "syscall\n\t"
                             "pop rdx\n\t"
                             "pop rsi\n\t"
@@ -375,7 +379,11 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                             "mov rdx, 1\n\t"
                             "lea rsi, [rip + .LCharacter]\n\t"
                             "mov rdi, 0\n\t"
+			    #ifdef LINUX
                             "mov rax, 0\n\t"
+			    #else
+			    "mov rax, 0x2000003\n\t"
+			    #endif
                             "syscall\n\n\t"
                             "pop rdx\n\t"
                             "pop rsi\n\t"
