@@ -26,6 +26,8 @@ char* version_string = "v1.2";
 char* platform_suffix =
     #ifdef WINDOWS
         "Windows";
+    #elif defined(MACOS)
+        "MacOS";
     #else
         "Linux";
     #endif
