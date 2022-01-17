@@ -101,8 +101,11 @@ int main(int argc, char* argv[]) {
             case 'g':
                 #ifdef WINDOWS
                 //If we use Windows, STABS does not work - output a warning, but don't do anything
-                fprintf(stderr, YEL"Warning: -g is not supported under Windows, ignoring..\n"RESET);
-                #else
+                fprintf(stderr, YEL"Info: -g is not supported under Windows, ignoring..\n"RESET);
+                #elif defined(MACOS)
+		//If we use MacOS, STABS does not work - output a warning, but don't do anything
+                fprintf(stderr, YEL"Info: -g is not supported under MacOS, ignoring..\n"RESET);
+		#else
                 useStabs = 1;
                 #endif
                 break;
