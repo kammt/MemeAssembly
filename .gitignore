@@ -4,7 +4,9 @@ memeasm.exe
 
 #Temporary files for local testing
 tmp.asm
+example.S
 example.memeasm
+example.exe
 tmp
 tmp.o
 /examples/Stalinsort/stalinsort.S
