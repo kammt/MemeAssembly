@@ -201,7 +201,7 @@ struct parsedCommand parseLine(int lineNum) {
                 parsedCommand.parameters[numberOfParameters++] = variable;
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
-                if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
+                if(savePtrLine != NULL && strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
                     printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
                     //If another parameter is already marked as a variable, print an error
                     if(parsedCommand.isPointer != 0) {
