@@ -25,13 +25,13 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Build Linux
-        run: make debug
+        run: make CFLAGS+=-Werror debug
 
       - name: Install mingw-w64
         run: sudo apt-get install mingw-w64
 
       - name: Build Windows
-        run: make windows
+        run: make CFLAGS+=-Werror windows
 
   build_windows:
     # The type of runner that the job will run on
@@ -45,5 +45,5 @@ jobs:
         shell: powershell
         run: |
           $env:Path += ";C:\msys64\mingw64\bin"
-          mingw32-make.exe debug
+          mingw32-make.exe CFLAGS+=-Werror debug
           
