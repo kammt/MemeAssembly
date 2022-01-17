@@ -4,9 +4,12 @@ PLATFORM_MACRO=
 ifeq ($(OS),Windows_NT)     # is Windows_NT on XP, 2000, 7, Vista, 10...
     PLATFORM_MACRO=WINDOWS
 else
-    detected_OS := $(shell uname)  # same as "uname -s"
-    #assuming that a non-Windows OS is Linux
-    PLATFORM_MACRO=LINUX
+    detected_OS := $(shell uname -s)
+    ifeq ($(detected_OS),Darwin)
+    	PLATFORM_MACRO=MACOS
+    else
+    	PLATFORM_MACRO=LINUX
+    endif
 endif
 
 # Compiler Flags
