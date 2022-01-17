@@ -104,7 +104,7 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
         *result = c;
         bytesRead++;
         result++;
-        if(bytesRead == *n) {
+        if(bytesRead == (ssize_t) *n) {
             *n += 128;
             *lineptr = realloc(*lineptr, *n);
             result = *lineptr + bytesRead;
