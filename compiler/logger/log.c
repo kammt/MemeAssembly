@@ -22,7 +22,13 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 int compilationErrors = 0;
 int logLevel = 1; //Default value
-char *version_string = "v1.2";
+char* version_string = "v1.2";
+char* platform_suffix =
+    #ifdef WINDOWS
+        "Windows";
+    #else
+        "Linux";
+    #endif
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
@@ -41,7 +47,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s, created by Tobias Kamm.\n\n", version_string);
+    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", version_string, platform_suffix);
 }
 
 /**

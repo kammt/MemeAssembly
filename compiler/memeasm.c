@@ -42,7 +42,7 @@ extern int useStabs;
 void printHelpPage(char* programName) {
     printInformationHeader();
     printf("Usage:\n");
-    printf("  %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
+    printf("  %s [options] -o outputFile [-i | -d] inputFile\tCompiles the specified file into an executable\n", programName);
     printf("  %s [options] -S -o outputFile.S [-i | -d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n", programName);
     printf("  %s [options] -O -o outputFile.o [-i | -d] inputFile\tOnly compiles the specified file and saves it an object file\n", programName);
     printf("  %s (-h | --help)\t\t\t\t\tDisplays this help page\n\n", programName);
