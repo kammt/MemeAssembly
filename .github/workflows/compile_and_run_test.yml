@@ -1,7 +1,6 @@
 
 name: Compile and Run Test
 
-# Controls when the action will run.
 on:
   # Triggers the workflow on push or pull request events but only for the main/develop branch
   push:
@@ -9,20 +8,15 @@ on:
   pull_request:
     branches: [ main, develop ]
 
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
   run_linux:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
       - name: Compile the project
         run: make debug
 
@@ -33,10 +27,8 @@ jobs:
         run: ./tmp
         
   run_windows:
-      # The type of runner that the job will run on
       runs-on: windows-latest
 
-      # Steps represent a sequence of tasks that will be executed as part of the job
       steps:
         - uses: actions/checkout@v2
 
@@ -53,3 +45,18 @@ jobs:
         - name: Run the executable
           shell: powershell
           run: ./tmp.exe
+
+  run_macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Compile the project
+        run: make debug
+
+      - name: Run the compiler on runnable_example.memeasm
+        run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
+
+      - name: Run the executable
+        run: ./tmp
