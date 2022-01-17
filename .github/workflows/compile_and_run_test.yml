@@ -1,10 +1,9 @@
-# This is a basic workflow to help you get started with Actions
 
 name: Compile and Run Test
 
 # Controls when the action will run.
 on:
-  # Triggers the workflow on push or pull request events but only for the main branch
+  # Triggers the workflow on push or pull request events but only for the main/develop branch
   push:
     branches: [ main, develop ]
   pull_request:
@@ -13,10 +12,8 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
+  run_linux:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -26,11 +23,33 @@ jobs:
       - uses: actions/checkout@v2
 
       # Runs a single command using the runners shell
-      - name: compile the project
+      - name: Compile the project
         run: make debug
 
-      - name: run the compiler on runnable_example.memeasm
+      - name: Run the compiler on runnable_example.memeasm
         run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
 
-      - name: run the executable
+      - name: Run the executable
         run: ./tmp
+        
+  run_windows:
+      # The type of runner that the job will run on
+      runs-on: windows-latest
+
+      # Steps represent a sequence of tasks that will be executed as part of the job
+      steps:
+        - uses: actions/checkout@v2
+
+        - name: Compile memeasm
+          shell: powershell
+          run: |
+            $env:Path += ";C:\msys64\mingw64\bin"
+            mingw32-make.exe debug     
+
+        - name: Run compiler on runnable_example.memeasm
+          shell: powershell
+          run: ./memeasm.exe -d -o tmp.exe .github\workflows\runnable_example.memeasm  
+          
+        - name: Run the executable
+          shell: powershell
+          run: ./tmp.exe
