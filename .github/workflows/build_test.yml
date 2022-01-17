@@ -47,3 +47,13 @@ jobs:
           $env:Path += ";C:\msys64\mingw64\bin"
           mingw32-make.exe CFLAGS+=-Werror debug
           
+  build_macos:
+    # The type of runner that the job will run on
+    runs-on: macos-latest
+    
+    steps:
+    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Build Linux
+        run: make CFLAGS+=-Werror debug
