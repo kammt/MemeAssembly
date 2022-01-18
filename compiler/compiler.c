@@ -456,8 +456,8 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  * @param destFile the name of the destination file
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
-    #ifdef MACOS
-    const char* commandPrefix = "gcc -O -e main -x assembler - -o";
+    #ifndef LINUX
+    const char* commandPrefix = "gcc -O -x assembler - -o";
     #else
     const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
     #endif
