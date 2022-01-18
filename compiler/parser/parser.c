@@ -24,6 +24,12 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "../logger/log.h"
 #include "../commands.h"
 
+#ifdef WINDOWS
+/* strtok_r does not exist on Windows and instead is strtok_s. Use a preprocessor directive to replace all occurrences */
+# define strtok_r strtok_s
+#endif
+
+
 char *line = NULL;
 size_t len = 0;
 ssize_t lineLength;
@@ -67,6 +73,56 @@ int isLineOfInterest() {
 }
 
 /**
+ * A basic implementation of a getline-function.
+ * Reads a full line and stores it in lineptr. If lineptr is NULL, it will be initialised and n will be set accordingly. When too little is allocated, 128 more Bytes will be added
+ * @param lineptr a pointer to the current storage for lines. May be NULL
+ * @param n must be the size of lineptr and will be updated by this function
+ * @param stream from where to read
+ * @return the number of bytes read if successful, -1 on error (e.g. EOF found, malloc/realloc failed)
+ */
+ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stream) {
+    if(*lineptr == NULL) {
+        if(!(*lineptr = malloc(128))) {
+            return -1;
+        }
+        *n = 128;
+    }
+
+    char* result = *lineptr;
+    char c = 'c';
+    ssize_t bytesRead = 0;
+    while(c != '\n') {
+        size_t readRes = fread(&c, 1, 1, stream);
+        if(readRes == 0) {
+            if(bytesRead == 0) {
+                return -1;
+            }
+            //If EOF was found somewhere while reading from file, still return this string
+            break;
+        }
+
+        *result = c;
+        bytesRead++;
+        result++;
+        if(bytesRead == (ssize_t) *n) {
+            *n += 128;
+            *lineptr = realloc(*lineptr, *n);
+            result = *lineptr + bytesRead;
+
+            if(!*lineptr) {
+                return -1;
+            }
+        }
+    }
+    //In case we just wrote an EOF, replace it with \n
+    *(result - 1) = '\n';
+
+    //We got to the end of a line or the end of a file, now append a '\0'
+    *result = '\0';
+    return bytesRead;
+}
+
+/**
  * Counts the lines of code in a memeasm file. A line counts as a line of code if:
  *  - it does not start with "What the hell happened here?" (a comment)
  *  - it is not empty
@@ -76,7 +132,7 @@ int isLineOfInterest() {
 size_t getLinesOfCode(FILE *inputFile) {
     size_t loc = 0;
 
-    while((lineLength = getline(&line, &len, inputFile)) != -1) {
+    while((lineLength = getLine(&line, &len, inputFile)) != -1) {
         if(isLineOfInterest() == 1) {
             loc++;
         }
@@ -145,7 +201,7 @@ struct parsedCommand parseLine(int lineNum) {
                 parsedCommand.parameters[numberOfParameters++] = variable;
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
-                if(strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
+                if(savePtrLine != NULL && strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
                     printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
                     //If another parameter is already marked as a variable, print an error
                     if(parsedCommand.isPointer != 0) {
@@ -218,7 +274,7 @@ struct commandsArray parseCommands(FILE *inputFile) {
     int lineNumber = 1; //The line number we are currently on. We differentiate between number of commands and number of lines to print the correct line number in case of an error
 
     //Parse the file line by line
-    while((lineLength = getline(&line, &len, inputFile)) != -1) {
+    while((lineLength = getLine(&line, &len, inputFile)) != -1) {
         //Check if the line contains actual code or if it's empty/contains comments
         if(isLineOfInterest() == 1) {
             //Remove \n from the end of the line

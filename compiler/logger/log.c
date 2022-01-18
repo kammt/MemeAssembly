@@ -18,19 +18,19 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdio.h>
-
-#define RED   "\x1B[31m"
-#define GRN   "\x1B[32m"
-#define YEL   "\x1B[33m"
-#define BLU   "\x1B[34m"
-#define MAG   "\x1B[35m"
-#define CYN   "\x1B[36m"
-#define WHT   "\x1B[37m"
-#define RESET "\x1B[0m"
+#include "log.h"
 
 int compilationErrors = 0;
 int logLevel = 1; //Default value
-char *version_string = "v1.2";
+char* version_string = "v1.2";
+char* platform_suffix =
+    #ifdef WINDOWS
+        "Windows";
+    #elif defined(MACOS)
+        "MacOS";
+    #else
+        "Linux";
+    #endif
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
@@ -49,7 +49,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s, created by Tobias Kamm.\n\n", version_string);
+    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", version_string, platform_suffix);
 }
 
 /**

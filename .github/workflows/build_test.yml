@@ -13,10 +13,9 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
+
+  build_linux:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -25,6 +24,36 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: make debug
+      - name: Build Linux
+        run: make CFLAGS+=-Werror debug
+
+      - name: Install mingw-w64
+        run: sudo apt-get install mingw-w64
+
+      - name: Build Windows
+        run: make CFLAGS+=-Werror windows
+
+  build_windows:
+    # The type of runner that the job will run on
+    runs-on: windows-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Run Makefile
+        shell: powershell
+        run: |
+          $env:Path += ";C:\msys64\mingw64\bin"
+          mingw32-make.exe CFLAGS+=-Werror debug
+          
+  build_macos:
+    # The type of runner that the job will run on
+    runs-on: macos-latest
+    
+    steps:
+    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Build MacOS
+        run: make CFLAGS+=-Werror debug
