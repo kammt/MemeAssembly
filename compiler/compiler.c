@@ -457,7 +457,7 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  */
 void createExecutable(FILE *srcPTR, char *destFile) {
     #ifdef MACOS
-    const char* commandPrefix = "gcc -O -e main -no-pie -x assembler - -o";
+    const char* commandPrefix = "gcc -O -e main -x assembler - -o";
     #else
     const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
     #endif
