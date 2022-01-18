@@ -31,6 +31,8 @@ void printErrorASCII();
 
 void printThanosASCII(int deletedLines);
 
+void printNiceASCII();
+
 void printSuccessMessage(char message[]);
 void printStatusMessage(char message[]);
 void printInfoMessage(char message[]);
