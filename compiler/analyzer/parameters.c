@@ -231,12 +231,15 @@ void checkParameters(struct parsedCommand *parsedCommand) {
         }
         if((allowedTypes & DECIMAL) != 0) { //Decimal number
             char* endPtr;
-            strtol(parameter, &endPtr, 10);
+            long int number = strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
             if(*endPtr == '\0') {
                 printDebugMessage("\t\tParameter is a decimal number", "");
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printSyntaxErrorWithoutString("A decimal number cannot be a pointer", parsedCommand -> lineNum);
+                }
+                if(number == 69 || number == 420) {
+                    printNiceASCII();
                 }
                 continue;
             }

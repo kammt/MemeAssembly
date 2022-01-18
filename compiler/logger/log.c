@@ -90,6 +90,20 @@ void printThanosASCII(int deletedLines) {
 }
 
 /**
+ * Called when a decimal parameter with value 420 or 69 is encountered. It prints a Nice ASCII art
+ */
+void printNiceASCII() {
+    printf("\n");
+    printf("\n");
+    printf("\x1B[38;5;197m" "  _   _ _          \n");
+    printf("\x1B[38;5;197m" " | \\ | (_)         \n");
+    printf("\x1B[38;5;198m" " |  \\| |_  ___ ___ \n");
+    printf("\x1B[38;5;198m" " | . ` | |/ __/ _ \\\n");
+    printf("\x1B[38;5;199m" " | |\\  | | (_|  __/\n");
+    printf("\x1B[38;5;199m" " |_| \\_|_|\\___\\___|\n\n" RESET);
+}
+
+/**
  * A success message. Will always be printed
  * @param message the message
  */
