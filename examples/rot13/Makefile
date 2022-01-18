@@ -1,5 +1,9 @@
 CC=gcc
+CFLAGS=
+
+ifeq ($(shell uname -s),Linux)
 CFLAGS+=-gstabs -no-pie
+endif
 
 .PHONY: all clean
 
