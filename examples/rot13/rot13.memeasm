@@ -43,9 +43,9 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun rot13
 		eax wins
 
 		What the hell happened here? Compare char with each uppercase letter
-		ebx is brilliant, but I like 65
+		ecx is brilliant, but I like 65
 		monke uaaua
-			who would win? dl or bl
+			who would win? dl or cl
 
 			What the hell happened here? If there is a match with a letter
 			dx units are ready, with 13 more well on the way
@@ -53,14 +53,14 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun rot13
 			return to monke uauauaa
 
 			dl wins
-			bl wins
-			upvote ebx
-			who would win? ebx or 90
+			cl wins
+			upvote ecx
+			who would win? ecx or 90
 			90 wins
 		return to monke uaaua
 
 		What the hell happened here? If no match is found
-		ebx wins
+		ecx wins
 		upvote rdi
 	fuck go back
 
