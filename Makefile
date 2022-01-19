@@ -15,8 +15,10 @@ endif
 # Compiler Flags
 CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO)
 CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wmisleading-indentation -g
+
 # Destination directory for make install
-DESTDIR=/usr/bin
+DESTDIR=/usr/local/bin
+
 # Files to compile
 FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
 
@@ -40,7 +42,7 @@ uninstall:
 
 # Compiles an executable and stores it in DESTDIR
 install:
-	mkdir $(DESTDIR) -p
+	mkdir -p $(DESTDIR)
 	$(CC) -o $(DESTDIR)/memeasm $(FILES) $(CFLAGS)
 
 # For building a windows executable under Linux
