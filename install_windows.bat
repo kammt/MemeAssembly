@@ -32,6 +32,7 @@ mingw32-make
 ECHO Installing...
 mkdir "%installDir%"
 move "./memeasm.exe" "%installDir%\memeasm.exe"
+icacls  "%installDir%\memeasm.exe"  /t  /grant  everyone:R
 
 :cleanup
 ECHO Cleaning up...
