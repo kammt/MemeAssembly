@@ -42,6 +42,12 @@ Doubles the value of the specified register. This is done by a binary left shift
 ### Description
 Adds/Subtracts 1 from the specified destination register
 
+## Calculate x^y
+### Definition
+`[register] UNLIMITED POWER [value/register]`
+### Description
+Calculates [register] = [register] ^ [value/register]
+
 ## Examples
 #### 1. Shift rax to the right by 6 bits
 ```

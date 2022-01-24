@@ -1,3 +1,22 @@
+## v1.3
+New features: 
+- MemeAssembly now supports Windows and MacOS! (#55, thank you to @xarantolus for helping on this one!)
+ Known issue: `-g` is currently Linux-only, as stabs is only supported on Linux (See #59)
+- New command: `[register] UNLIMITED POWER [value/register]`. Calculates x^y (#50, thanks @tomatoboyeet for the suggestion!)
+- The compiler now prints "Nice" whenever the numbers 69 or 420 are used in the code (#56, thanks @M3L73D!)
+
+Improvements:
+- Parameter declaration is now done with or-ed constants instead of a binary constant to make it more readable (#50)
+- New code example: rot13 (#57, thanks @M3L73D!)
+- The default installation directory changed to `/usr/local/bin`
+
+Bug Fixes: 
+- The signed division command was broken (#49) 
+
+As a sidenote: During the development of v1.3, the 420th commit was pushed! (nice) :tada:
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.3)
+
 ## v1.2
 New features:
 - New command: `let me in. LET ME IIIIIIIIN [8-bit register]`. Reads a single character from stdin into the specified register (#45, Thanks @xarantolus!)

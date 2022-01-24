@@ -1,4 +1,4 @@
-?> MemeAssembly v1.2 is out! Check out the [changelog page](changelog) for more information
+?> MemeAssembly v1.3 is out, now featuring support for Windows and MacOS! Check out the [changelog page](changelog) for more information
     
 ## What is MemeAssembly?
 In short, MemeAssembly is the revolution the tech industry has been waiting for. Combining the emerging trend of minimalism with rememberable memes, Big Data, AI and co. won't be the same without it!
