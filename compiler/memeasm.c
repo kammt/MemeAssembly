@@ -42,7 +42,7 @@ extern int useStabs;
 void printHelpPage(char* programName) {
     printInformationHeader();
     printf("Usage:\n");
-    printf("  %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
+    printf("  %s [options] -o outputFile [-i | -d] inputFile\tCompiles the specified file into an executable\n", programName);
     printf("  %s [options] -S -o outputFile.S [-i | -d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n", programName);
     printf("  %s [options] -O -o outputFile.o [-i | -d] inputFile\tOnly compiles the specified file and saves it an object file\n", programName);
     printf("  %s (-h | --help)\t\t\t\t\tDisplays this help page\n\n", programName);
@@ -52,7 +52,7 @@ void printHelpPage(char* programName) {
     printf("  -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
     printf("  -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf("  -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
-    printf("  -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported\n");
+    printf("  -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf("  -i \t\t- enables information logs\n");
     printf("  -d \t\t- enables debug logs\n");
 }
@@ -99,7 +99,15 @@ int main(int argc, char* argv[]) {
                 outputFileString = optarg;
                 break;
             case 'g':
+                #ifdef WINDOWS
+                //If we use Windows, STABS does not work - output a warning, but don't do anything
+                fprintf(stderr, YEL"Info: -g is not supported under Windows, ignoring..\n"RESET);
+                #elif defined(MACOS)
+		//If we use MacOS, STABS does not work - output a warning, but don't do anything
+                fprintf(stderr, YEL"Info: -g is not supported under MacOS, ignoring..\n"RESET);
+		#else
                 useStabs = 1;
+                #endif
                 break;
             case '?':
                 fprintf(stderr, "Error: Unknown option provided\n");

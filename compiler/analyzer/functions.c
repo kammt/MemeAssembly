@@ -137,9 +137,17 @@ void checkFunctionValidity(struct commandsArray *commandsArray, int functionDecl
      * - that a main function exists (if checkForMainFunction is set to 1)
      */
     uint8_t mainFunctionExists = 0;
+    char* mainFuncName =
+	#ifdef MACOS
+	"_main";
+	#else
+	"main";
+	#endif
+
     for(size_t i = 0; i < functionDefinitions; i++) {
         struct function function = functions[i];
-        if(strcmp(function.name, "main") == 0) {
+
+        if(strcmp(function.name, mainFuncName) == 0) {	
             mainFunctionExists = 1;
         }
 

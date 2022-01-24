@@ -1,11 +1,21 @@
+#Executable
 memeasm
+memeasm.exe
+
+#Temporary files for local testing
 tmp.asm
+example.S
 example.memeasm
+example.exe
 tmp
 tmp.o
 /examples/Stalinsort/stalinsort.S
-/examples/Stalinsort/.idea/
 test
 test.S
+
+#IDE files
+**/.idea/
+**/.vscode/
+
 #compiledb used by clang tooling
 compile_commands.json

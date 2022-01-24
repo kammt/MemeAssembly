@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <bits/types/FILE.h>
+#include <stdio.h>
 #include <stdint.h>
 
 #ifndef MEMEASSEMBLY_PARSER_H

@@ -23,7 +23,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include <stddef.h>
 
-#define NUMBER_OF_COMMANDS 37
+#define NUMBER_OF_COMMANDS 38
 #define MAX_PARAMETER_COUNT 2
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
@@ -42,6 +42,15 @@ struct commandsArray {
     size_t size;
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
+
+#define REG64 1
+#define REG32 2
+#define REG16 4
+#define REG8 8
+#define DECIMAL 16
+#define CHAR 32
+#define MONKE_LABEL 64
+#define FUNC_NAME 128
 
 struct command {
     char *pattern;

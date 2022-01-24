@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,19 +18,19 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdio.h>
-
-#define RED   "\x1B[31m"
-#define GRN   "\x1B[32m"
-#define YEL   "\x1B[33m"
-#define BLU   "\x1B[34m"
-#define MAG   "\x1B[35m"
-#define CYN   "\x1B[36m"
-#define WHT   "\x1B[37m"
-#define RESET "\x1B[0m"
+#include "log.h"
 
 int compilationErrors = 0;
 int logLevel = 1; //Default value
-char *version_string = "v1.2";
+char* version_string = "v1.3";
+char* platform_suffix =
+    #ifdef WINDOWS
+        "Windows";
+    #elif defined(MACOS)
+        "MacOS";
+    #else
+        "Linux";
+    #endif
 
 void setLogLevel(int newLogLevel) {
     logLevel = newLogLevel;
@@ -49,7 +49,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s, created by Tobias Kamm.\n\n", version_string);
+    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", version_string, platform_suffix);
 }
 
 /**
@@ -87,6 +87,20 @@ void printThanosASCII(int deletedLines) {
     printf(MAG "Yes\n" RESET);
     printf(GRN "What did it cost?\n" RESET);
     printf(MAG "%d lines of code\n\n" RESET, deletedLines);
+}
+
+/**
+ * Called when a decimal parameter with value 420 or 69 is encountered. It prints a Nice ASCII art
+ */
+void printNiceASCII() {
+    printf("\n");
+    printf("\n");
+    printf("\x1B[38;5;197m" "  _   _ _          \n");
+    printf("\x1B[38;5;197m" " | \\ | (_)         \n");
+    printf("\x1B[38;5;198m" " |  \\| |_  ___ ___ \n");
+    printf("\x1B[38;5;198m" " | . ` | |/ __/ _ \\\n");
+    printf("\x1B[38;5;199m" " | |\\  | | (_|  __/\n");
+    printf("\x1B[38;5;199m" " |_| \\_|_|\\___\\___|\n\n" RESET);
 }
 
 /**

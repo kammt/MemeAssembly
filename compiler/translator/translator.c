@@ -24,7 +24,14 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-#include <stab.h>
+
+///STABS flags
+#define N_SO 100
+#define N_SLINE 68
+#define N_FUN 36
+#define N_LBRAC 0xc0
+#define N_RBRAC 0xe0
+
 
 extern char* version_string;
 extern struct command commandList[];
@@ -239,14 +246,30 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
         }
     }
 
-    fprintf(outputFile, "\n.section .data\n\t.LCharacter: .ascii \"a\"\n");
+    #ifdef WINDOWS
+    //To interact with the Windows API, we need to reference the needed functions
+    fprintf(outputFile, "\n.extern GetStdHandle\n.extern WriteFile\n.extern ReadFile\n");
+    #endif
+
+    #ifdef MACOS
+    fprintf(outputFile, "\n.data\n\t");
+    #else
+    fprintf(outputFile, "\n.section .data\n\t");
+    #endif
+
+    fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
 
     //Write the file info if we are using stabs
     if(useStabs) {
         stabs_writeFileInfo(outputFile);
     }
 
+   
+    #ifdef MACOS
+    fprintf(outputFile, "\n\n.text\n\t");
+    #else    
     fprintf(outputFile, "\n\n.section .text\n");
+    #endif
 
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
@@ -263,9 +286,113 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
     if(optimisationLevel != 42069) {
-        fprintf(outputFile, "\n\nwritechar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rax, 1\n\tsyscall\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\t\n\tret\n");
+        #ifdef WINDOWS
+        //Using Windows API
+        fprintf(outputFile,
+                "\n\nwritechar:\n"
+                "\tpush rcx\n"
+                "\tpush rax\n"
+                "\tpush rdx\n"
+                "\tpush r8\n"
+                "\tpush r9\n"
+                //Get Handle of stdout
+                "\tsub rsp, 32\n"
+                "\tmov rcx, -11\n" //-11=stdout
+                "\tcall GetStdHandle\n"//return value is in rax
+                //Prepare the parameters for output
+                "\tmov rcx, rax\n" //move Handle of stdout into rcx
+                "\tlea rdx, [rip + .LCharacter]\n"
+                "\tmov r8, 1\n" //Length of message = 1 character
+                "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes written, just discard that value
+                "\tmov QWORD PTR [rsp + 32], 0\n"
+                "\tcall WriteFile\n"
+                "\tadd rsp, 32\n"
 
-        fprintf(outputFile, "\n\nreadchar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rdi, 0\n\tmov rax, 0\n\tsyscall\n\t\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\tret\n");
+                //Restore all registers
+                "\tpop r9\n"
+                "\tpop r8\n"
+                "\tpop rdx\n"
+                "\tpop rax\n"
+                "\tpop rcx\n"
+                "\tret\n");
+
+        fprintf(outputFile,
+                "\n\nreadchar:\n"
+                "\tpush rcx\n"
+                "\tpush rax\n"
+                "\tpush rdx\n"
+                "\tpush r8\n"
+                "\tpush r9\n"
+                //Get Handle of stdin
+                "\tsub rsp, 32\n"
+                "\tmov rcx, -10\n" //-10=stdin
+                "\tcall GetStdHandle\n"//return value is in rax
+                //Prepare the parameters for reading from input
+                "\tmov rcx, rax\n" //move Handle of stdin into rcx
+                "\tlea rdx, [rip + .LCharacter]\n"
+                "\tmov r8, 1\n" //Bytes to read = 1 character
+                "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes read, just discard that value
+                //Parameter 5 and then 4 Bytes of emptiness on the stack
+                "\tmov QWORD PTR [rsp + 32], 0\n"
+                "\tcall ReadFile\n"
+                "\tadd rsp, 32\n"
+
+                //Restore all registers
+                "\tpop r9\n"
+                "\tpop r8\n"
+                "\tpop rdx\n"
+                "\tpop rax\n"
+                "\tpop rcx\n"
+                "\tret\n");
+        #else
+        //Using Linux syscalls
+        fprintf(outputFile, "\n\nwritechar:\n\t"
+                            "push rcx\n\t"
+                            "push r11\n\t"
+                            "push rax\n\t"
+                            "push rdi\n\t"
+                            "push rsi\n\t"
+                            "push rdx\n\t"
+                            "mov rdx, 1\n\t"
+                            "lea rsi, [rip + .LCharacter]\n\t"
+			    #ifdef LINUX
+                            "mov rax, 1\n\t"
+ 			    #else
+			    "mov rax, 0x2000004\n\t"
+			    #endif
+                            "syscall\n\t"
+                            "pop rdx\n\t"
+                            "pop rsi\n\t"
+                            "pop rdi\n\t"
+                            "pop rax\n\t"
+                            "pop r11\n\t"
+                            "pop rcx\n\t\n\t"
+                            "ret\n");
+
+        fprintf(outputFile, "\n\nreadchar:\n\t"
+                            "push rcx\n\t"
+                            "push r11\n\t"
+                            "push rax\n\t"
+                            "push rdi\n\t"
+                            "push rsi\n\t"
+                            "push rdx\n\n\t"
+                            "mov rdx, 1\n\t"
+                            "lea rsi, [rip + .LCharacter]\n\t"
+                            "mov rdi, 0\n\t"
+			    #ifdef LINUX
+                            "mov rax, 0\n\t"
+			    #else
+			    "mov rax, 0x2000003\n\t"
+			    #endif
+                            "syscall\n\n\t"
+                            "pop rdx\n\t"
+                            "pop rsi\n\t"
+                            "pop rdi\n\t"
+                            "pop rax\n\t"
+                            "pop r11\n\t"
+                            "pop rcx\n\t"
+                            "ret\n");
+        #endif
     }
 
     //If we are using stabs, we now need to save all function info to the file
