@@ -325,7 +325,7 @@ void checkParameters(struct parsedCommand *parsedCommand, struct compileState* c
                     printSyntaxErrorWithoutString("A function name cannot be a pointer", parsedCommand -> lineNum, compileState);
                 }
 		#ifdef MACOS
-		printDebugMessage("\t\tThis is MacOS, adding a _-prefix to the function name", "");
+		printDebugMessage("\t\tThis is MacOS, adding a _-prefix to the function name", "", compilerState -> logLevel);
 		char* prefixedFunctionName = malloc(strlen(parameter) + 2); //+1 for NULL and +1 for _
 		if(prefixedFunctionName == NULL) {
 		    fprintf(stderr, "Critical error: Memory allocation for parameter failed!");
