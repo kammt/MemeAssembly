@@ -29,11 +29,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 # define strtok_r strtok_s
 #endif
 
-
-char *line = NULL;
-size_t len = 0;
-ssize_t lineLength;
-
 extern struct command commandList[];
 
 unsigned int min(unsigned int one, unsigned int two) {
@@ -47,7 +42,7 @@ unsigned int min(unsigned int one, unsigned int two) {
 /**
  * Removes the \n from a string if it is present at the end of the string
  */
-void removeLineBreaksAndTabs() {
+void removeLineBreaksAndTabs(char* line) {
     size_t i = strlen(line) - 1;
     while (line[i] == '\t' || line[i] == '\n' || line[i] == ' ') {
         i--;
@@ -59,7 +54,7 @@ void removeLineBreaksAndTabs() {
  * Checks whether this line should be skipped or not
  * @return 1 if it is of interest (=> code), 0 if it should be skipped (e.g. it is a comment or it's empty)
  */
-int isLineOfInterest() {
+int isLineOfInterest(const char* line, ssize_t lineLength) {
     //To support tabbed comments, we need to determine when the text actually starts
     int i = 0;
     while (line[i] == '\t' || line[i] == ' ') {
@@ -131,9 +126,12 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
  */
 size_t getLinesOfCode(FILE *inputFile) {
     size_t loc = 0;
+    char* line = NULL;
+    size_t len;
+    ssize_t lineLength;
 
     while((lineLength = getLine(&line, &len, inputFile)) != -1) {
-        if(isLineOfInterest() == 1) {
+        if(isLineOfInterest(line, lineLength) == 1) {
             loc++;
         }
     }
@@ -141,6 +139,7 @@ size_t getLinesOfCode(FILE *inputFile) {
     printDebugMessageWithNumber("The number of lines are", (int) loc);
     printDebugMessage("Rewinding source pointer", "");
     rewind(inputFile);
+    free(line);
     return loc;
 }
 
@@ -155,7 +154,7 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
     }
 }
 
-struct parsedCommand parseLine(int lineNum) {
+struct parsedCommand parseLine(char* line, int lineNum) {
     struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum; //Set the line number
     parsedCommand.translate = 1;
@@ -260,6 +259,11 @@ struct parsedCommand parseLine(int lineNum) {
 }
 
 struct commandsArray parseCommands(FILE *inputFile) {
+    //Variable declarations
+    char* line = NULL;
+    size_t len = 0;
+    ssize_t lineLength;
+
     //First, we create an array of command structs
     size_t loc = getLinesOfCode(inputFile);
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), (size_t) loc);
@@ -276,12 +280,12 @@ struct commandsArray parseCommands(FILE *inputFile) {
     //Parse the file line by line
     while((lineLength = getLine(&line, &len, inputFile)) != -1) {
         //Check if the line contains actual code or if it's empty/contains comments
-        if(isLineOfInterest() == 1) {
+        if(isLineOfInterest(line, lineLength) == 1) {
             //Remove \n from the end of the line
-            removeLineBreaksAndTabs();
+            removeLineBreaksAndTabs(line);
             printDebugMessage("Parsing line:", line);
             //Parse the command and add the returned struct into the array
-            *(commands + i) = parseLine(lineNumber);
+            *(commands + i) = parseLine(line, lineNumber);
             //Increase our number of structs in the array
             i++;
         }
@@ -292,5 +296,6 @@ struct commandsArray parseCommands(FILE *inputFile) {
             commands, loc, 0
     };
 
+    free(line);
     return result;
 }
