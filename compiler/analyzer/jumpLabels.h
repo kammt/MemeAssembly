@@ -22,7 +22,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../commands.h"
 
-void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode);
-void checkJumpLabelValidity(struct commandsArray *commandsArray, int upgradeOpcode);
+void checkMonkeJumpLabelValidity(struct compileState* compileState, int opcode);
+void checkJumpLabelValidity(struct compileState* compileState, int opcode);
 
 #endif //MEMEASSEMBLY_JUMPLABELS_H

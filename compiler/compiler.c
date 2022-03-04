@@ -16,14 +16,12 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
-
 #include "compiler.h"
-#include <stdio.h>  //Printf() function
-#include <stdlib.h> //Exit() function
 
-#include <string.h> //String functions
-
-#include "commands.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 
 #include "parser/parser.h"
 #include "analyzer/parameters.h"
@@ -35,10 +33,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "logger/log.h"
 
 
-int compileMode = 2; //2 = Create Executable, 1 = Create Object File, 0 = Compile only
-extern int compilationErrors;
-
-struct command commandList[NUMBER_OF_COMMANDS] = {
+const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
@@ -353,8 +348,8 @@ struct command commandList[NUMBER_OF_COMMANDS] = {
         }
 };
 
-void freeCommandsArray(struct commandsArray *commands) {
-    printDebugMessage("Freeing memory", "");
+void freeCommandsArray(struct commandsArray *commands, logLevel logLevel) {
+    printDebugMessage("Freeing memory", "", logLevel);
     for(size_t i = 0; i < commands -> size; i++) {
         struct parsedCommand parsedCommand = *(commands -> arrayPointer + i);
         for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
@@ -363,7 +358,7 @@ void freeCommandsArray(struct commandsArray *commands) {
     }
     free(commands -> arrayPointer);
 
-    printDebugMessage("All memory freed, compilation done", "");
+    printDebugMessage("All memory freed, compilation done", "", logLevel);
 }
 
 /**
@@ -372,33 +367,31 @@ void freeCommandsArray(struct commandsArray *commands) {
  * @return the commandsArray struct. Note that this struct is also returned when a compilation error occurred.
  *          compilationErrors (defined in log.c) counts the number of compilation errors.
  */
-struct commandsArray compile(FILE *srcPTR) {
-    printStatusMessage("Parsing input file");
-    struct commandsArray commands = parseCommands(srcPTR);
+void compile(FILE *srcPTR, struct compileState* compileState) {
+    printStatusMessage("Parsing input file", compileState -> logLevel);
+    parseCommands(srcPTR, compileState);
 
-    if(commands.size > 0) {
-        printStatusMessage("Starting parameter check");
-        for (size_t i = 0; i < commands.size; ++i) {
-            checkParameters(&commands.arrayPointer[i]);
+    if(compileState -> commandsArray.size > 0) {
+        printStatusMessage("Starting parameter check", compileState -> logLevel);
+        for (size_t i = 0; i < (compileState -> commandsArray).size; ++i) {
+            checkParameters(&(compileState -> commandsArray).arrayPointer[i], compileState);
         }
 
-        printStatusMessage("Analyzing commands");
+        printStatusMessage("Analyzing commands", compileState -> logLevel);
         for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
             if(commandList[opcode].analysisFunction != NULL) {
-                commandList[opcode].analysisFunction(&commands, opcode);
+                commandList[opcode].analysisFunction(compileState, opcode);
             }
         }
 
-        if(compilationErrors > 0) {
+        if(compileState -> compilerErrors > 0) {
             printErrorASCII();
-            fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compilationErrors);
+            fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compileState -> compilerErrors);
         }
     } else {
         fprintf(stderr, "File is empty, nothing to do\n");
-        compilationErrors++;
+        compileState -> compilerErrors++;
     }
-
-    return commands;
 }
 
 /**
@@ -406,16 +399,16 @@ struct commandsArray compile(FILE *srcPTR) {
  * @param srcPTR a pointer to the source file to be compiled
  * @param destPTR a pointer to the destination file.
  */
-int createAssemblyFile(FILE *srcPTR, FILE *destPTR) {
-    struct commandsArray commands = compile(srcPTR);
-    if(compilationErrors == 0) {
-        writeToFile(&commands, destPTR);
+int createAssemblyFile(FILE *srcPTR, char* inputFileString, FILE *destPTR, struct compileState compileState) {
+    compile(srcPTR, &compileState);
+    if(compileState.compilerErrors == 0) {
+        writeToFile(&compileState, inputFileString, destPTR);
     }
 
     fclose(destPTR);
-    freeCommandsArray(&commands);
+    freeCommandsArray(&compileState.commandsArray, compileState.logLevel);
 
-    if(compilationErrors == 0) {
+    if(compileState.compilerErrors == 0) {
         exit(EXIT_SUCCESS);
     } else {
         exit(EXIT_FAILURE);
@@ -427,23 +420,23 @@ int createAssemblyFile(FILE *srcPTR, FILE *destPTR) {
  * @param srcPTR a pointer to the source file to be compiled
  * @param destFile the name of the destination file
  */
-void createObjectFile(FILE *srcPTR, char *destFile) {
+void createObjectFile(FILE *srcPTR, char* inputFileString, char *destFile, struct compileState compileState) {
     const char* commandPrefix = "gcc -O -c -x assembler - -o";
     char command[strlen(commandPrefix) + strlen(destFile) + 1];
     strcpy(command, commandPrefix);
     strcat(command, destFile);
 
     // Pipe assembler code directly to GCC via stdin
-    struct commandsArray commands = compile(srcPTR);
+    compile(srcPTR, &compileState);
     int gccres = 1;
-    if(compilationErrors == 0) {
+    if(compileState.compilerErrors == 0) {
         FILE *gccPTR = popen(command, "w");
-        writeToFile(&commands, gccPTR);
+        writeToFile(&compileState, inputFileString, gccPTR);
         gccres = pclose(gccPTR);
     }
 
-    freeCommandsArray(&commands);
-    if(compilationErrors != 0 || gccres != 0) {
+    freeCommandsArray(&compileState.commandsArray, compileState.logLevel);
+    if(compileState.compilerErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
     } else {
         exit(EXIT_SUCCESS);
@@ -455,7 +448,7 @@ void createObjectFile(FILE *srcPTR, char *destFile) {
  * @param srcPTR a pointer to the source file to be compiled
  * @param destFile the name of the destination file
  */
-void createExecutable(FILE *srcPTR, char *destFile) {
+void createExecutable(FILE *srcPTR, char* inputFileString, char *destFile, struct compileState compileState) {
     #ifndef LINUX
     const char* commandPrefix = "gcc -O -x assembler - -o";
     #else
@@ -466,16 +459,16 @@ void createExecutable(FILE *srcPTR, char *destFile) {
     strcat(command, destFile);
 
     // Pipe assembler code directly to GCC via stdin
-    struct commandsArray commands = compile(srcPTR);
+    compile(srcPTR, &compileState);
     int gccres = 1;
-    if(compilationErrors == 0) {
+    if(compileState.compilerErrors == 0) {
         FILE *gccPTR = popen(command, "w");
-        writeToFile(&commands, gccPTR);
+        writeToFile(&compileState, inputFileString, gccPTR);
         gccres = pclose(gccPTR);
     }
 
-    freeCommandsArray(&commands);
-    if(compilationErrors != 0 || gccres != 0) {
+    freeCommandsArray(&compileState.commandsArray, compileState.logLevel);
+    if(compileState.compilerErrors != 0 || gccres != 0) {
         exit(EXIT_FAILURE);
     } else {
         exit(EXIT_SUCCESS);

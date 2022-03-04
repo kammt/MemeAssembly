@@ -17,13 +17,10 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
 #include "log.h"
 
-int compilationErrors = 0;
-int logLevel = 1; //Default value
-char* version_string = "v1.3";
-char* platform_suffix =
+const char* const version_string = "v1.4";
+const char* const platform_suffix =
     #ifdef WINDOWS
         "Windows";
     #elif defined(MACOS)
@@ -31,10 +28,6 @@ char* platform_suffix =
     #else
         "Linux";
     #endif
-
-void setLogLevel(int newLogLevel) {
-    logLevel = newLogLevel;
-}
 
 /**
  * Prints an ASCII-Art title and version information.
@@ -103,55 +96,22 @@ void printNiceASCII() {
     printf("\x1B[38;5;199m" " |_| \\_|_|\\___\\___|\n\n" RESET);
 }
 
-/**
- * A success message. Will always be printed
- * @param message the message
- */
-void printSuccessMessage(char message[]) {
-    printf(GRN "%s \n" RESET, message);
-}
-
-/**
- * A status message. Will always be printed
- * @param message the message
- */
-void printStatusMessage(char message[]) {
-    if(logLevel >= 2) {
+void printStatusMessage(char message[], logLevel logLevel) {
+    if(logLevel == debug || logLevel == info) {
         printf(YEL "%s \n" RESET, message);
         fflush( stdout );
     }
 }
 
-/**
- * An information message. Will only be printed if -d or -i is active
- * @param message the message
- */
-void printInfoMessage(char message[]) {
-    if(logLevel >= 2) {
-        printf("%s \n", message);
-        fflush( stdout );  
-    }
-}
-
-/**
- * A debug message. Will only be printed if -d is active
- * @param message the message
- * @param variable an optional string variable
- */
-void printDebugMessage(char message[], char *variable) {
-    if(logLevel == 3) {
+void printDebugMessage(char message[], char *variable, logLevel logLevel) {
+    if(logLevel == debug) {
         printf("%s %s \n", message, variable);
         fflush( stdout );  
     }
 }
 
-/**
- * A debug message. Will only be printed if -d is active
- * @param message the message
- * @param variable an optional integer variable
- */
-void printDebugMessageWithNumber(char message[], int variable) {
-    if(logLevel == 3) {
+void printDebugMessageWithNumber(char message[], int variable, logLevel logLevel) {
+    if(logLevel == debug) {
         printf("%s %d \n", message, variable);
         fflush( stdout );  
     }
@@ -162,8 +122,8 @@ void printDebugMessageWithNumber(char message[], int variable) {
  * @param message the error message
  * @param lineNum the line number
  */
-void printSemanticError(char message[], int lineNum) {
-    compilationErrors += 1;
+void printSemanticError(char message[], int lineNum, struct compileState* compileState) {
+    compileState -> compilerErrors++;
     fprintf(stderr, RED "Semantic Error in line %d: %s\n" RESET, lineNum, message);
 }
 
@@ -173,20 +133,9 @@ void printSemanticError(char message[], int lineNum) {
  * @param lineNum the line number
  * @param originalDefinition the line Number in which the original definition was
  */
-void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition) {
-    compilationErrors += 1;
+void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition, struct compileState* compileState) {
+    compileState -> compilerErrors++;
     fprintf(stderr, RED "Semantic Error in line %d: %s (already defined in line %d)\n" RESET, lineNum, message, originalDefinition);
-}
-
-/**
- * Prints an error message concerning a wrong token
- * @param expected what the compiler wanted
- * @param got what the token actually was
- * @param lineNum the line number
- */
-void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
-    compilationErrors += 1;
-    fprintf(stderr, RED "Syntax Error in line %d: Expected %s, but got %s\n" RESET, lineNum, expected, got);
 }
 
 /**
@@ -195,8 +144,8 @@ void printUnexpectedCharacterError(char expected[], char got[], int lineNum) {
  * @param got the token that the compiler received. It will be inserted at the end of the message, so formatting must match.
  * @param lineNum the line number
  */
-void printSyntaxError(char message[], char got[], int lineNum) {
-    compilationErrors += 1;
+void printSyntaxError(char message[], char got[], int lineNum, struct compileState* compileState) {
+    compileState -> compilerErrors++;
     fprintf(stderr, RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
 }
 
@@ -205,7 +154,7 @@ void printSyntaxError(char message[], char got[], int lineNum) {
  * @param message the error message
  * @param lineNum the line number
  */
-void printSyntaxErrorWithoutString(char message[], int lineNum) {
-    compilationErrors += 1;
+void printSyntaxErrorWithoutString(char message[], int lineNum, struct compileState* compileState) {
+    compileState -> compilerErrors++;
     fprintf(stderr, RED "Syntax Error in line %d: %s\n" RESET, lineNum, message);
 }

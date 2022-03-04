@@ -21,8 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define LOG_H
 
 #include <stdio.h>  //Printf() function
-#include <stdlib.h> //Exit() function
-
+#include "../compiler.h"
 
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
@@ -33,8 +32,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
 
-void setLogLevel(int newLogLevel);
-
 void printInformationHeader();
 
 void printErrorASCII();
@@ -43,17 +40,14 @@ void printThanosASCII(int deletedLines);
 
 void printNiceASCII();
 
-void printSuccessMessage(char message[]);
-void printStatusMessage(char message[]);
-void printInfoMessage(char message[]);
-void printDebugMessage(char message[], char *variable);
-void printDebugMessageWithNumber(char message[], int variable);
+void printStatusMessage(char message[], logLevel logLevel);
+void printDebugMessage(char message[], char *variable, logLevel logLevel);
+void printDebugMessageWithNumber(char message[], int variable, logLevel logLevel);
 
-void printSemanticError(char message[], int lineNum);
-void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition);
+void printSemanticError(char message[], int lineNum, struct compileState* compileState);
+void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition, struct compileState* compileState);
 
-void printUnexpectedCharacterError(char expected[], char got[], int lineNum);
-void printSyntaxError(char message[], char got[], int lineNum);
-void printSyntaxErrorWithoutString(char message[], int lineNum);
+void printSyntaxError(char message[], char got[], int lineNum, struct compileState* compileState);
+void printSyntaxErrorWithoutString(char message[], int lineNum, struct compileState* compileState);
 
 #endif

@@ -18,11 +18,16 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include "../commands.h"
 
 #ifndef MEMEASSEMBLY_PARSER_H
 #define MEMEASSEMBLY_PARSER_H
 
-struct commandsArray parseCommands(FILE *inputFile);
+/**
+ * Parses an input file line by line and converts it to a command struct array which is saved in compileState->commands
+ */
+void parseCommands(FILE *inputFile, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_PARSER_H

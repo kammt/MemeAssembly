@@ -21,11 +21,11 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define COMPILER_H
 
 #include <stdio.h>
-
+#include <stdbool.h>
 #include "commands.h"
 
-_Noreturn void createExecutable(FILE *srcPTR, char *destFile);
-_Noreturn void createObjectFile(FILE *srcPTR, char *destFile);
-_Noreturn int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
+_Noreturn void createExecutable(FILE *srcPTR, char* inputFileString, char *destFile, struct compileState compileState);
+_Noreturn void createObjectFile(FILE *srcPTR, char* inputFileString, char *destFile, struct compileState compileState);
+_Noreturn int createAssemblyFile(FILE *srcPTR, char* inputFileString, FILE *destPTR, struct compileState compileState);
 
 #endif

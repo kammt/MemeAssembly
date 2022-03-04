@@ -136,8 +136,6 @@ size_t getLinesOfCode(FILE *inputFile) {
         }
     }
 
-    printDebugMessageWithNumber("The number of lines are", (int) loc);
-    printDebugMessage("Rewinding source pointer", "");
     rewind(inputFile);
     free(line);
     return loc;
@@ -154,7 +152,7 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
     }
 }
 
-struct parsedCommand parseLine(char* line, int lineNum) {
+struct parsedCommand parseLine(char* line, int lineNum, struct compileState* compileState) {
     struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum; //Set the line number
     parsedCommand.translate = 1;
@@ -186,10 +184,10 @@ struct parsedCommand parseLine(char* line, int lineNum) {
 
         //Enter the comparison loop
         while (commandToken != NULL && lineToken != NULL) {
-            printDebugMessage("\tcomparing with", commandToken);
+            printDebugMessage("\tcomparing with", commandToken, compileState -> logLevel);
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
-                printDebugMessage("\t\tInterpreting as parameter:", lineToken);
+                printDebugMessage("\t\tInterpreting as parameter:", lineToken, compileState -> logLevel);
 
                 char *variable = malloc(strlen(lineToken) + 1);
                 if(variable == NULL) {
@@ -201,10 +199,10 @@ struct parsedCommand parseLine(char* line, int lineNum) {
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer
                 if(savePtrLine != NULL && strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
-                    printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "");
+                    printDebugMessage("\t\t\t'do you know de wey' was found, interpreting as pointer", "", compileState -> logLevel);
                     //If another parameter is already marked as a variable, print an error
                     if(parsedCommand.isPointer != 0) {
-                        printSemanticError("Only one parameter is allowed to be a pointer", lineNum);
+                        printSemanticError("Only one parameter is allowed to be a pointer", lineNum, compileState);
                     }
                     parsedCommand.isPointer = (uint8_t) numberOfParameters;
                     //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
@@ -212,7 +210,7 @@ struct parsedCommand parseLine(char* line, int lineNum) {
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
-                printDebugMessage("\t\tMatching failed, attempting to match next command", "");
+                printDebugMessage("\t\tMatching failed, attempting to match next command", "", compileState -> logLevel);
                 freeAllocatedMemory(parsedCommand, numberOfParameters);
                 break;
             }
@@ -235,12 +233,12 @@ struct parsedCommand parseLine(char* line, int lineNum) {
             parsedCommand.opcode = (uint8_t) i;
             return parsedCommand;
         } else if(lineToken == NULL) {
-            printDebugMessage("\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "");
+            printDebugMessage("\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", "", compileState -> logLevel);
             freeAllocatedMemory(parsedCommand, numberOfParameters);
             continue;
         //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
-            printDebugMessage("\t\t'or draw 25' was found, replacing opcode", "");
+            printDebugMessage("\t\t'or draw 25' was found, replacing opcode", "", compileState -> logLevel);
             //Before we replace the opcode though, we need to free memory that was allocated for parameters
             for(int j = 0; j < commandList[i].usedParameters; j++) {
                 free(parsedCommand.parameters[j]);
@@ -252,13 +250,13 @@ struct parsedCommand parseLine(char* line, int lineNum) {
     }
 
     parsedCommand.opcode = INVALID_COMMAND_OPCODE;
-    printSyntaxError("Failed to parse command:", line, lineNum);
+    printSyntaxError("Failed to parse command:", line, lineNum, compileState);
     //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
     //We don't exit immediately because we want to print every error possible
     return parsedCommand;
 }
 
-struct commandsArray parseCommands(FILE *inputFile) {
+void parseCommands(FILE *inputFile, struct compileState* compileState) {
     //Variable declarations
     char* line = NULL;
     size_t len = 0;
@@ -266,12 +264,13 @@ struct commandsArray parseCommands(FILE *inputFile) {
 
     //First, we create an array of command structs
     size_t loc = getLinesOfCode(inputFile);
+    printDebugMessageWithNumber("The number of lines are", (int) loc, compileState -> logLevel);
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), (size_t) loc);
     if(commands == NULL) {
         fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
         exit(EXIT_FAILURE);
     }
-    printDebugMessage("Struct array was created successfully", "");
+    printDebugMessage("Struct array was created successfully", "", compileState -> logLevel);
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array
     int i = 0; //The number of structs in the array
@@ -283,9 +282,9 @@ struct commandsArray parseCommands(FILE *inputFile) {
         if(isLineOfInterest(line, lineLength) == 1) {
             //Remove \n from the end of the line
             removeLineBreaksAndTabs(line);
-            printDebugMessage("Parsing line:", line);
+            printDebugMessage("Parsing line:", line, compileState -> logLevel);
             //Parse the command and add the returned struct into the array
-            *(commands + i) = parseLine(line, lineNumber);
+            *(commands + i) = parseLine(line, lineNumber, compileState);
             //Increase our number of structs in the array
             i++;
         }
@@ -297,5 +296,5 @@ struct commandsArray parseCommands(FILE *inputFile) {
     };
 
     free(line);
-    return result;
+    compileState -> commandsArray = result;
 }

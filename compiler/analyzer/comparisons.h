@@ -21,8 +21,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define MEMEASSEMBLY_COMPARISONS_H
 
 #include "../commands.h"
+#include <stdlib.h>
 
-void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode);
-void checkTheyreTheSamePictureValidity(struct commandsArray *commandsArray, int comparisonOpcode);
+void checkWhoWouldWinValidity(struct compileState* compileState, int opcode);
+void checkTheyreTheSamePictureValidity(struct compileState* compileState, int opcode);
 
 #endif //MEMEASSEMBLY_COMPARISONS_H

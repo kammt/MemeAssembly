@@ -29,6 +29,6 @@ struct function {
     size_t numberOfCommands;
 };
 
-void checkFunctionValidity(struct commandsArray *commandsArray, int functionDeclarationOpcode);
+void checkFunctionValidity(struct compileState* compileState, int opcode);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H

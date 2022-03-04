@@ -40,26 +40,26 @@ struct comparisonJumpLabel {
  * @param commandsArray the parsed commands
  * @param whoWouldWinOpcode the opcode of the "Who would win" command. The opcode of the jump marker must be the one following it.
  */
-void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldWinOpcode) {
-    printDebugMessageWithNumber("Starting \"Who would win\" comparison validity check for opcode", whoWouldWinOpcode);
+void checkWhoWouldWinValidity(struct compileState* compileState, int whoWouldWinOpcode) {
+    printDebugMessageWithNumber("Starting \"Who would win\" comparison validity check for opcode", whoWouldWinOpcode, compileState->logLevel);
 
     //Traverse the command Array and count how many comparisons and jump labels there are
     size_t comparisonsUsed = 0;
     size_t comparisonJumpLabelsUsed = 0;
-    for(size_t i = 0; i < commandsArray-> size; i++) {
-        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+    for(size_t i = 0; i < compileState -> commandsArray.size; i++) {
+        struct parsedCommand parsedCommand = compileState -> commandsArray.arrayPointer[i];
         if(parsedCommand.opcode == whoWouldWinOpcode) {
-            printDebugMessageWithNumber("\t\tComparison found in line", parsedCommand.lineNum);
+            printDebugMessageWithNumber("\t\tComparison found in line", parsedCommand.lineNum, compileState->logLevel);
             comparisonsUsed++;
         } else if(parsedCommand.opcode == whoWouldWinOpcode + 1) {
-            printDebugMessageWithNumber("\t\tComparison jump label found in line", parsedCommand.lineNum);
+            printDebugMessageWithNumber("\t\tComparison jump label found in line", parsedCommand.lineNum, compileState->logLevel);
             comparisonJumpLabelsUsed++;
         }
     }
 
-    printDebugMessageWithNumber("\tNumber of comparisons:", (int) comparisonsUsed);
-    printDebugMessageWithNumber("\tNumber of comparison labels:", (int) comparisonJumpLabelsUsed);
-    printDebugMessage("\tAllocating memory for structs", "");
+    printDebugMessageWithNumber("\tNumber of comparisons:", (int) comparisonsUsed, compileState->logLevel);
+    printDebugMessageWithNumber("\tNumber of comparison labels:", (int) comparisonJumpLabelsUsed, compileState->logLevel);
+    printDebugMessage("\tAllocating memory for structs", "", compileState->logLevel);
 
     //Allocate memory for the structs
     struct comparison *comparisons = calloc(sizeof(struct comparison), comparisonsUsed);
@@ -72,8 +72,8 @@ void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldW
     //Traverse the command array again and add the objects to the respective arrays
     int comparisonArrayIndex = 0;
     int comparisonJumpArrayIndex = 0;
-    for(size_t i = 0; i < commandsArray-> size; i++) {
-        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+    for(size_t i = 0; i < compileState -> commandsArray.size; i++) {
+        struct parsedCommand parsedCommand = compileState -> commandsArray.arrayPointer[i];
         if(parsedCommand.opcode == whoWouldWinOpcode) {
             struct comparison comparison = {
                     parsedCommand.parameters[0],
@@ -90,18 +90,18 @@ void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldW
         }
     }
 
-    printDebugMessage("\tMemory allocation and struct creation successful, starting checks", "");
+    printDebugMessage("\tMemory allocation and struct creation successful, starting checks", "", compileState->logLevel);
     /*
      * We now need to check the following things
      * - That no labels were defined twice
      * - That a "p wins" was declared if p was used in a comparison
      */
     for(size_t i = 0; i < comparisonJumpLabelsUsed; i++) {
-        printDebugMessage("\tLabel duplicity check for parameter", comparisonJumpLabels[i].parameter);
+        printDebugMessage("\tLabel duplicity check for parameter", comparisonJumpLabels[i].parameter, compileState->logLevel);
         for(size_t j = i + 1; j < comparisonJumpLabelsUsed; j++) {
-            printDebugMessage("\t\tComparing against parameter", comparisonJumpLabels[j].parameter);
+            printDebugMessage("\t\tComparing against parameter", comparisonJumpLabels[j].parameter, compileState->logLevel);
             if(strcmp(comparisonJumpLabels[i].parameter, comparisonJumpLabels[j].parameter) == 0) {
-                printSemanticErrorWithExtraLineNumber("Comparison jump markers cannot be defined twice", comparisonJumpLabels[j].definedInLine, comparisonJumpLabels[i].definedInLine);
+                printSemanticErrorWithExtraLineNumber("Comparison jump markers cannot be defined twice", comparisonJumpLabels[j].definedInLine, comparisonJumpLabels[i].definedInLine, compileState);
             }
         }
     }
@@ -109,11 +109,11 @@ void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldW
     for(size_t i = 0; i < comparisonsUsed; i++) {
         uint8_t parameter1Defined = 0;
         uint8_t parameter2Defined = 0;
-        printDebugMessage("\tLabel existence check for parameter", comparisons[i].parameter1);
-        printDebugMessage("\tLabel existence check for parameter", comparisons[i].parameter2);
+        printDebugMessage("\tLabel existence check for parameter", comparisons[i].parameter1, compileState->logLevel);
+        printDebugMessage("\tLabel existence check for parameter", comparisons[i].parameter2, compileState->logLevel);
 
         for(size_t j = 0; j < comparisonJumpLabelsUsed; j++) {
-            printDebugMessage("\t\tComparing against parameter", comparisonJumpLabels[j].parameter);
+            printDebugMessage("\t\tComparing against parameter", comparisonJumpLabels[j].parameter, compileState->logLevel);
             if(strcmp(comparisons[i].parameter1, comparisonJumpLabels[j].parameter) == 0) {
                 parameter1Defined = 1;
             }
@@ -123,18 +123,18 @@ void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldW
         }
 
         if(parameter1Defined == 0) {
-            printSemanticError("No comparison jump marker defined for first parameter", comparisons[i].definedInLine);
+            printSemanticError("No comparison jump marker defined for first parameter", comparisons[i].definedInLine, compileState);
         }
         if(parameter2Defined == 0) {
-            printSemanticError("No comparison jump marker defined for second parameter", comparisons[i].definedInLine);
+            printSemanticError("No comparison jump marker defined for second parameter", comparisons[i].definedInLine, compileState);
         }
     }
 
-    printDebugMessage("\tChecks done, freeing memory", "");
+    printDebugMessage("\tChecks done, freeing memory", "", compileState->logLevel);
     free(comparisons);
     free(comparisonJumpLabels);
 
-    printDebugMessage("\"Who would win\" comparison validity check done", "");
+    printDebugMessage("\"Who would win\" comparison validity check done", "", compileState->logLevel);
 }
 
 /**
@@ -143,27 +143,27 @@ void checkWhoWouldWinValidity(struct commandsArray *commandsArray, int whoWouldW
  * @param commandsArray the parsed commands
  * @param comparisonOpcode the opcode of the comparison command. The opcode of "they're the same picture" must be the one following it
  */
-void checkTheyreTheSamePictureValidity(struct commandsArray *commandsArray, int comparisonOpcode) {
-    printDebugMessageWithNumber("Starting comparison label validity check for opcode", comparisonOpcode);
+void checkTheyreTheSamePictureValidity(struct compileState* compileState, int comparisonOpcode) {
+    printDebugMessageWithNumber("Starting comparison label validity check for opcode", comparisonOpcode, compileState->logLevel);
     int jumpMarkerDefined = 0;
 
     //Traverse the command array and save the first occurrence of the jump label. If it then occurs another time, print an error
-    for(size_t i = 0; i < commandsArray->size; i++) {
-        struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+    for(size_t i = 0; i < compileState -> commandsArray.size; i++) {
+        struct parsedCommand parsedCommand = compileState -> commandsArray.arrayPointer[i];
         if(parsedCommand.opcode == comparisonOpcode + 1) {
-            printDebugMessageWithNumber("\tComparison jump label found in line", parsedCommand.lineNum);
+            printDebugMessageWithNumber("\tComparison jump label found in line", parsedCommand.lineNum, compileState->logLevel);
             jumpMarkerDefined = parsedCommand.lineNum;
         }
     }
 
     //If no jump label was defined, we traverse the array again and print an error if any jumps exist
     if(jumpMarkerDefined == 0) {
-        for(size_t i = 0; i < commandsArray->size; i++) {
-            struct parsedCommand parsedCommand = commandsArray -> arrayPointer[i];
+        for(size_t i = 0; i < compileState -> commandsArray.size; i++) {
+            struct parsedCommand parsedCommand = compileState -> commandsArray.arrayPointer[i];
             if(parsedCommand.opcode == comparisonOpcode) {
-                printSemanticError("\"they're the same picture\" wasn't defined anywhere", parsedCommand.lineNum);
+                printSemanticError("\"they're the same picture\" wasn't defined anywhere", parsedCommand.lineNum, compileState);
             }
         }
     }
-    printDebugMessage("Comparison label validity check done", "");
+    printDebugMessage("Comparison label validity check done", "", compileState->logLevel);
 }

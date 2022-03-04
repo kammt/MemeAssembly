@@ -29,11 +29,11 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
  * @param commandsArray the parsed commands
  * @param confusedStonksOpcode the opcode of this command.
  */
-void setConfusedStonksJumpLabel(struct commandsArray *commandsArray, int confusedStonksOpcode) {
-    printDebugMessageWithNumber("Starting confused stonks analysis with provided Opcode:", confusedStonksOpcode);
+void setConfusedStonksJumpLabel(struct compileState* compileState, int confusedStonksOpcode) {
+    printDebugMessageWithNumber("Starting confused stonks analysis with provided Opcode:", confusedStonksOpcode, compileState -> logLevel);
     srand((unsigned int) time(NULL));
-    commandsArray -> randomIndex = (size_t) rand() % commandsArray -> size;
-    printDebugMessageWithNumber("Chose random line for jump marker:", (int) commandsArray -> randomIndex);
+    compileState -> commandsArray.randomIndex = (size_t) rand() % compileState -> commandsArray.size;
+    printDebugMessageWithNumber("Chose random line for jump marker:", (int) compileState -> commandsArray.randomIndex, compileState -> logLevel);
 }
 
 /**
@@ -41,24 +41,24 @@ void setConfusedStonksJumpLabel(struct commandsArray *commandsArray, int confuse
  * @param commandsArray the parsed commands
  * @param perfectlyBalancedOpcode the opcode of this command
  */
-void chooseLinesToBeDeleted(struct commandsArray *commandsArray, int perfectlyBalancedOpcode) {
-    printDebugMessage("Starting analysis of the \"Perfectly balanced...\" command", "");
+void chooseLinesToBeDeleted(struct compileState* compileState, int perfectlyBalancedOpcode) {
+    printDebugMessage("Starting analysis of the \"Perfectly balanced...\" command", "", compileState -> logLevel);
     int perfectlyBalancedUsed = 0;
-    for(size_t i = 0; i < commandsArray -> size; i++) {
-        if(commandsArray -> arrayPointer[i].opcode == perfectlyBalancedOpcode) {
+    for(size_t i = 0; i < compileState -> commandsArray.size; i++) {
+        if(compileState -> commandsArray.arrayPointer[i].opcode == perfectlyBalancedOpcode) {
             perfectlyBalancedUsed++;
         }
     }
 
-    printDebugMessageWithNumber("\tamount of times perfectly balanced was used:", perfectlyBalancedUsed);
+    printDebugMessageWithNumber("\tamount of times perfectly balanced was used:", perfectlyBalancedUsed, compileState -> logLevel);
     //Calculating the number of lines to be deleted
-    int linesToBeKept = (int) commandsArray -> size;
+    int linesToBeKept = (int) compileState -> commandsArray.size;
     for(int i = 0; i < perfectlyBalancedUsed; i++) {
         linesToBeKept /= 2;
     }
-    int linesToBeDeleted = (int) commandsArray -> size - linesToBeKept;
+    int linesToBeDeleted = (int) compileState -> commandsArray.size - linesToBeKept;
 
-    printDebugMessageWithNumber("\tamount of lines to be deleted:", linesToBeDeleted);
+    printDebugMessageWithNumber("\tamount of lines to be deleted:", linesToBeDeleted, compileState -> logLevel);
     if(linesToBeDeleted > 0) {
         printThanosASCII(linesToBeDeleted);
 
@@ -67,8 +67,8 @@ void chooseLinesToBeDeleted(struct commandsArray *commandsArray, int perfectlyBa
         int lines[linesToBeDeleted];
         while(selectedLines < linesToBeDeleted) {
             //Generate a random line
-            int randomLine = rand() % (int) commandsArray -> size;
-            printDebugMessageWithNumber("\tGenerated random line:", randomLine);
+            int randomLine = rand() % (int) compileState -> commandsArray.size;
+            printDebugMessageWithNumber("\tGenerated random line:", randomLine, compileState -> logLevel);
 
             //Check if it was already selected
             for(int i = 0; i < selectedLines; i++) {
@@ -79,16 +79,16 @@ void chooseLinesToBeDeleted(struct commandsArray *commandsArray, int perfectlyBa
             }
             //If it was already selected, generate a new line
             if(randomLine == -1) {
-                printDebugMessage("\t\tLine was already generated", "");
+                printDebugMessage("\t\tLine was already generated", "", compileState -> logLevel);
                 continue;
             }
 
             //If not, add it to the array
             lines[selectedLines++] = randomLine;
             //Set the command at this index as to be ignored
-            commandsArray -> arrayPointer[randomLine].translate = 0;
-            printDebugMessage("\t\tLine was added to the list", "");
+            compileState -> commandsArray.arrayPointer[randomLine].translate = 0;
+            printDebugMessage("\t\tLine was added to the list", "", compileState -> logLevel);
         }
     }
-    printDebugMessage("Analysis of the \"Perfectly balanced...\" command done", "");
+    printDebugMessage("Analysis of the \"Perfectly balanced...\" command done", "", compileState -> logLevel);
 }
