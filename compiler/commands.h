@@ -22,6 +22,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <stdbool.h>
 
 #define NUMBER_OF_COMMANDS 38
 #define MAX_PARAMETER_COUNT 2
@@ -41,6 +43,23 @@ struct commandsArray {
     struct parsedCommand* arrayPointer;
     size_t size;
     size_t randomIndex; //A variable necessary for the "confused stonks" command
+};
+
+typedef enum { executable, assemblyFile, objectFile } compileMode;
+typedef enum { intSISD, intSIMD, floatSISD, floatSIMD, doubleSISD, doubleSIMD } translateMode;
+typedef enum { none, o_1, o_2, o_3, o_s, o42069 } optimisationLevel;
+typedef enum { normal, info, debug } logLevel;
+
+struct compileState {
+    compileMode compileMode;
+    struct commandsArray commandsArray;
+
+    bool useStabs;
+    translateMode translateMode;
+    optimisationLevel optimisationLevel;
+
+    unsigned compilerErrors;
+    logLevel logLevel;
 };
 
 #define REG64 1
@@ -68,9 +87,10 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
-    void (*analysisFunction)(struct commandsArray*, int);
+    void (*analysisFunction)(struct compileState*, int);
     char *translationPattern;
 };
+
 
 #define commentStart "What the hell happened here?"
 
