@@ -25,7 +25,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "compiler.h" //Compiler related functions in a separate file
 #include "logger/log.h"
 
-static int optimisation = 0;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
@@ -65,16 +64,17 @@ int main(int argc, char* argv[]) {
     char *outputFileString = NULL;
     FILE *inputFile;
 
-    static const struct option long_options[] = {
+    int optimisationLevel = 0;
+    const struct option long_options[] = {
             {"output",  required_argument, 0, 'o'},
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
             {"info",    no_argument,       0, 'i'},
-            {"O-1",     no_argument,      &optimisation, -1},
-            {"O-2",     no_argument,      &optimisation, -2},
-            {"O-3",     no_argument,      &optimisation,-3},
-            {"O-s",     no_argument,      &optimisation,-4},
-            {"O69420",     no_argument,      &optimisation,69420},
+            {"O-1",     no_argument,      &optimisationLevel, -1},
+            {"O-2",     no_argument,      &optimisationLevel, -2},
+            {"O-3",     no_argument,      &optimisationLevel,-3},
+            {"O-s",     no_argument,      &optimisationLevel,-4},
+            {"O69420",     no_argument,      &optimisationLevel, 69420},
             { 0, 0, 0, 0 }
     };
 
