@@ -28,6 +28,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 /**
  * Parses an input file line by line and converts it to a command struct array which is saved in compileState->commands
  */
-void parseCommands(FILE *inputFile, struct compileState* compileState);
+void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_PARSER_H
