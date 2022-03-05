@@ -349,7 +349,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
 };
 
 void freeCommandsArray(struct commandsArray *commands, logLevel logLevel) {
-    printDebugMessage("Freeing memory", "", logLevel);
+    printDebugMessage(logLevel, "Freeing memory", 0);
     for(size_t i = 0; i < commands -> size; i++) {
         struct parsedCommand parsedCommand = *(commands -> arrayPointer + i);
         for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
@@ -358,26 +358,25 @@ void freeCommandsArray(struct commandsArray *commands, logLevel logLevel) {
     }
     free(commands -> arrayPointer);
 
-    printDebugMessage("All memory freed, compilation done", "", logLevel);
+    printDebugMessage(logLevel, "All memory freed, compilation done", 0);
 }
 
 /**
  * Parses the provided source file, converts it into a commandsArray struct and runs all the required semantic analysis functions
- * @param srcPTR a pointer to the input file
  * @return the commandsArray struct. Note that this struct is also returned when a compilation error occurred.
  *          compilationErrors (defined in log.c) counts the number of compilation errors.
  */
-void compile(FILE *srcPTR, struct compileState* compileState) {
-    printStatusMessage("Parsing input file", compileState -> logLevel);
-    parseCommands(srcPTR, compileState);
+void compile(FILE *srcPTR, char* inputFileName, struct compileState* compileState) {
+    printStatusMessage( compileState -> logLevel, "Parsing input file");
+    parseCommands(srcPTR, inputFileName, compileState);
 
     if(compileState -> commandsArray.size > 0) {
-        printStatusMessage("Starting parameter check", compileState -> logLevel);
+        printStatusMessage( compileState -> logLevel, "Starting parameter check");
         for (size_t i = 0; i < (compileState -> commandsArray).size; ++i) {
             checkParameters(&(compileState -> commandsArray).arrayPointer[i], compileState);
         }
 
-        printStatusMessage("Analyzing commands", compileState -> logLevel);
+        printStatusMessage( compileState -> logLevel, "Analyzing commands");
         for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
             if(commandList[opcode].analysisFunction != NULL) {
                 commandList[opcode].analysisFunction(compileState, opcode);
@@ -399,10 +398,10 @@ void compile(FILE *srcPTR, struct compileState* compileState) {
  * @param srcPTR a pointer to the source file to be compiled
  * @param destPTR a pointer to the destination file.
  */
-int createAssemblyFile(FILE *srcPTR, char* inputFileString, FILE *destPTR, struct compileState compileState) {
-    compile(srcPTR, &compileState);
+int createAssemblyFile(FILE *srcPTR, char* inputFileName, FILE *destPTR, struct compileState compileState) {
+    compile(srcPTR, inputFileName, &compileState);
     if(compileState.compilerErrors == 0) {
-        writeToFile(&compileState, inputFileString, destPTR);
+        writeToFile(&compileState, inputFileName, destPTR);
     }
 
     fclose(destPTR);
@@ -420,7 +419,7 @@ int createAssemblyFile(FILE *srcPTR, char* inputFileString, FILE *destPTR, struc
  * @param srcPTR a pointer to the source file to be compiled
  * @param destFile the name of the destination file
  */
-void createObjectFile(FILE *srcPTR, char* inputFileString, char *destFile, struct compileState compileState) {
+void createObjectFile(FILE *srcPTR, char* inputFileName, char *destFile, struct compileState compileState) {
     const char* commandPrefix = "gcc -O -c -x assembler - -o";
     char command[strlen(commandPrefix) + strlen(destFile) + 1];
     strcpy(command, commandPrefix);
@@ -431,7 +430,7 @@ void createObjectFile(FILE *srcPTR, char* inputFileString, char *destFile, struc
     int gccres = 1;
     if(compileState.compilerErrors == 0) {
         FILE *gccPTR = popen(command, "w");
-        writeToFile(&compileState, inputFileString, gccPTR);
+        writeToFile(&compileState, inputFileName, gccPTR);
         gccres = pclose(gccPTR);
     }
 
@@ -448,7 +447,7 @@ void createObjectFile(FILE *srcPTR, char* inputFileString, char *destFile, struc
  * @param srcPTR a pointer to the source file to be compiled
  * @param destFile the name of the destination file
  */
-void createExecutable(FILE *srcPTR, char* inputFileString, char *destFile, struct compileState compileState) {
+void createExecutable(FILE *srcPTR, char* inputFileName, char *destFile, struct compileState compileState) {
     #ifndef LINUX
     const char* commandPrefix = "gcc -O -x assembler - -o";
     #else
@@ -463,7 +462,7 @@ void createExecutable(FILE *srcPTR, char* inputFileString, char *destFile, struc
     int gccres = 1;
     if(compileState.compilerErrors == 0) {
         FILE *gccPTR = popen(command, "w");
-        writeToFile(&compileState, inputFileString, gccPTR);
+        writeToFile(&compileState, inputFileName, gccPTR);
         gccres = pclose(gccPTR);
     }
 
