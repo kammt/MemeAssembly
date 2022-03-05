@@ -18,6 +18,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "log.h"
+#include <stdarg.h>
 
 const char* const version_string = "v1.4";
 const char* const platform_suffix =
@@ -83,7 +84,7 @@ void printThanosASCII(int deletedLines) {
 }
 
 /**
- * Called when a decimal parameter with value 420 or 69 is encountered. It prints a Nice ASCII art
+ * Called when a decimal parameter with value 420 or 69 is encountered. It prints a "Nice" ASCII art
  */
 void printNiceASCII() {
     printf("\n");
@@ -96,65 +97,63 @@ void printNiceASCII() {
     printf("\x1B[38;5;199m" " |_| \\_|_|\\___\\___|\n\n" RESET);
 }
 
-void printStatusMessage(char message[], logLevel logLevel) {
+void printStatusMessage(logLevel logLevel, char* message) {
     if(logLevel == debug || logLevel == info) {
         printf(YEL "%s \n" RESET, message);
         fflush( stdout );
     }
 }
 
-void printDebugMessage(char message[], char *variable, logLevel logLevel) {
+/**
+ * Prints a debug message. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
+ */
+void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...) {
     if(logLevel == debug) {
-        printf("%s %s \n", message, variable);
+        va_list vaList;
+        va_start(vaList, varArgNum);
+
+        vprintf(message, vaList);
         fflush( stdout );  
     }
 }
 
-void printDebugMessageWithNumber(char message[], int variable, logLevel logLevel) {
-    if(logLevel == debug) {
-        printf("%s %d \n", message, variable);
-        fflush( stdout );  
-    }
+/**
+ * Prints an error message. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
+ * @param inputFileName name of the input file
+ * @param lineNum the line number in which the error occurred
+ * @param compileState the current compileState. Needed to increase the error count
+ * @param message the message (with printf-like formatting)
+ * @param varArgNum How many variable arguments were passed (important!)
+ * @param ... variable arguments
+ */
+void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...) {
+    compileState -> compilerErrors++;
+
+    //Initialise va_list to pass it on to vprintf
+    va_list vaList;
+    va_start(vaList, varArgNum);
+
+    //First, only print the file name and line
+    printf("%s:%u: " RED "error: " RESET, inputFileName, lineNum);
+    //Now print the custom message with variable args
+    vprintf(message, vaList);
 }
 
 /**
- * Prints a simple semantic error message
- * @param message the error message
- * @param lineNum the line number
+ * Prints a warning. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
+ * @param inputFileName name of the input file
+ * @param lineNum the line number in which the error occurred
+ * @param message the message (with printf-like formatting)
+ * @param varArgNum How many variable arguments were passed (important!)
+ * @param ... variable arguments
  */
-void printSemanticError(char message[], int lineNum, struct compileState* compileState) {
-    compileState -> compilerErrors++;
-    fprintf(stderr, RED "Semantic Error in line %d: %s\n" RESET, lineNum, message);
-}
+void printWarning(char* inputFileName, unsigned lineNum, char* message, unsigned varArgNum, ...) {
+    //Initialise va_list to pass it on to vprintf
+    va_list vaList;
+    va_start(vaList, varArgNum);
 
-/**
- * Prints a semantic error message concerning multiple definitions
- * @param message the error message
- * @param lineNum the line number
- * @param originalDefinition the line Number in which the original definition was
- */
-void printSemanticErrorWithExtraLineNumber(char message[], int lineNum, int originalDefinition, struct compileState* compileState) {
-    compileState -> compilerErrors++;
-    fprintf(stderr, RED "Semantic Error in line %d: %s (already defined in line %d)\n" RESET, lineNum, message, originalDefinition);
-}
-
-/**
- * Prints a generic syntax error
- * @param message the error message
- * @param got the token that the compiler received. It will be inserted at the end of the message, so formatting must match.
- * @param lineNum the line number
- */
-void printSyntaxError(char message[], char got[], int lineNum, struct compileState* compileState) {
-    compileState -> compilerErrors++;
-    fprintf(stderr, RED "Syntax Error in line %d: %s '%s'\n" RESET, lineNum, message, got);
-}
-
-/**
- * Prints a generic syntax error
- * @param message the error message
- * @param lineNum the line number
- */
-void printSyntaxErrorWithoutString(char message[], int lineNum, struct compileState* compileState) {
-    compileState -> compilerErrors++;
-    fprintf(stderr, RED "Syntax Error in line %d: %s\n" RESET, lineNum, message);
+    //First, only print the file name and line
+    printf("%s:%u: " YEL "warning: " RESET, inputFileName, lineNum);
+    //Now print the custom message with variable args
+    vprintf(message, vaList);
 }
