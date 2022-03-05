@@ -147,18 +147,18 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        printDebugMessageWithNumber("Optimisation level is", optimisation, compileState.logLevel);
+        printDebugMessageWithNumber("Optimisation level is", optimisationLevel, compileState.logLevel);
         //Convert our optmisationLevel to a value that our struct can work with to make it more readable later on
         //If optimisationLevel == 0, then leave the value at none (default)
-        if(optimisation == -1) {
+        if(optimisationLevel == -1) {
             compileState.optimisationLevel = o_1;
-        } else if (optimisation == -2) {
+        } else if (optimisationLevel == -2) {
             compileState.optimisationLevel = o_2;
-        } else if (optimisation == -3) {
+        } else if (optimisationLevel == -3) {
             compileState.optimisationLevel = o_3;
-        } else if (optimisation == -4) {
+        } else if (optimisationLevel == -4) {
             compileState.optimisationLevel = o_s;
-        } else if (optimisation == 69420) {
+        } else if (optimisationLevel == 69420) {
             compileState.optimisationLevel = o42069;
         }
 
