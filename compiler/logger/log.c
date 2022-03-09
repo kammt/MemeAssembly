@@ -100,7 +100,6 @@ void printNiceASCII() {
 void printStatusMessage(logLevel logLevel, char* message) {
     if(logLevel == debug || logLevel == info) {
         printf(YEL "%s \n" RESET, message);
-        fflush( stdout );
     }
 }
 
@@ -113,7 +112,7 @@ void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...
         va_start(vaList, varArgNum);
 
         vprintf(message, vaList);
-        fflush( stdout );  
+        printf("\n");
     }
 }
 
@@ -137,6 +136,7 @@ void printError(char* inputFileName, unsigned lineNum, struct compileState* comp
     printf("%s:%u: " RED "error: " RESET, inputFileName, lineNum);
     //Now print the custom message with variable args
     vprintf(message, vaList);
+    printf("\n");
 }
 
 /**
