@@ -22,7 +22,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <getopt.h>
 #include <stdbool.h>
 
-#include "compiler.h" //Compiler related functions in a separate file
+#include "compiler.h"
+#include "parser/parser.h"
 #include "logger/log.h"
 
 
@@ -124,30 +125,54 @@ int main(int argc, char* argv[]) {
         printExplanationMessage(argv[0]);
         return 1;
     } else if(argc < optind + 1) {
-        fprintf(stderr, "Error: No input file specified\n");
+        fprintf(stderr, "Error: No input file(s) specified\n");
         printExplanationMessage(argv[0]);
         return 1;
     } else {
-        inputFile = fopen(argv[optind], "r");
-        //If the pointer is NULL, then the file failed to open. Print an error
-        if (inputFile == NULL) {
-            perror("Error while opening input file");
-            printExplanationMessage(argv[0]);
-            return 1;
+        //We have one or more input files, check how many there are
+        //The first is at optind, the last at argc-1
+        uint32_t fileCount = (argc - 1) - optind;
+
+        //Now allocate fileCount file structs on the heap
+        struct file* fileStructs = calloc(fileCount, sizeof(struct file));
+        if(fileStructs == NULL) {
+            fprintf(stderr, "Critical Error: Memory allocation for file parsing failed");
+            exit(EXIT_FAILURE);
         }
 
-        //Create a stat struct to check if the file is a regular file. If we did not check for this, an input file like "/dev/urandom" would pass without errors
-        struct stat inputFileStat;
-        fstat(fileno(inputFile), &inputFileStat);
-        if (!S_ISREG(inputFileStat.st_mode)) {
-            fprintf(stderr,
-                    "Error while opening input file: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
+        //Open each file one by one and parse it into a "struct file"
+        for(int i = optind; i < argc; i++) {
+            inputFile = fopen(argv[i], "r");
+            //If the pointer is NULL, then the file failed to open. Print an error
+            if (inputFile == NULL) {
+                perror("Failed to open input file");
+                printExplanationMessage(argv[0]);
+                return 1;
+            }
+
+            //Create a stat struct to check if the file is a regular file. If we did not check for this, an input file like "/dev/urandom" would pass without errors
+            struct stat inputFileStat;
+            fstat(fileno(inputFile), &inputFileStat);
+            if (!S_ISREG(inputFileStat.st_mode)) {
+                fprintf(stderr,
+                        "Error while opening input file: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
+                fclose(inputFile);
+                printExplanationMessage(argv[0]);
+                return 1;
+            }
+
+            //Set the attribute "fileName" in the struct, because the parsing function uses this attribute for error printing
+            fileStructs[i - optind].fileName = argv[i];
+
+            //Parse file
+            printDebugMessage(compileState.logLevel, "Opening file \"%s\" successful, parsing file...", 1, argv[i]);
+            parseFile(&fileStructs[i - optind], inputFile, &compileState);
+            printDebugMessage(compileState.logLevel, "File parsing done, closing file...", 0);
             fclose(inputFile);
-            printExplanationMessage(argv[0]);
-            return 1;
         }
+        compileState.fileCount = fileCount;
+        compileState.files = fileStructs;
 
-        printDebugMessageWithNumber("Optimisation level is", optimisationLevel, compileState.logLevel);
         //Convert our optmisationLevel to a value that our struct can work with to make it more readable later on
         //If optimisationLevel == 0, then leave the value at none (default)
         if(optimisationLevel == -1) {
@@ -162,20 +187,6 @@ int main(int argc, char* argv[]) {
             compileState.optimisationLevel = o42069;
         }
 
-        if(compileState.compileMode == executable) {
-            createExecutable(inputFile, argv[optind], outputFileString, compileState);
-        } else if(compileState.compileMode == objectFile) {
-            createObjectFile(inputFile, argv[optind], outputFileString, compileState);
-        } else {
-            FILE* outputFile = fopen(outputFileString, "w");
-            //If the pointer is NULL, then the file failed to open. Print an error
-            if (outputFile == NULL) {
-                perror("Error in option -o");
-                printExplanationMessage(argv[0]);
-                return 1;
-            }
 
-            createAssemblyFile(inputFile, argv[optind], outputFile, compileState);
-        }
     }
 }

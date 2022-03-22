@@ -24,8 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include "commands.h"
 
-_Noreturn void createExecutable(FILE *srcPTR, char* inputFileName, char *destFile, struct compileState compileState);
-_Noreturn void createObjectFile(FILE *srcPTR, char* inputFileName, char *destFile, struct compileState compileState);
-_Noreturn int createAssemblyFile(FILE *srcPTR, char* inputFileName, FILE *destPTR, struct compileState compileState);
+_Noreturn void compile(struct compileState compileState, char* outputFileName);
 
 #endif

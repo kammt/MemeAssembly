@@ -20,9 +20,9 @@ CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 DESTDIR=/usr/local/bin
 
 # Files to compile
-FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
+FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/fileParser.c compiler/parser/functionParser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
 
-.PHONY: all clean debug uninstall install
+.PHONY: all clean debug uninstall install windows
 
 # Standard compilation
 all:
