@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     } else {
         //We have one or more input files, check how many there are
         //The first is at optind, the last at argc-1
-        uint32_t fileCount = (argc - 1) - optind;
+        uint32_t fileCount = argc - optind;
 
         //Now allocate fileCount file structs on the heap
         struct file* fileStructs = calloc(fileCount, sizeof(struct file));
@@ -187,6 +187,6 @@ int main(int argc, char* argv[]) {
             compileState.optimisationLevel = o42069;
         }
 
-
+        compile(compileState, outputFileString);
     }
 }
