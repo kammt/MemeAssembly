@@ -26,7 +26,5 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
     parseCommands(inputFile, fileStruct -> fileName, compileState, &commandsArray);
 
     parseFunctions(fileStruct, commandsArray, compileState);
-
-    //Cleanup
-    free(commandsArray.arrayPointer);
+    fileStruct -> loc = commandsArray.size;
 }

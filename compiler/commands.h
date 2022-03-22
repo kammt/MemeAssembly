@@ -49,6 +49,7 @@ struct function {
 
 struct file {
     char* fileName;
+    size_t loc; //lines of code
     size_t functionCount;
     struct function* functions;
     size_t randomIndex; //A variable necessary for the "confused stonks" command
@@ -98,9 +99,10 @@ struct command {
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
 
-    void* (*analysisStart)(struct compileState*);
-    void (*analyseCommand)(void*, struct compileState*, struct parsedCommand);
-    void (*analysisEnd)(void*, struct compileState*);
+    void* (*analysisStart)(unsigned); //opcode
+    void (*analyseCommand)(void*, struct parsedCommand, unsigned); //data, parsedCommand, fileIndex
+    void (*analysisEnd)(void*, struct compileState*); //data, compileState
+    unsigned parentCommand;
 
     //TODO replace with char* translationPatterns[6];
     char* translationPattern;
