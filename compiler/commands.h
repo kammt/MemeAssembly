@@ -36,23 +36,33 @@ struct parsedCommand {
     char *parameters[MAX_PARAMETER_COUNT];
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter, ...
     int lineNum;
-    uint8_t translate; //Default is 1 (true). Is set to false in case this command is selected for deletion by "perfectly balanced as all things should be"
+    bool translate; //Default is 1 (true). Is set to false in case this command is selected for deletion by "perfectly balanced as all things should be"
 };
 
-struct commandsArray {
-    struct parsedCommand* arrayPointer;
-    size_t size;
+struct function {
+    char* name;
+    char* definedInFile;
+    size_t definedInLine;
+    size_t numberOfCommands;
+    struct parsedCommand* commands;
+};
+
+struct file {
+    char* fileName;
+    size_t functionCount;
+    struct function* functions;
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
 typedef enum { executable, assemblyFile, objectFile } compileMode;
-typedef enum { intSISD, intSIMD, floatSISD, floatSIMD, doubleSISD, doubleSIMD } translateMode;
+typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateMode;
 typedef enum { none, o_1, o_2, o_3, o_s, o42069 } optimisationLevel;
 typedef enum { normal, info, debug } logLevel;
 
 struct compileState {
     compileMode compileMode;
-    struct commandsArray commandsArray;
+    uint32_t fileCount;
+    struct file* files;
 
     bool useStabs;
     translateMode translateMode;
@@ -87,14 +97,19 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
-    void (*analysisFunction)(struct compileState*, int);
-    char *translationPattern;
+
+    void* (*analysisStart)(struct compileState*);
+    void (*analyseCommand)(void*, struct compileState*, struct parsedCommand);
+    void (*analysisEnd)(void*, struct compileState*);
+
+    //TODO replace with char* translationPatterns[6];
+    char* translationPattern;
 };
 
-
 #define commentStart "What the hell happened here?"
+#define multiLineCommentStart "Why, why?"
+#define multiLineCommendEnd "Oh, that's why"
 
-#define orDraw25Suffix "or draw 25"
 #define orDraw25Start "or"
 #define orDraw25End "draw 25"
 
