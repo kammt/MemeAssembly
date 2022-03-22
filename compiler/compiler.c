@@ -22,6 +22,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "parser/parser.h"
 #include "analyzer/parameters.h"
@@ -39,26 +40,35 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun p",
             .usedParameters = 1,
             .allowedParamTypes = {FUNC_NAME},
-            .analysisFunction = &checkFunctionValidity,
+//            .analysisFunction = &checkFunctionValidity,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = "0:"
         },
         {
             .pattern = "right back at ya, buckaroo",
             .usedParameters = 0,
-            .analysisFunction = NULL,
-            .translationPattern = "ret"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "ret"
         },
         {
             .pattern = "no, I don't think I will",
             .usedParameters = 0,
-            .analysisFunction = NULL,
-            .translationPattern = "mov rax, 1\n\tret"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "mov rax, 1\n\tret"
         },
         {
             .pattern = "I see this as an absolute win",
             .usedParameters = 0,
-            .analysisFunction = NULL,
-            .translationPattern = "xor rax, rax\n\tret"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "xor rax, rax\n\tret"
         },
 
         ///Stack operations
@@ -66,30 +76,38 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "stonks p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | DECIMAL | CHAR},
-            .analysisFunction = NULL,
-            .translationPattern = "push 0"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "push 0"
         },
         {
             .pattern = "not stonks p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64},
-            .analysisFunction = NULL,
-            .translationPattern = "pop 0"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "pop 0"
         },
 
         ///Logical Operations
         {
             .pattern = "bitconneeeeeeect p p",
             .usedParameters = 2,
-            .analysisFunction = NULL,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
             .translationPattern = "and 0, 1"
         },
         {
             .pattern = "p \\s",
             .usedParameters = 1,
-            .analysisFunction = NULL,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
             .translationPattern = "not 0"
         },
 
@@ -98,15 +116,19 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "sneak 100 p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
-            .analysisFunction = NULL,
-            .translationPattern = "xor 0, 0"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "xor 0, 0"
         },
         {
             .pattern = "p is brilliant, but I like p",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
-            .analysisFunction = NULL,
-            .translationPattern = "mov 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "mov 0, 1"
         },
 
         ///Arithmetic operations
@@ -114,57 +136,73 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "upvote p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
-            .analysisFunction = NULL,
-            .translationPattern = "add 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "add 0, 1"
         },
         {
             .pattern = "downvote p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
-            .analysisFunction = NULL,
-            .translationPattern = "sub 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "sub 0, 1"
         },
         {
             .pattern = "parry p you filthy casual p",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR, REG64 | REG32 | REG16 | REG8},
-            .analysisFunction = NULL,
-            .translationPattern = "sub 1, 0"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "sub 1, 0"
         },
         {
             .pattern = "p units are ready, with p more well on the way",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
-            .analysisFunction = NULL,
-            .translationPattern = "add 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "add 0, 1"
         },
         {
             .pattern = "upgrades, people. Upgrades p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
-            .analysisFunction = NULL,
-            .translationPattern = "shl 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "shl 0, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie p",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
-            .analysisFunction = NULL,
-            .translationPattern = "shr 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "shr 0, 1"
         },
         {
             .pattern = "p is getting out of hand, now there are p of them",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | REG32, REG64 | REG32 | DECIMAL | CHAR},
-            .analysisFunction = NULL,
-            .translationPattern = "imul 0, 1"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "imul 0, 1"
         },
         {
             .pattern = "look at what p needs to mimic a fraction of p",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | DECIMAL | CHAR, REG64},
-            .analysisFunction = NULL,
-            .translationPattern = "mov QWORD PTR [rip + .Ltmp64], 0\n\t"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "mov QWORD PTR [rip + .Ltmp64], 0\n\t"
                                   "push rdx\n\t"
                                   "xor rdx, rdx\n\t"
                                   "push rax\n\t"
@@ -180,8 +218,10 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "p UNLIMITED POWER p",
             .usedParameters = 2,
             .allowedParamTypes = {REG64, REG64 | DECIMAL | CHAR},
-            .analysisFunction = NULL,
-            .translationPattern = "mov QWORD PTR [rip + .Ltmp64], 1\n\t"
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
+                .translationPattern = "mov QWORD PTR [rip + .Ltmp64], 1\n\t"
                                   //Check if y=0. We cannot use 0 constants, as they would be replaced by the first parameter. So we just add and then subtract one to compare the flags
                                   "inc QWORD PTR [rip + .Ltmp64]\n\t"
                                   "dec QWORD PTR [rip + .Ltmp64]\n\t"
@@ -205,66 +245,90 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "upgrade",
             .usedParameters = 0,
-            .analysisFunction = &checkJumpLabelValidity,
+//            .analysisFunction = &checkJumpLabelValidity,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = ".LUpgradeMarker:"
         },
         {
             .pattern = "fuck go back",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = "jmp .LUpgradeMarker"
         },
         {
             .pattern = "banana",
             .usedParameters = 0,
-            .analysisFunction = &checkJumpLabelValidity,
+//            .analysisFunction = &checkJumpLabelValidity,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = ".LBananaMarker:"
         },
         {
             .pattern = "where banana",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = "jmp .LBananaMarker"
         },
         {
             .pattern = "monke p",
             .usedParameters = 1,
             .allowedParamTypes = {FUNC_NAME},
-            .analysisFunction = &checkMonkeJumpLabelValidity,
+//            .analysisFunction = &checkMonkeJumpLabelValidity,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = ".L0:"
         },
         {
             .pattern = "return to monke p",
             .usedParameters = 1,
             .allowedParamTypes = {FUNC_NAME},
-            .analysisFunction = NULL,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = "jmp .L0"
         },
         {
             .pattern = "who would win? p or p",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
-            .analysisFunction = &checkWhoWouldWinValidity,
+            .analysisStart = &whoWouldWinValidityStart,
+            .analyseCommand = &analyseWhoWouldWinCommand,
+            .analysisEnd = &whoWouldWinValidityEnd,
             .translationPattern = "cmp 0, 1\n\tjg .L0Wins\n\tjl .L1Wins"
         },
         {
             .pattern = "p wins",
             .usedParameters = 1,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = &analyseWhoWouldWinCommand,
+            .analysisEnd = NULL,
             .translationPattern = ".L0Wins:"
         },
         {
             .pattern = "corporate needs you to find the difference between p and p",
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
-            .analysisFunction = &checkTheyreTheSamePictureValidity,
+//            .analysisFunction = &checkTheyreTheSamePictureValidity,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = "cmp 0, 1\n\tje .LSamePicture"
         },
         {
             .pattern = "they're the same picture",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL, //TODO
+            .analysisEnd = NULL,
             .translationPattern = ".LSamePicture:"
         },
 
@@ -272,7 +336,9 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "what can I say except p",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .allowedParamTypes = {REG8 | CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], 0\n\t"
                                   "test rsp, -2\n\t"
@@ -287,7 +353,9 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "let me in. LET ME IIIIIIIIN p",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .allowedParamTypes = {REG8},
             .translationPattern = "test rsp, -2\n\t"
                                   "jz 1f\n\t"
@@ -304,25 +372,34 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "guess I'll die",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .translationPattern = "mov rax, [69]"
         },
         {
             .pattern = "confused stonks",
             .usedParameters = 0,
-            .analysisFunction = &setConfusedStonksJumpLabel,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = &setConfusedStonksJumpLabel,
             .translationPattern = "jmp .LConfusedStonks:"
         },
         {
             .pattern = "perfectly balanced as all things should be",
             .usedParameters = 0,
-            .analysisFunction = &chooseLinesToBeDeleted,
+//            .analysisFunction = &chooseLinesToBeDeleted,
+                .analysisStart = NULL,
+                .analyseCommand = NULL,
+                .analysisEnd = NULL,
             .translationPattern = ""
         },
         {
             .pattern = "wait, that's illegal",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
         },
 
@@ -330,144 +407,141 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "it's a trap",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .translationPattern = "int3"
         },
         //Insert commands above this one
         {
             .pattern = "or draw 25",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .translationPattern = "add eax, 25"
         },
         {
             .pattern = "",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisStart = NULL,
+            .analyseCommand = NULL,
+            .analysisEnd = NULL,
             .translationPattern = "0"
         }
 };
 
-void freeCommandsArray(struct commandsArray *commands, logLevel logLevel) {
-    printDebugMessage(logLevel, "Freeing memory", 0);
-    for(size_t i = 0; i < commands -> size; i++) {
-        struct parsedCommand parsedCommand = *(commands -> arrayPointer + i);
-        for(size_t j = 0; j < commandList[parsedCommand.opcode].usedParameters; j++) {
-            free(parsedCommand.parameters[j]);
+/**
+ *
+ * @param compileState a struct containing all necessary infos. Most notably, it contains the compileMode, optimisation level and all parsed input files
+ * @param outputFileName the name of the output file
+ */
+void compile(struct compileState compileState, char* outputFileName) {
+    ///Analysis
+    //Start the command analysis. In previous versions, each analysis function would iterate through the entire code
+    //To mitigate this, the analysis is split into three functions per command:
+    //analysisStart() may return a pointer to data that will be passed
+    //analyseCommand() will be called when a command is found
+    //analysisEnd() is called after all commands were traversed. Most analysis-related checks (e.g. if a matching "fuck go back" exists for an "upgrade") should(TM) happen in here
+    void* analysisData[NUMBER_OF_COMMANDS] = {0};
+    for(unsigned i = 0; i < NUMBER_OF_COMMANDS; i++) {
+        if(commandList[i].analysisStart != NULL) {
+            analysisData[i] = commandList[i].analysisStart(i);
         }
     }
-    free(commands -> arrayPointer);
 
-    printDebugMessage(logLevel, "All memory freed, compilation done", 0);
-}
+    //Traverse all files
+    for(unsigned i = 0; i < compileState.fileCount; i++) {
+        struct file file = compileState.files[i];
 
-/**
- * Parses the provided source file, converts it into a commandsArray struct and runs all the required semantic analysis functions
- * @return the commandsArray struct. Note that this struct is also returned when a compilation error occurred.
- *          compilationErrors (defined in log.c) counts the number of compilation errors.
- */
-void compile(FILE *srcPTR, char* inputFileName, struct compileState* compileState) {
-    printStatusMessage( compileState -> logLevel, "Parsing input file");
-    parseCommands(srcPTR, inputFileName, compileState);
+        //Traverse all functions
+        for(unsigned j = 0; j < file.functionCount; j++) {
+            struct function function = file.functions[j];
 
-    if(compileState -> commandsArray.size > 0) {
-        printStatusMessage( compileState -> logLevel, "Starting parameter check");
-        for (size_t i = 0; i < (compileState -> commandsArray).size; ++i) {
-            checkParameters(&(compileState -> commandsArray).arrayPointer[i], compileState);
-        }
+            //Traverse all commands
+            for(unsigned k = 0; k < function.numberOfCommands; k++) {
+                struct parsedCommand parsedCommand = function.commands[k];
+                //Analyse parameters
+                checkParameters(&parsedCommand, compileState.files[i].fileName, &compileState);
 
-        printStatusMessage( compileState -> logLevel, "Analyzing commands");
-        for(int opcode = 0; opcode < NUMBER_OF_COMMANDS - 2; opcode++) {
-            if(commandList[opcode].analysisFunction != NULL) {
-                commandList[opcode].analysisFunction(compileState, opcode);
+                //Call analysis function, if it is defined
+                uint8_t opcode = parsedCommand.opcode;
+                if(commandList[opcode].analyseCommand != NULL) {
+                    //If the analysisStart-function is not defined, this function uses void* data from another command. Iterate backwards until such a command is found
+                    unsigned parentOpcode = opcode;
+                    if(commandList[opcode].analysisStart == NULL) {
+                        while(parentOpcode > 0 && commandList[parentOpcode].analysisStart == NULL) {
+                            parentOpcode--;
+                        }
+
+                        if (commandList[parentOpcode].analysisStart == NULL) {
+                            fprintf(stderr,
+                                    "Internal compiler error. Please submit a bug report at https://github.com/kammt/MemeAssembly/issues so that it can be fixed\nError info: Unable to find parent command for opcode %d", opcode);
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+
+                    commandList[opcode].analyseCommand(analysisData[parentOpcode], parsedCommand, i);
+                }
             }
         }
+    }
 
-        if(compileState -> compilerErrors > 0) {
-            printErrorASCII();
-            fprintf(stderr, "Compilation failed with %d error(s), please check your code and try again.\n", compileState -> compilerErrors);
+    //Call analysisEnd() for each command
+    for(unsigned i = 0; i < NUMBER_OF_COMMANDS; i++) {
+        if(commandList[i].analysisEnd != NULL) {
+            commandList[i].analysisEnd(analysisData[i], &compileState);
         }
-    } else {
-        fprintf(stderr, "File is empty, nothing to do\n");
-        compileState -> compilerErrors++;
-    }
-}
-
-/**
- * Attempts to convert the source file to an x86 Assembly file
- * @param srcPTR a pointer to the source file to be compiled
- * @param destPTR a pointer to the destination file.
- */
-int createAssemblyFile(FILE *srcPTR, char* inputFileName, FILE *destPTR, struct compileState compileState) {
-    compile(srcPTR, inputFileName, &compileState);
-    if(compileState.compilerErrors == 0) {
-        writeToFile(&compileState, inputFileName, destPTR);
     }
 
-    fclose(destPTR);
-    freeCommandsArray(&compileState.commandsArray, compileState.logLevel);
-
-    if(compileState.compilerErrors == 0) {
-        exit(EXIT_SUCCESS);
-    } else {
+    //Analysis done. If any errors occurred until now, print to stderr and exit
+    if(compileState.compilerErrors > 0) {
+        printErrorASCII();
+        fprintf(stderr, "Compilation failed with %u error(s), please check your code and try again.\n", compileState.compilerErrors);
         exit(EXIT_FAILURE);
     }
-}
 
-/**
- * Compiles the specified memeasm file into an object file
- * @param srcPTR a pointer to the source file to be compiled
- * @param destFile the name of the destination file
- */
-void createObjectFile(FILE *srcPTR, char* inputFileName, char *destFile, struct compileState compileState) {
-    const char* commandPrefix = "gcc -O -c -x assembler - -o";
-    char command[strlen(commandPrefix) + strlen(destFile) + 1];
-    strcpy(command, commandPrefix);
-    strcat(command, destFile);
-
-    // Pipe assembler code directly to GCC via stdin
-    compile(srcPTR, &compileState);
-    int gccres = 1;
-    if(compileState.compilerErrors == 0) {
-        FILE *gccPTR = popen(command, "w");
-        writeToFile(&compileState, inputFileName, gccPTR);
-        gccres = pclose(gccPTR);
-    }
-
-    freeCommandsArray(&compileState.commandsArray, compileState.logLevel);
-    if(compileState.compilerErrors != 0 || gccres != 0) {
-        exit(EXIT_FAILURE);
+    ///Translation
+    FILE* output;
+    int gccResult = 0;
+    //When generating an assembly file, we open the output file in writing mode directly
+    if(compileState.compileMode == assemblyFile) {
+        output = fopen(outputFileName, "w") ;
+        if(output == NULL) {
+            perror("Failed to open output file");
+            exit(EXIT_FAILURE);
+        }
+    //When letting gcc do the work for us (object file or executable), we just pipe the code into gcc via stdin
     } else {
-        exit(EXIT_SUCCESS);
-    }
-}
+        char* commandPrefix;
+        if(compileState.compileMode == objectFile) {
+            commandPrefix = "gcc -O -c -x assembler - -o";
+        } else {
+            #ifndef LINUX
+            commandPrefix = "gcc -O -x assembler - -o";
+            #else
+            commandPrefix = "gcc -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
+            #endif
+        }
 
-/**
- * Compiles and links the specified memeasm file into an executable
- * @param srcPTR a pointer to the source file to be compiled
- * @param destFile the name of the destination file
- */
-void createExecutable(FILE *srcPTR, char* inputFileName, char *destFile, struct compileState compileState) {
-    #ifndef LINUX
-    const char* commandPrefix = "gcc -O -x assembler - -o";
-    #else
-    const char* commandPrefix = "gcc -O -no-pie -x assembler - -o";
-    #endif
-    char command[strlen(commandPrefix) + strlen(destFile) + 1];
-    strcpy(command, commandPrefix);
-    strcat(command, destFile);
+        char command[strlen(commandPrefix) + strlen(outputFileName) + 1];
+        strcpy(command, commandPrefix);
+        strcat(command, outputFileName);
 
-    // Pipe assembler code directly to GCC via stdin
-    compile(srcPTR, &compileState);
-    int gccres = 1;
-    if(compileState.compilerErrors == 0) {
-        FILE *gccPTR = popen(command, "w");
-        writeToFile(&compileState, inputFileName, gccPTR);
-        gccres = pclose(gccPTR);
+        // Pipe assembler code directly to GCC via stdin
+        output = popen(command, "w");
     }
 
-    freeCommandsArray(&compileState.commandsArray, compileState.logLevel);
-    if(compileState.compilerErrors != 0 || gccres != 0) {
+    writeToFile(&compileState, "", output);
+
+    if(compileState.compileMode == assemblyFile) {
+        fclose(output);
+    } else {
+        gccResult = pclose(output);
+    }
+
+    if(gccResult != 0) {
+        fprintf(stderr, "gcc exited unexpectedly with exit code %d. If you did not expect this to happen, please report this issue at https://github.com/kammt/MemeAssembly/issues so that it can be fixed\n", gccResult);
         exit(EXIT_FAILURE);
     } else {
         exit(EXIT_SUCCESS);
