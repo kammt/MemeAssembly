@@ -106,6 +106,8 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
 
         //Parse the function
         functions[functionArrayIndex] = parseFunction(commandsArray, fileStruct -> fileName, commandArrayIndex, compileState);
+        //Set the commands
+        functions[functionArrayIndex].commands = &commandsArray.arrayPointer[commandArrayIndex];
         //Increase our command index so that it points to the next unparsed command
         commandArrayIndex += functions[functionArrayIndex].numberOfCommands + 1;
         //Increase our function array index so that it points to the next uninitialised struct
