@@ -17,14 +17,12 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include "../commands.h"
+#ifndef MEMEASSEMBLY_FUNCTIONPARSER_H
+#define MEMEASSEMBLY_FUNCTIONPARSER_H
 
-#ifndef MEMEASSEMBLY_PARSER_H
-#define MEMEASSEMBLY_PARSER_H
+#include "parser.h"
+#include "fileParser.h"
 
-void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* compileState);
+void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray, struct compileState* compileState);
 
 #endif
