@@ -22,6 +22,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../commands.h"
 
-void checkParameters(struct parsedCommand *parsedCommand, struct compileState* compileState);
+void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_PARAMETERS_H
