@@ -25,7 +25,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "comparisons.h"
 #include "functions.h"
-#include "jumpLabels.h"
+#include "jumpMarkers.h"
 #include "parameters.h"
 #include "randomCommands.h"
 
