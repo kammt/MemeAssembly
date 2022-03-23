@@ -84,7 +84,7 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
 
             if(parentCommand -> definedInFile == childCommand -> definedInFile) {
                 //The first child was found if either no parameters must match or the first parameter matches
-                if(parametersToCheck == 0 || parametersToCheck >= 1 && strcmp( command -> parameters[0], childCommand -> command -> parameters[0]) == 0) {
+                if(parametersToCheck == 0 || (parametersToCheck >= 1 && strcmp( command -> parameters[0], childCommand -> command -> parameters[0]) == 0)) {
                     childFound[0] = true;
                 } else if(parametersToCheck == 2 && strcmp( command -> parameters[1], childCommand -> command -> parameters[0]) == 0)  {
                     childFound[1] = true;
