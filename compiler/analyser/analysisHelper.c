@@ -65,7 +65,7 @@ void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struc
  * @param compileState the compile state
  * @param parametersToCheck how many parameters should be checked. Note that when this is set to e.g. 2,
  *                          it will look for a command with a first parameter that matches param1 and a separate command with a first parameter that matches param2
- * @param itemName he name of the item. Will be inserted in the error message ("%s wasn't defined [for parameter _]")
+ * @param itemName the name of the item. Will be inserted in the error message ("%s wasn't defined [for parameter _]")
  */
 void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, struct commandLinkedList* childCommands, struct compileState* compileState, uint8_t parametersToCheck, char* itemName) {
     if(parametersToCheck > 2) {
