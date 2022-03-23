@@ -32,7 +32,7 @@ void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, un
     printDebugMessage(compileState -> logLevel, "Starting analysis for \"who would win?\" command", 0);
 
     //First check: No comparison jump labels were defined twice
-    checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 1, "comparison jump label");
+    checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 1, "comparison jump marker");
 
     //Second check: "p wins" was declared
     checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 2, "comparison jump label");
