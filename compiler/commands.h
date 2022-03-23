@@ -31,6 +31,12 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
 #define INVALID_COMMAND_OPCODE NUMBER_OF_COMMANDS - 1;
 
+struct commandLinkedList {
+    struct parsedCommand* command;
+    unsigned definedInFile;
+    struct commandLinkedList* next;
+};
+
 struct parsedCommand {
     uint8_t opcode;
     char *parameters[MAX_PARAMETER_COUNT];
@@ -98,11 +104,7 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
-
-    void* (*analysisStart)(unsigned); //opcode
-    void (*analyseCommand)(void*, struct parsedCommand, unsigned); //data, parsedCommand, fileIndex
-    void (*analysisEnd)(void*, struct compileState*); //data, compileState
-    unsigned parentCommand;
+    void (*analysisFunction)(struct commandLinkedList**, unsigned, struct compileState*); //commandLinkedList-list, opcode (index), compileState
 
     //TODO replace with char* translationPatterns[6];
     char* translationPattern;
