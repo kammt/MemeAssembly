@@ -23,12 +23,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "../commands.h"
 #include <stddef.h>
 
-struct function {
-    char* name;
-    size_t definedInLine;
-    size_t numberOfCommands;
-};
-
-void checkFunctionValidity(struct compileState* compileState, int opcode);
+void checkFunctionValidity(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H
