@@ -58,6 +58,7 @@ struct file {
     size_t loc; //lines of code
     size_t functionCount;
     struct function* functions;
+    struct parsedCommand* parsedCommands;
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
