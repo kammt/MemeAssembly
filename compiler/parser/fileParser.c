@@ -109,8 +109,6 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
             }
         }
     }
-    //In case we just wrote an EOF, replace it with \n
-    *(result - 1) = '\n';
 
     //We got to the end of a line or the end of a file, now append a '\0'
     *result = '\0';
@@ -160,7 +158,7 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
  * @param compileState the current compile state
  * @return
  */
-struct parsedCommand parseLine(char* inputFileName, unsigned lineNum, char* line, struct compileState* compileState) {
+struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, struct compileState* compileState) {
     struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum; //Set the line number
     parsedCommand.translate = 1;
@@ -258,7 +256,7 @@ struct parsedCommand parseLine(char* inputFileName, unsigned lineNum, char* line
     }
 
     parsedCommand.opcode = INVALID_COMMAND_OPCODE;
-    printError(inputFileName, lineNum, compileState, "Failed to parse command:", 0);
+    printError(inputFileName, lineNum, compileState, "Failed to parse command: \"%s\"", 1, line);
     //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
     //We don't exit immediately because we want to print every error possible
     return parsedCommand;
