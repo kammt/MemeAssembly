@@ -22,7 +22,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../commands.h"
 
-void setConfusedStonksJumpLabel(struct compileState* compileState, int opcode);
-void chooseLinesToBeDeleted(struct compileState* compileState, int opcode);
+void setConfusedStonksJumpLabel(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) ;
+void chooseLinesToBeDeleted(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_RANDOMCOMMANDS_H
