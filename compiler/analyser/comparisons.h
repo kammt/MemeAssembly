@@ -23,7 +23,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "../commands.h"
 #include <stdlib.h>
 
-void checkWhoWouldWinValidity(struct compileState* compileState, int opcode);
-void checkTheyreTheSamePictureValidity(struct compileState* compileState, int opcode);
+void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
+void analyseTheyreTheSamePictureCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_COMPARISONS_H
