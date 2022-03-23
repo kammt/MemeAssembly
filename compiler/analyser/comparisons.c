@@ -36,7 +36,6 @@ void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, un
 
     //Second check: "p wins" was declared
     checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 2, "comparison jump label");
-    struct commandLinkedList* comparisonListItem = commandLinkedList[opcode];
 }
 
 
