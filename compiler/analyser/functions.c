@@ -34,7 +34,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
  * @param opcode the opcode of the function definition
  * @param compileState the current compile state
  */
-void checkFunctionValidity(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
+void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, false, 1, "function");
 
     //Check 2: Does a main-function exist?
