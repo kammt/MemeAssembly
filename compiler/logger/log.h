@@ -36,7 +36,7 @@ void printInformationHeader();
 
 void printErrorASCII();
 
-void printThanosASCII(int deletedLines);
+void printThanosASCII(size_t deletedLines);
 
 void printNiceASCII();
 
