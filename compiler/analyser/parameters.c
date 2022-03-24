@@ -335,38 +335,38 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not a valid Monke jump label", 0);
         }
         if((allowedTypes & FUNC_NAME) != 0) { //Function name
-            uint8_t unexpectedCharacter = 0;
+            bool unexpectedCharacter = false;
             for(size_t i = 0; i < strlen(parameter); i++) {
                 char character = parameter[i];
                 if(i == 0 && character >= '0' && character <= '9') {
-                    unexpectedCharacter = 1;
+                    unexpectedCharacter = true;
                     printDebugMessage(compileState -> logLevel, "\t\tParameter is not a valid function name, as there is a number in the first position", 0);
                     break;
                 }
                 if(!(character == '_' || character == '$' || character == '.' || (character >= '0' && character <= '9') || (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
-                    unexpectedCharacter = 1;
+                    unexpectedCharacter = true;
                     printDebugMessage(compileState -> logLevel, "\t\tParameter is not a valid function name, unexpected character found at position %u", 1, i);
                     break;
                 }
             }
-            if(unexpectedCharacter == 0) {
+            if(!unexpectedCharacter) {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a valid function name", 0);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printError(inputFileName, parsedCommand -> lineNum, compileState, "a function name cannot be a pointer", 0);
                 }
-		#ifdef MACOS
-		printDebugMessage("\t\tThis is MacOS, adding a _-prefix to the function name", "", compileState -> logLevel);
-		char* prefixedFunctionName = malloc(strlen(parameter) + 2); //+1 for NULL and +1 for _
-		if(prefixedFunctionName == NULL) {
-		    fprintf(stderr, "Critical error: Memory allocation for parameter failed!");
-		    exit(EXIT_FAILURE);		
-		}
-		prefixedFunctionName[0] = '_';
-		//Copy the rest of the function name
-		strcpy(prefixedFunctionName + 1, parameter);
-		//Set the new parameter
-		parsedCommand -> parameters[parameterNum] = prefixedFunctionName;
-		#endif
+                #ifdef MACOS
+                printDebugMessage(compileState -> logLevel, "\t\tThis is MacOS, adding a _-prefix to the function name", 0);
+                char* prefixedFunctionName = malloc(strlen(parameter) + 2); //+1 for NULL and +1 for _
+                if(prefixedFunctionName == NULL) {
+                    fprintf(stderr, "Critical error: Memory allocation for parameter failed!");
+                    exit(EXIT_FAILURE);
+                }
+                prefixedFunctionName[0] = '_';
+                //Copy the rest of the function name
+                strcpy(prefixedFunctionName + 1, parameter);
+                //Set the new parameter
+                parsedCommand -> parameters[parameterNum] = prefixedFunctionName;
+                #endif
                 continue;
             }
         }
