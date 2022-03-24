@@ -29,6 +29,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_16_BIT_REGISTERS 16
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
+//Parameters as strings
+const char* const paramNames[] = {"64 bit Register", "32 bit Register", "16 bit Register", "8 bit Register", "decimal number", "character", "monke jump marker name", "function name"};
+
 extern struct command commandList[];
 
 char *registers_64_bit[NUMBER_OF_64_BIT_REGISTERS] = {
@@ -187,6 +190,33 @@ void translateCharacter(char *parameter, int parameterNum, struct parsedCommand 
     (*parsedCommand).parameters[parameterNum] = modifiedParameter;
 }
 
+void printParameterUsageNote(uint8_t allowedParams) {
+    //First, we construct a string that lists all allowed parameter types for this parameter
+    //The worst case is: all parameters are used, separated by commas (+8*2 characters) and \0 at the end (+1 character)
+    size_t maxSize = 17;
+    for(unsigned i = 0; i < 8; i++) {
+        maxSize += strlen(paramNames[i]);
+    }
+    char allowedParamsString[maxSize];
+    allowedParamsString[0] = '\0';
+
+    //Iterate through all parameters. If parameter is allowed (nth bit is set), append its name (at index n) to the string
+    uint8_t param = 1;
+    for(uint8_t i = 0; i < 8; i++) {
+        if((param & allowedParams) != 0) {
+            strcat(allowedParamsString, paramNames[i]);
+            strcat(allowedParamsString, ", ");
+        }
+        param = param << 1;
+    }
+
+    //We assume here that at least one parameter was added to the string. This means that there is an unnecessary comma and space at the end. We remove that by adding a \0
+    allowedParamsString[strlen(allowedParamsString) - 2] = '\0';
+
+    //Print it
+    printNote("the following parameter types are allowed: %s", 1, allowedParamsString);
+}
+
 /**
  * Checks if the given parsed command adheres to the parameter constraints (i.e. the parameters are legal)
  */
@@ -341,6 +371,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             }
         }
         printDebugMessage(compileState -> logLevel, "No checks succeeded, invalid parameter!", 0);
-        printError(inputFileName, parsedCommand -> lineNum, compileState, "invalid parameter provided", 0);
+        printError(inputFileName, parsedCommand -> lineNum, compileState, "invalid parameter provided: \"%s\"", 1, parameter);
+        printParameterUsageNote(allowedTypes);
     }
 }
