@@ -140,20 +140,19 @@ void printError(char* inputFileName, unsigned lineNum, struct compileState* comp
 }
 
 /**
- * Prints a warning. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
- * @param inputFileName name of the input file
- * @param lineNum the line number in which the error occurred
+ * Prints a note. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
  * @param message the message (with printf-like formatting)
  * @param varArgNum How many variable arguments were passed (important!)
  * @param ... variable arguments
  */
-void printWarning(char* inputFileName, unsigned lineNum, char* message, unsigned varArgNum, ...) {
+void printNote(char* message, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
 
     //First, only print the file name and line
-    printf("%s:%u: " YEL "warning: " RESET, inputFileName, lineNum);
+    printf("\t" MAG "note: " RESET);
     //Now print the custom message with variable args
     vprintf(message, vaList);
+    printf("\n");
 }
