@@ -41,7 +41,7 @@ void analyseCommands(struct compileState* compileState) {
 
                 //Add to command's linkedList
                 //Create Linked List item
-                struct commandLinkedList* commandLinkedListItem = malloc(sizeof(struct commandLinkedList*));
+                struct commandLinkedList* commandLinkedListItem = malloc(sizeof(struct commandLinkedList));
                 if(commandLinkedListItem == NULL) {
                     fprintf(stderr, "Critical error: Memory allocation for command analysis failed!");
                     exit(EXIT_FAILURE);
