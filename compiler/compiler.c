@@ -178,10 +178,8 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .allowedParamTypes = {REG64, REG64 | DECIMAL | CHAR},
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {1}\n\t"
-                              //Check if y=0. We cannot use 0 constants, as they would be replaced by the first parameter. So we just add and then subtract one to compare the flags
-                              "inc QWORD PTR [rip + .Ltmp64]\n\t"
-                              "dec QWORD PTR [rip + .Ltmp64]\n\t"
-                              "jnz 2f\n\t" //Jump forward to 2 if not zero
+                              "cmp QWORD PTR [rip + .Ltmp64], 0\n\t"
+                              "jne 2f\n\t" //Jump forward to 2 if not zero
                               //y is zero, load 1 and jump to the end (numeric label 4)
                               "xor {0}, {0}\n\t"
                               "inc {0}\n\t"
@@ -271,7 +269,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .allowedParamTypes = {REG8 | CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
-                                  "test rsp, -2\n\t"
+                                  "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
                                   "sub rsp, 8\n\t"
                                   "call writechar\n\t"
@@ -285,7 +283,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 1,
             .analysisFunction = NULL,
             .allowedParamTypes = {REG8},
-            .translationPattern = "test rsp, -2\n\t"
+            .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
                                   "sub rsp, 8\n\t"
                                   "call readchar\n\t"
