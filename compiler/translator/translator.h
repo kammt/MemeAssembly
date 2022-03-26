@@ -24,6 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdio.h>
 
-void writeToFile(struct compileState* compileState, char* inputFileString, FILE *outputFile);
+void writeToFile(struct compileState* compileState, FILE *outputFile);
 
 #endif //MEMEASSEMBLY_TRANSLATOR_H
