@@ -21,9 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "analysisHelper.h"
 #include "../logger/log.h"
 
-#include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 
 
 /**
@@ -42,7 +40,13 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
         bool mainFunctionExists = false;
         struct commandLinkedList *functionDefinition = commandLinkedList[opcode];
         while (functionDefinition != NULL) {
-            if (strcmp(functionDefinition->command->parameters[0], "main") == 0) {
+            const char* const mainFunctionName =
+                #ifdef MACOS
+                    "_main";
+                #else
+                    "main";
+                #endif
+            if (strcmp(functionDefinition->command->parameters[0], mainFunctionName) == 0) {
                 mainFunctionExists = true;
             }
 
