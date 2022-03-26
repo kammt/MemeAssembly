@@ -13,8 +13,8 @@ else
 endif
 
 # Compiler Flags
-CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO)
-CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wmisleading-indentation -g
+CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO) -O2
+CFLAGS_DEBUG+=-Og -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 
 # Destination directory for make install
 DESTDIR=/usr/local/bin
