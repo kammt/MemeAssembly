@@ -37,7 +37,7 @@ void analyseCommands(struct compileState* compileState) {
             for(unsigned k = 0; k < function.numberOfCommands; k++) {
                 struct parsedCommand parsedCommand = function.commands[k];
                 //Analyse parameters
-                checkParameters(&parsedCommand, compileState -> files[i].fileName, compileState);
+                checkParameters(&function.commands[k], compileState -> files[i].fileName, compileState);
 
                 //Add to command's linkedList
                 //Create Linked List item
