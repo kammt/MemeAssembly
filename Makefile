@@ -14,7 +14,7 @@ endif
 
 # Compiler Flags
 CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO) -O2
-CFLAGS_DEBUG+=-Og -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
+CFLAGS_DEBUG+=-O0 -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 
 # Destination directory for make install
 DESTDIR=/usr/local/bin
