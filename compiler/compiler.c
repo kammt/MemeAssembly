@@ -162,13 +162,13 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {0}\n\t"
                               "push rdx\n\t"
-                              "xor rdx, rdx\n\t"
+                              "cqo\n\t"
                               "push rax\n\t"
                               "mov rax, {1}\n\t"
                               "idiv QWORD PTR [rip + .Ltmp64]\n\t"
                               "push rax\n\t"
                               "mov rax, [rsp + 8]\n\t"
-                              "pop 1\n\t"
+                              "pop {1}\n\t"
                               "add rsp, 8\n\t"
                               "pop rdx\n\t"
         },
