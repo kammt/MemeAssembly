@@ -66,7 +66,8 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
         printError(inputFileName, functionStart.lineNum, compileState, "function does not return", 0);
     }
 
-    function.numberOfCommands = functionEndIndex;
+    //Our function definition is also a command, hence there are functionEndIndex + 1 commands
+    function.numberOfCommands = functionEndIndex + 1;
     return function;
 }
 
