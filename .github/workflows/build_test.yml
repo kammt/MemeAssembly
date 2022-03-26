@@ -45,7 +45,7 @@ jobs:
         shell: powershell
         run: |
           $env:Path += ";C:\msys64\mingw64\bin"
-          mingw32-make.exe CFLAGS+=-Werror debug
+          mingw32-make.exe debug
           
   build_macos:
     # The type of runner that the job will run on
