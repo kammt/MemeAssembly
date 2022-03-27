@@ -189,9 +189,46 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
     fprintf(outputFile, "\n.data\n\t");
     fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
+    //Struct for martyrdom command
+    #ifndef WINDOWS
+    fprintf(outputFile, "\t.LsigStruct:\n"
+                        "\t\t.Lsa_handler: .quad 0\n"
+                        "\t\t.quad 0x04000000\n"
+                        "\t\t.Lsa_restorer: .quad 0\n"
+                        "\t\t.quad 0\n\n");
+    #endif
 
     fprintf(outputFile, "\n\n.text\n\t");
     fprintf(outputFile, "\n\n.Ltext0:\n");
+
+    #ifndef WINDOWS
+    fprintf(outputFile, "killParent:\n"
+                        #ifdef LINUX
+                        "    mov rax, 110\n"
+                        #else
+                        "    mov rax, 0x2000027"
+                        #endif
+                        "    syscall\n"
+                        "\n"
+                        "    mov rdi, rax\n"
+                        "    mov rsi, 9\n"
+                        #ifdef LINUX
+                        "    mov rax, 62\n"
+                        #else
+                        "    mov rax, 0x2000025"
+                        #endif
+                        "    syscall\n"
+                        "\n"
+                        "    mov rdi, 0\n"
+                        "    mov rax, 60\n"
+                        "    syscall\n"
+                        "    ret\n"
+                        "\n"
+                        "sa_restorer:\n"
+                        "    xor rax, rax\n"
+                        "    ret\n\n");
+
+    #endif
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         struct file currentFile = compileState -> files[i];
@@ -215,6 +252,51 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                 if(currentCommand.translate) {
                     translateToAssembly(compileState, currentFunction.name, currentCommand, i, (k == currentFunction.numberOfCommands - 1), outputFile);
                 }
+
+
+                #ifndef WINDOWS
+                const char* const mainFuncName =
+                    #ifdef MACOS
+                        "_main";
+                    #else
+                        "main";
+                    #endif
+
+                if(compileState -> martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
+                    fprintf(outputFile, "push rax\n"
+                                        "    push rdi\n"
+                                        "    push rsi\n"
+                                        "    push rdx\n"
+                                        "    push r10\n"
+                                        "    push rcx\n"
+                                        "    push r11\n"
+                                        "    \n"
+                                        "    lea rax, [rip + killParent]\n"
+                                        "    mov [rip + .Lsa_handler], rax\n"
+                                        "\n"
+                                        "    lea rax, [rip + sa_restorer]\n"
+                                        "    mov [rip + .Lsa_restorer], rax\n"
+                                        "\n"
+                                        #ifdef LINUX
+                                        "    mov rax, 13\n"
+                                        #else
+                                        "    mov rax, 0x200002E"
+                                        #endif
+                                        "    mov rdi, 2\n"
+                                        "    lea rsi, [rip + .LsigStruct]\n"
+                                        "    xor rdx, rdx\n"
+                                        "    mov r10, 8\n"
+                                        "    syscall\n"
+                                        "    \n"
+                                        "    pop r11\n"
+                                        "    pop rcx\n"
+                                        "    pop r10\n"
+                                        "    pop rdx\n"
+                                        "    pop rsi\n"
+                                        "    pop rdi\n"
+                                        "    pop rax\n\n");
+                }
+                #endif
             }
 
             //Insert STABS function-info
