@@ -73,6 +73,7 @@ struct compileState {
     struct file* files;
 
     bool useStabs;
+    bool martyrdom;
     translateMode translateMode;
     optimisationLevel optimisationLevel;
 
