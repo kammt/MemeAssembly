@@ -206,7 +206,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         #ifdef LINUX
                         "    mov rax, 110\n"
                         #else
-                        "    mov rax, 0x2000027"
+                        "    mov rax, 0x2000027\n"
                         #endif
                         "    syscall\n"
                         "\n"
@@ -215,7 +215,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         #ifdef LINUX
                         "    mov rax, 62\n"
                         #else
-                        "    mov rax, 0x2000025"
+                        "    mov rax, 0x2000025\n"
                         #endif
                         "    syscall\n"
                         "\n"
@@ -280,7 +280,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                                         #ifdef LINUX
                                         "    mov rax, 13\n"
                                         #else
-                                        "    mov rax, 0x200002E"
+                                        "    mov rax, 0x200002E\n"
                                         #endif
                                         "    mov rdi, 2\n"
                                         "    lea rsi, [rip + .LsigStruct]\n"
