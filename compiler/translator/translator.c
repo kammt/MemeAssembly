@@ -190,12 +190,17 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fprintf(outputFile, "\n.data\n\t");
     fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
     //Struct for martyrdom command
-    #ifndef WINDOWS
+    #ifdef LINUX
     fprintf(outputFile, "\t.LsigStruct:\n"
                         "\t\t.Lsa_handler: .quad 0\n"
                         "\t\t.quad 0x04000000\n"
-                        "\t\t.Lsa_restorer: .quad 0\n"
-                        "\t\t.quad 0\n\n");
+                        "\t\t.quad 0, 0\n\n");
+    #endif
+    #ifdef MACOS
+    fprintf(outputFile, "\t.LsigStruct:\n"
+                        "\t\t.Lsa_handler: .quad 0\n"
+                        "\t\t.Lsa_handler_2: .quad 0\n"
+                        "\t\t.quad 0, 0\n\n");
     #endif
 
     fprintf(outputFile, "\n\n.text\n\t");
@@ -222,10 +227,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         "    mov rdi, 0\n"
                         "    mov rax, 60\n"
                         "    syscall\n"
-                        "    ret\n"
-                        "\n"
-                        "sa_restorer:\n"
-                        "    xor rax, rax\n"
                         "    ret\n\n");
 
     #endif
@@ -273,9 +274,11 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                                         "    \n"
                                         "    lea rax, [rip + killParent]\n"
                                         "    mov [rip + .Lsa_handler], rax\n"
-                                        "\n"
-                                        "    lea rax, [rip + sa_restorer]\n"
-                                        "    mov [rip + .Lsa_restorer], rax\n"
+                #ifdef MACOS
+                                        //For some reason, signaling leads to a segmentation fault if the second qword of the sigaction struct
+                                        //doesn't contain the address as well
+                                        "    mov [rip + .Lsa_handler_2], rax\n"
+                #endif
                                         "\n"
                                         #ifdef LINUX
                                         "    mov rax, 13\n"
