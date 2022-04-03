@@ -189,14 +189,14 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
     fprintf(outputFile, "\n.data\n\t");
     fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
+
     //Struct for martyrdom command
     #ifdef LINUX
     fprintf(outputFile, "\t.LsigStruct:\n"
                         "\t\t.Lsa_handler: .quad 0\n"
                         "\t\t.quad 0x04000000\n"
                         "\t\t.quad 0, 0\n\n");
-    #endif
-    #ifdef MACOS
+    #elif defined(MACOS)
     fprintf(outputFile, "\t.LsigStruct:\n"
                         "\t\t.Lsa_handler: .quad 0\n"
                         "\t\t.Lsa_handler_2: .quad 0\n"
@@ -274,11 +274,11 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                                         "    \n"
                                         "    lea rax, [rip + killParent]\n"
                                         "    mov [rip + .Lsa_handler], rax\n"
-                #ifdef MACOS
-                                        //For some reason, signaling leads to a segmentation fault if the second qword of the sigaction struct
+                                        #ifdef MACOS
+                                        //For some reason, signaling SIGINT on MacOS leads to a segmentation fault if the second qword of the sigaction struct
                                         //doesn't contain the address as well
                                         "    mov [rip + .Lsa_handler_2], rax\n"
-                #endif
+                                        #endif
                                         "\n"
                                         #ifdef LINUX
                                         "    mov rax, 13\n"
