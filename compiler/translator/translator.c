@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm and contributors
+ Copyright © 2021-2022 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
