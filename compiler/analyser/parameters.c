@@ -345,7 +345,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 }
                 if(!(character == '_' || character == '$' || character == '.' || (character >= '0' && character <= '9') || (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z'))) {
                     unexpectedCharacter = true;
-                    printDebugMessage(compileState -> logLevel, "\t\tParameter is not a valid function name, unexpected character found at position %u", 1, i);
+                    printDebugMessage(compileState -> logLevel, "\t\tParameter is not a valid function name, unexpected character found at position %lu", 1, i);
                     break;
                 }
             }
