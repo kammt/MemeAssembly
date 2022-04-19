@@ -58,3 +58,13 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
         }
     }
 }
+
+/**
+ * Checks if all function-calls are valid, meaning that a function was defined. Since there is no "extern"-keyword until now, this means that only MemeASM-functions can be called (and not e.g. c-functions)
+ * @param commandLinkedList a list of all occurrences of all commands. Index i contains a linked list of all commands that have opcode i
+ * @param opcode the opcode of the function call
+ * @param compileState the current compile state
+ */
+void analyseCall(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
+    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[0], compileState, 1, "function");
+}
