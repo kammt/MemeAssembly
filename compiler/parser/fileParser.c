@@ -193,14 +193,29 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
             printDebugMessage(compileState -> logLevel, "\tcomparing with %s", 1, commandToken);
             //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
             if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
-                printDebugMessage( compileState -> logLevel, "\t\tInterpreting as parameter:", 1, lineToken);
+                printDebugMessage(compileState->logLevel, "\t\tInterpreting as parameter:", 1, lineToken);
 
-                char *variable = malloc(strlen(lineToken) + 1);
-                if(variable == NULL) {
+                char *variable = malloc(strlen(lineToken) +
+                                        2); //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
+                if (variable == NULL) {
                     fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                     exit(EXIT_FAILURE);
                 }
+
+                #ifdef MACOS
+                if (i == 0) {
+                    strcpy(variable, "_");
+                    strcat(variable, lineToken);
+                } else {
+                #endif
+
+                //On Windows and Linux, only this line is executed
                 strcpy(variable, lineToken);
+
+                #ifdef MACOS
+                }
+                #endif
+
                 parsedCommand.parameters[numberOfParameters++] = variable;
 
                 //If the line after this parameter contains "do you know de wey", mark it as a pointer

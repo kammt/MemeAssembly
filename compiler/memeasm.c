@@ -66,11 +66,13 @@ int main(int argc, char* argv[]) {
     FILE *inputFile;
 
     int optimisationLevel = 0;
+    int martyrdom = true;
     const struct option long_options[] = {
             {"output",  required_argument, 0, 'o'},
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
             {"info",    no_argument,       0, 'i'},
+            {"fno-martyrdom",    no_argument,&martyrdom, false},
             {"O-1",     no_argument,      &optimisationLevel, -1},
             {"O-2",     no_argument,      &optimisationLevel, -2},
             {"O-3",     no_argument,      &optimisationLevel,-3},
@@ -119,6 +121,7 @@ int main(int argc, char* argv[]) {
                 return 1;
         }
     }
+    compileState.martyrdom = martyrdom;
 
     if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
