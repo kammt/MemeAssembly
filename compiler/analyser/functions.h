@@ -24,5 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stddef.h>
 
 void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
+void analyseCall(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H

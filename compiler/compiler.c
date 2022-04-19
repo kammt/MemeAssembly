@@ -39,13 +39,6 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "{0}:"
         },
         {
-            .pattern = "{p}: whomst has summoned the almighty one",
-            .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
-            .analysisFunction = NULL,
-            .translationPattern = "call {0}"
-        },
-        {
             .pattern = "right back at ya, buckaroo",
             .usedParameters = 0,
             .analysisFunction = NULL,
@@ -62,6 +55,13 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "xor rax, rax\n\tret"
+        },
+        {
+            .pattern = "{p}: whomst has summoned the almighty one",
+            .usedParameters = 1,
+            .allowedParamTypes = {FUNC_NAME},
+            .analysisFunction = &analyseCall,
+            .translationPattern = "call {0}"
         },
 
         ///Stack operations
