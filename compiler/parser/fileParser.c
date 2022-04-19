@@ -191,43 +191,63 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         //Enter the comparison loop
         while (commandToken != NULL && lineToken != NULL) {
             printDebugMessage(compileState -> logLevel, "\tcomparing with %s", 1, commandToken);
-            //If the pattern of the command at this position is only 'p', it is a parameter, save it into the struct
-            if(strlen(commandToken) == 1 && commandToken[0] == 'p') {
-                printDebugMessage(compileState->logLevel, "\t\tInterpreting as parameter:", 1, lineToken);
 
-                char *variable = malloc(strlen(lineToken) +
-                                        2); //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
-                if (variable == NULL) {
-                    fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                    exit(EXIT_FAILURE);
-                }
+            if(strstr(commandToken, "{p}") != NULL) {
+                //First check that everything before and after the {p} matches
 
-                #ifdef MACOS
-                if (i == 0) {
-                    strcpy(variable, "_");
-                    strcat(variable, lineToken);
-                } else {
-                #endif
+                //The difference between the starting address of commandToken and the starting address of {p} is the number of characters before {p}
+                size_t charsBefore = ((size_t) strstr(commandToken, "{p}") - (size_t) commandToken);
+                //The difference between the total string length of commandToken and (charsBefore + 3)
+                size_t charsAfter = (strlen(commandToken) - charsBefore - 3);
 
-                //On Windows and Linux, only this line is executed
-                strcpy(variable, lineToken);
+                if(strncmp(commandToken, lineToken, charsBefore) == 0 &&
+                                        strncmp(commandToken + charsBefore + 3, lineToken + strlen(lineToken) - charsAfter, charsAfter) == 0) {
+                    printDebugMessage(compileState->logLevel, "\t\t%s contains a parameter", 1, lineToken);
 
-                #ifdef MACOS
-                }
-                #endif
+                    size_t parameterLength = strlen(lineToken) - charsBefore - charsAfter;
 
-                parsedCommand.parameters[numberOfParameters++] = variable;
-
-                //If the line after this parameter contains "do you know de wey", mark it as a pointer
-                if(savePtrLine != NULL && strlen(savePtrLine) >= strlen(pointerSuffix) && strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
-                    printDebugMessage( compileState -> logLevel, "\t\t\t'do you know de wey' was found, interpreting as pointer", 0);
-                    //If another parameter is already marked as a variable, print an error
-                    if(parsedCommand.isPointer != 0) {
-                        printError(inputFileName, lineNum, compileState, "Only one parameter is allowed to be a pointer", 0);
+                    //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
+                    char *variable = malloc(parameterLength + 2);
+                    if (variable == NULL) {
+                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                        exit(EXIT_FAILURE);
                     }
-                    parsedCommand.isPointer = (uint8_t) numberOfParameters;
-                    //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
-                    savePtrLine += strlen(pointerSuffix);
+
+                    #ifdef MACOS
+                    if (i == 0) {
+                        strcpy(variable, "_");
+                        strncat(variable, lineToken, parameterLength);
+                        variable[parameterLength + 1] = '\0';
+                    } else {
+                    #endif
+                    //On Windows and Linux, only this line is executed
+                    strncpy(variable, lineToken, parameterLength);
+                    variable[parameterLength] = '\0';
+                    #ifdef MACOS
+                    }
+                    #endif
+
+                    parsedCommand.parameters[numberOfParameters++] = variable;
+
+                    //If the line after this parameter contains "do you know de wey", mark it as a pointer
+                    if (savePtrLine != NULL && strlen(savePtrLine) >= strlen(pointerSuffix) &&
+                        strncmp(pointerSuffix, savePtrLine, strlen(pointerSuffix)) == 0) {
+                        printDebugMessage(compileState->logLevel,
+                                          "\t\t\t'do you know de wey' was found, interpreting as pointer", 0);
+                        //If another parameter is already marked as a variable, print an error
+                        if (parsedCommand.isPointer != 0) {
+                            printError(inputFileName, lineNum, compileState,
+                                       "Only one parameter is allowed to be a pointer", 0);
+                        }
+                        parsedCommand.isPointer = (uint8_t) numberOfParameters;
+                        //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
+                        savePtrLine += strlen(pointerSuffix);
+                    }
+                } else {
+                    //Characters before and after parameter do not match
+                    printDebugMessage( compileState -> logLevel, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command", 0);
+                    freeAllocatedMemory(parsedCommand, numberOfParameters);
+                    break;
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
