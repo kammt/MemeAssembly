@@ -37,6 +37,9 @@ void setConfusedStonksJumpLabel(struct commandLinkedList** commandLinkedList, un
     srand((unsigned int) time(NULL));
 
     for(unsigned i = 0; i < compileState -> fileCount; i++) {
+        if(compileState->files[i].loc == 0) {
+            continue;
+        }
         compileState -> files[i].randomIndex = ((size_t) rand()) % (compileState -> files[i].loc);
         printDebugMessage(compileState -> logLevel, "Chose random line for jump marker: %lu", 1, compileState -> files[i].randomIndex);
     }
