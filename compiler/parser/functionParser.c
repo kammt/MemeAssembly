@@ -50,13 +50,12 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
 
         //Is this a new function definition
         if(opcode == 0) {
-            //If there hasn't been a return statement until now, throw an error since there was no return statement until now
-            if(functionEndIndex == 0) {
-                printError(inputFileName, parsedCommand.lineNum, compileState, "expected a return statement, but got a new function definition", 0);
-            }
+            //Throw an error since there was no return statement until now
+            printError(inputFileName, parsedCommand.lineNum, compileState, "expected a return statement, but got a new function definition", 0);
             break;
-        } if(opcode > 0 && opcode <= 3) { //Function is a return statement
-            functionEndIndex = index;
+        } if(opcode > 0 && opcode <= 3) { //command is a return statement
+            functionEndIndex = functionStartAtIndex + index;
+            break;
         }
         index++;
     }
@@ -66,8 +65,8 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
         printError(inputFileName, functionStart.lineNum, compileState, "function does not return", 0);
     }
 
-    //Our function definition is also a command, hence there are functionEndIndex + 1 commands
-    function.numberOfCommands = functionEndIndex + 1;
+    //Our function definition is also a command, hence there are functionEndIndex - functionStartAtIndex + 1 commands
+    function.numberOfCommands = (functionEndIndex - functionStartAtIndex) + 1;
     return function;
 }
 
@@ -110,7 +109,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
         //Set the commands
         functions[functionArrayIndex].commands = &commandsArray.arrayPointer[commandArrayIndex];
         //Increase our command index so that it points to the next unparsed command
-        commandArrayIndex += functions[functionArrayIndex].numberOfCommands + 1;
+        commandArrayIndex += functions[functionArrayIndex].numberOfCommands;
         //Increase our function array index so that it points to the next uninitialised struct
         functionArrayIndex++;
     }
