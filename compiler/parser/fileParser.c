@@ -31,14 +31,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 extern struct command commandList[];
 
-unsigned int min(unsigned int one, unsigned int two) {
-    if(one > two) {
-        return two;
-    } else {
-        return one;
-    }
-}
-
 /**
  * Removes the \n from a string if it is present at the end of the string
  */
@@ -61,7 +53,7 @@ int isLineOfInterest(const char* line, ssize_t lineLength) {
         i++; //Increase our variable as long as there are only tabs or spaces
     }
 
-    if(lineLength != i + 1 && lineLength != 1 && strncmp((line + i), commentStart, min((unsigned int) lineLength, strlen(commentStart))) != 0) {
+    if(lineLength != i && strncmp((line + i), commentStart, strlen(commentStart)) != 0) {
         return 1;
     }
     return 0;
@@ -310,6 +302,14 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
     //First, we create an array of command structs
     size_t loc = getLinesOfCode(inputFile);
     printDebugMessage(compileState -> logLevel, "The number of lines are %lu", 1, loc);
+
+    if(loc == 0) {
+        printError(inputFileName, 0, compileState, "file does not contain any commands", 0);
+
+        commandsArray->arrayPointer = NULL;
+        commandsArray->size = 0;
+        return;
+    }
 
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), loc);
     if(commands == NULL) {
