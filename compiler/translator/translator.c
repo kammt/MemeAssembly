@@ -238,32 +238,20 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
             stabs_writeFileInfo(outputFile, currentFile.fileName);
         }
 
+        size_t line = 0;
         for(size_t j = 0; j < currentFile.functionCount; j++) {
             struct function currentFunction = currentFile.functions[j];
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
-                struct parsedCommand currentCommand = currentFunction.commands[k];
-
-                //Print the confused stonks label now if it should be at this position
-                if(k == currentFile.randomIndex) {
-                    fprintf(outputFile, "\t.LConfusedStonks_%u: ", i);
-                }
-
-                //If it should be translated, translate it
-                if(currentCommand.translate) {
-                    translateToAssembly(compileState, currentFunction.name, currentCommand, i, (k == currentFunction.numberOfCommands - 1), outputFile);
-                }
-
-
                 #ifndef WINDOWS
-                const char* const mainFuncName =
-                    #ifdef MACOS
+                const char *const mainFuncName =
+                #ifdef MACOS
                         "_main";
-                    #else
+                #else
                         "main";
-                    #endif
+                #endif
 
-                if(compileState -> martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
+                if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
                     fprintf(outputFile, "push rax\n"
                                         "    push rdi\n"
                                         "    push rsi\n"
@@ -300,11 +288,25 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                                         "    pop rax\n\n");
                 }
                 #endif
-            }
 
-            //Insert STABS function-info
-            if(compileState -> useStabs) {
-                stabs_writeFunctionInfo(outputFile, currentFunction.name);
+                struct parsedCommand currentCommand = currentFunction.commands[k];
+
+                //Print the confused stonks label now if it should be at this position
+                if (line == currentFile.randomIndex) {
+                    fprintf(outputFile, "\t.LConfusedStonks_%u: \n", i);
+                }
+
+                //If it should be translated, translate it
+                if (currentCommand.translate) {
+                    translateToAssembly(compileState, currentFunction.name, currentCommand, i,
+                                        (k == currentFunction.numberOfCommands - 1), outputFile);
+                }
+
+                //Insert STABS function-info
+                if (compileState->useStabs) {
+                    stabs_writeFunctionInfo(outputFile, currentFunction.name);
+                }
+                line++;
             }
         }
     }
