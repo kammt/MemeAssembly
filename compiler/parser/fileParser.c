@@ -53,7 +53,7 @@ int isLineOfInterest(const char* line, ssize_t lineLength) {
         i++; //Increase our variable as long as there are only tabs or spaces
     }
 
-    if(lineLength != i && strncmp((line + i), commentStart, strlen(commentStart)) != 0) {
+    if(line[i] != '\n' && lineLength != i && strncmp((line + i), commentStart, strlen(commentStart)) != 0) {
         return 1;
     }
     return 0;
