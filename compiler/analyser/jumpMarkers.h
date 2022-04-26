@@ -17,13 +17,12 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MEMEASSEMBLY_TRANSLATOR_H
-#define MEMEASSEMBLY_TRANSLATOR_H
+#ifndef MEMEASSEMBLY_JUMPMARKERS_H
+#define MEMEASSEMBLY_JUMPMARKERS_H
 
 #include "../commands.h"
 
-#include <stdio.h>
+void analyseMonkeMarkers(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
+void analyseJumpMarkers(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
-void writeToFile(struct compileState* compileState, FILE *outputFile);
-
-#endif //MEMEASSEMBLY_TRANSLATOR_H
+#endif //MEMEASSEMBLY_JUMPMARKERS_H

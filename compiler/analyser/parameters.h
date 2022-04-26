@@ -17,13 +17,11 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MEMEASSEMBLY_TRANSLATOR_H
-#define MEMEASSEMBLY_TRANSLATOR_H
+#ifndef MEMEASSEMBLY_PARAMETERS_H
+#define MEMEASSEMBLY_PARAMETERS_H
 
 #include "../commands.h"
 
-#include <stdio.h>
+void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, struct compileState* compileState);
 
-void writeToFile(struct compileState* compileState, FILE *outputFile);
-
-#endif //MEMEASSEMBLY_TRANSLATOR_H
+#endif //MEMEASSEMBLY_PARAMETERS_H

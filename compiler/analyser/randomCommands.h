@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021-2022 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,12 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MEMEASSEMBLY_JUMPLABELS_H
-#define MEMEASSEMBLY_JUMPLABELS_H
+#ifndef MEMEASSEMBLY_RANDOMCOMMANDS_H
+#define MEMEASSEMBLY_RANDOMCOMMANDS_H
 
 #include "../commands.h"
 
-void checkMonkeJumpLabelValidity(struct commandsArray *commandsArray, int monkeOpcode);
-void checkJumpLabelValidity(struct commandsArray *commandsArray, int upgradeOpcode);
+void setConfusedStonksJumpLabel(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) ;
+void chooseLinesToBeDeleted(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
-#endif //MEMEASSEMBLY_JUMPLABELS_H
+#endif //MEMEASSEMBLY_RANDOMCOMMANDS_H

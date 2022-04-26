@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021-2022 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,11 +21,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define COMPILER_H
 
 #include <stdio.h>
-
+#include <stdbool.h>
 #include "commands.h"
 
-_Noreturn void createExecutable(FILE *srcPTR, char *destFile);
-_Noreturn void createObjectFile(FILE *srcPTR, char *destFile);
-_Noreturn int createAssemblyFile(FILE *srcPTR, FILE *destPTR);
+_Noreturn void compile(struct compileState compileState, char* outputFileName);
 
 #endif

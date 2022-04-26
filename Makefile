@@ -13,16 +13,16 @@ else
 endif
 
 # Compiler Flags
-CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO)
-CFLAGS_DEBUG+=-Wall -Wextra -Wpedantic -Wmisleading-indentation -g
+CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO) -O2
+CFLAGS_DEBUG+=-O0 -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 
 # Destination directory for make install
 DESTDIR=/usr/local/bin
 
 # Files to compile
-FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/analyzer/parameters.c compiler/analyzer/functions.c compiler/analyzer/jumpLabels.c compiler/analyzer/comparisons.c compiler/analyzer/randomCommands.c compiler/translator/translator.c
+FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/fileParser.c compiler/parser/functionParser.c compiler/analyser/analysisHelper.c compiler/analyser/parameters.c compiler/analyser/functions.c compiler/analyser/jumpMarkers.c compiler/analyser/comparisons.c compiler/analyser/randomCommands.c compiler/analyser/analyser.c compiler/translator/translator.c
 
-.PHONY: all clean debug uninstall install
+.PHONY: all clean debug uninstall install windows
 
 # Standard compilation
 all:
@@ -32,7 +32,7 @@ all:
 debug:
 	$(CC) -o memeasm $(FILES) $(CFLAGS) $(CFLAGS_DEBUG)
 
-# Removed the compiled executable from this directory
+# Remove the compiled executable from this directory
 clean: 
 	$(RM) memeasm
 

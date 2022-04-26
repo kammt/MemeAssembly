@@ -35,7 +35,7 @@ jobs:
 
   build_windows:
     # The type of runner that the job will run on
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -45,7 +45,7 @@ jobs:
         shell: powershell
         run: |
           $env:Path += ";C:\msys64\mingw64\bin"
-          mingw32-make.exe CFLAGS+=-Werror debug
+          mingw32-make.exe debug
           
   build_macos:
     # The type of runner that the job will run on

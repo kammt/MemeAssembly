@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021-2022 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,11 +18,13 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include "../commands.h"
 
 #ifndef MEMEASSEMBLY_PARSER_H
 #define MEMEASSEMBLY_PARSER_H
 
-struct commandsArray parseCommands(FILE *inputFile);
+void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* compileState);
 
-#endif //MEMEASSEMBLY_PARSER_H
+#endif

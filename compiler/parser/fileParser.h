@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021-2022 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,18 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MEMEASSEMBLY_RANDOMCOMMANDS_H
-#define MEMEASSEMBLY_RANDOMCOMMANDS_H
+#ifndef MEMEASSEMBLY_FILEPARSER_H
+#define MEMEASSEMBLY_FILEPARSER_H
 
-#include "../commands.h"
+#include "parser.h"
 
-void setConfusedStonksJumpLabel(struct commandsArray *commandsArray, int confusedStonksOpcode);
-void chooseLinesToBeDeleted(struct commandsArray *commandsArray, int perfectlyBalancedOpcode);
+struct commandsArray {
+    struct parsedCommand* arrayPointer;
+    size_t size;
+};
 
-#endif //MEMEASSEMBLY_RANDOMCOMMANDS_H
+/**
+ * Parses an input file line by line and fills a provided struct commandsArray
+ */
+void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* compileState, struct commandsArray* commandsArray);
+#endif

@@ -17,13 +17,18 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MEMEASSEMBLY_TRANSLATOR_H
-#define MEMEASSEMBLY_TRANSLATOR_H
+#ifndef MEMEASSEMBLY_ANALYSER_H
+#define MEMEASSEMBLY_ANALYSER_H
 
 #include "../commands.h"
+#include "../compiler.h"
 
-#include <stdio.h>
+#include "comparisons.h"
+#include "functions.h"
+#include "jumpMarkers.h"
+#include "parameters.h"
+#include "randomCommands.h"
 
-void writeToFile(struct compileState* compileState, FILE *outputFile);
+void analyseCommands(struct compileState* compileState);
 
-#endif //MEMEASSEMBLY_TRANSLATOR_H
+#endif

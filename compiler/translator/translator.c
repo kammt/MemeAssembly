@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm and contributors
+ Copyright © 2021-2022 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,25 +32,14 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define N_LBRAC 0xc0
 #define N_RBRAC 0xe0
 
-
-extern char* version_string;
-extern struct command commandList[];
-extern char *inputFileString;
-
-int optimisationLevel = 0;
-int useStabs = 0;
-
-///STABS flags
-//Required for stabs so that the function name can be inserted into the return label
-char *currentFunctionName;
-//If the previous command was ignored and the next label was already printed, this variable is set to 1 so that the label isn't printed twice
-int DNLABEL = 0;
+extern const char* const version_string;
+extern const struct command commandList[];
 
 /**
  * Creates the first STABS entry in which the origin file is stored
  * @param outputFile the output file
  */
-void stabs_writeFileInfo(FILE *outputFile) {
+void stabs_writeFileInfo(FILE *outputFile, char* inputFileString) {
     //Check if the input file string starts with a /. If it does, it is an absolute path
     char cwd[PATH_MAX + 1];
     if(inputFileString[0] == '/') {
@@ -58,18 +47,6 @@ void stabs_writeFileInfo(FILE *outputFile) {
     } else {
         fprintf(outputFile, ".stabs \"%s/%s\", %d, 0, 0, .Ltext0\n", getcwd(cwd, PATH_MAX), inputFileString, N_SO);
     }
-}
-
-/**
- * Checks if the current command should not receive a separate STABS line info. Currently, this only affects breakpoints
- * @param opcode the opcode
- * @return 1 if it should be ignored, 0 if it needs line info
- */
-int stabs_ignore(int opcode) {
-    if(strcmp(commandList[opcode].translationPattern, "int3") == 0) {
-        return 1;
-    }
-    return 0;
 }
 
 /**
@@ -87,7 +64,7 @@ void stabs_writeFunctionInfo(FILE *outputFile, char* functionName) {
  * Is called after a function return command is found. Creates a label for the function info stab to use
  * @param outputFile the output file
  */
-void stabs_writeFunctionEndLabel(FILE *outputFile) {
+void stabs_writeFunctionEndLabel(FILE *outputFile, char* currentFunctionName) {
     fprintf(outputFile, "\t.Lret_%s:\n", currentFunctionName);
 }
 
@@ -97,7 +74,7 @@ void stabs_writeFunctionEndLabel(FILE *outputFile) {
  * @param parsedCommand the command that requires a line number info
  */
 void stabs_writeLineLabel(FILE *outputFile, struct parsedCommand parsedCommand) {
-    fprintf(outputFile, "\t.Lcmd_%d:\n", parsedCommand.lineNum);
+    fprintf(outputFile, "\t.Lcmd_%lu:\n", parsedCommand.lineNum);
 }
 
 /**
@@ -106,143 +83,102 @@ void stabs_writeLineLabel(FILE *outputFile, struct parsedCommand parsedCommand) 
  * @param parsedCommand the command that requires a line number info
  */
 void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
-    fprintf(outputFile, "\t.stabn %d, 0, %d, .Lcmd_%d\n", N_SLINE, parsedCommand.lineNum, parsedCommand.lineNum);
+    fprintf(outputFile, "\t.stabn %d, 0, %lu, .Lcmd_%lu\n", N_SLINE, parsedCommand.lineNum, parsedCommand.lineNum);
 }
 
 /**
- * Translates a given command into assembly. This includes inserting parameters and creating STABS info if necessary
- * @param commandsArray all commands that were parsed
- * @param index the index of the current command
- * @param outputFile the output file
+ *
+ * @param compileState
+ * @param currentFunctionName
+ * @param parsedCommand
+ * @param fileNum
+ * @param outputFile
  */
-void translateToAssembly(struct commandsArray *commandsArray, size_t index, FILE *outputFile) {
-    struct parsedCommand parsedCommand = commandsArray -> arrayPointer[index];
-    if(parsedCommand.opcode != 0 && optimisationLevel == 69420) {
-        printDebugMessage("\tCommand is not a function declaration, abort.", "");
+void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
+    if(parsedCommand.opcode != 0 && compileState->optimisationLevel == o42069) {
+        printDebugMessage(compileState -> logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
     }
 
     //If we are supposed to create STABS info, we now need to create labels
-    if(useStabs) {
+    if(compileState -> useStabs) {
         //If this is a function declaration, update the current function name
-        if(parsedCommand.opcode == 0) {
-            currentFunctionName = parsedCommand.parameters[0];
-        //If this command is supposed to be ignored
-        } else if (stabs_ignore(parsedCommand.opcode)) {
-            //Already print the start label of the next command
-            stabs_writeLineLabel(outputFile, commandsArray -> arrayPointer[index + 1]);
-            //Set the DNLABEL variable
-            DNLABEL = 1;
-        //If it is a regular command
-        } else if (DNLABEL == 0) {
+        if(parsedCommand.opcode != 0) {
             stabs_writeLineLabel(outputFile, parsedCommand);
-        //If the previous command was ignored, i.e. DNLABEL was set, reset it to 0
-        } else {
-            DNLABEL = 0;
         }
     }
 
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    size_t patternLen = strlen(translationPattern);
-    size_t strLen = patternLen;
-    for(size_t i = 0; i < patternLen; i++) {
-        char character = translationPattern[i];
-        if(character >= '0' && character <= (char) command.usedParameters + 47) {
-            char *parameter = parsedCommand.parameters[character - 48];
-            strLen += strlen(parameter);
-            if(parsedCommand.isPointer == (character - 48) + 1) {
-                strLen += 2; // for [ and ]
-            }
-        }
-    }
-
-    char *translatedLine = malloc(strLen + 3); //Include an extra byte for the null-Pointer and two extra bytes in case []-brackets are needed for a pointer
-    if(translatedLine == NULL) {
-        fprintf(stderr, "Critical error: Memory allocation for command translation failed!");
-        exit(EXIT_FAILURE);
-    }
-    translatedLine[0] = '\0';
-
-    for(size_t i = 0; i < patternLen; i++) {
-        char character = translationPattern[i];
-        if(character >= '0' && character <= (char) command.usedParameters + 47) {
-            char *parameter = parsedCommand.parameters[character - 48];
-
-            if(parsedCommand.isPointer == (character - 48) + 1) {
-                printDebugMessage("\tAppending pointer parameter", parameter);
-
-                //Manually add braces to the string
-                size_t currentStrLen = strlen(translatedLine);
-
-                //Append a '['
-                translatedLine[currentStrLen] = '[';
-                translatedLine[currentStrLen + 1] = '\0';
-                //Append the parameter
-                strcat(translatedLine, parameter);
-                //Append a ']'
-                currentStrLen = strlen(translatedLine);
-                translatedLine[currentStrLen] = ']';
-                translatedLine[currentStrLen + 1] = '\0';
-            } else {
-                printDebugMessage("\tAppending parameter", parameter);
-                strcat(translatedLine, parameter);
-            }
-        } else {
-            char appendix[2] = {character, '\0'};
-            strcat(translatedLine, appendix);
-        }
-    }
-
-    printDebugMessage("\tWriting to file: ", translatedLine);
     if(parsedCommand.opcode != 0) {
         fprintf(outputFile, "\t");
     }
-    fprintf(outputFile, "%s\n", translatedLine);
+    for(size_t i = 0; i < strlen(translationPattern); i++) {
 
-    printDebugMessage("\tDone, freeing memory", "");
-    free(translatedLine);
+        //Check if this is a format specifier
+        if(translationPattern[i] == '{' && translationPattern[i + 2] == '}') {
+            char formatSpecifier = translationPattern[i + 1];
+            //If the format_specifier is F, we need to add the value of the current file's index to the string
+            if(formatSpecifier == 'F') {
+                fprintf(outputFile, "%u", fileNum);
+            //Is it a parameter?
+            } else if(formatSpecifier <= (char) command.usedParameters + 47) {
+                char *parameter = parsedCommand.parameters[formatSpecifier - 48];
+                if(parsedCommand.isPointer == (formatSpecifier - 48) + 1) {
+                    fprintf(outputFile, "[%s]", parameter);
+                } else {
+                    fprintf(outputFile, "%s", parameter);
+                }
+            } else {
+                fprintf(stderr, RED "Internal compiler error: " RESET "Invalid translation format specifier '%c' for opcode %u\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new", formatSpecifier, parsedCommand.opcode);
+            }
+
+            //move our pointer along by three characters instead of one, as we just parsed three characters
+            i += 2;
+        } else {
+            fprintf(outputFile, "%c", translationPattern[i]);
+        }
+    }
+    fprintf(outputFile, "\n");
 
     //Now, we need to insert more commands based on the current optimisation level
-    if (optimisationLevel == -1) {
+    if (compileState -> optimisationLevel == o_1) {
         //Insert a nop
         fprintf(outputFile, "\tnop\n");
-    } else if (optimisationLevel == -2) {
+    } else if (compileState -> optimisationLevel == o_2) {
         //Push and pop rax
         fprintf(outputFile, "\tpush rax\n\tpop rax\n");
-    } else if (optimisationLevel == -3) {
+    } else if (compileState -> optimisationLevel == o_3) {
         //Save and restore xmm0 on the stack using movups
         fprintf(outputFile, "\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n");
-    } else if(optimisationLevel == 69420) {
+    } else if(compileState -> optimisationLevel == o42069) {
         //If we get here, then this was a function declaration. Insert a ret-statement and exit
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
     }
 
-    if(useStabs && parsedCommand.opcode != 0) {
+    if(compileState -> useStabs && parsedCommand.opcode != 0) {
         //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
-        if(parsedCommand.opcode > 0 && parsedCommand.opcode <= 3 && (commandsArray -> size == index + 1 || commandsArray -> arrayPointer[index + 1].opcode == 0)) {
-            stabs_writeFunctionEndLabel(outputFile);
+        if(lastCommand) {
+            stabs_writeFunctionEndLabel(outputFile, currentFunctionName);
         }
         //In any case, we now need to write the line info to the file
-        if(!stabs_ignore(parsedCommand.opcode)) {
-            stabs_writeLineInfo(outputFile, parsedCommand);
-        }
+        stabs_writeLineInfo(outputFile, parsedCommand);
     }
 }
 
-void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
+void writeToFile(struct compileState* compileState, FILE *outputFile) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
 
     fprintf(outputFile, "#\n# Generated by the MemeAssembly compiler %s on %s#\n", version_string, asctime(&tm));
     fprintf(outputFile, ".intel_syntax noprefix\n");
 
-    //Traverse the commandsArray to look for any functions
-    for(size_t i = 0; i < commandsArray -> size; i++) {
-        if(commandsArray -> arrayPointer[i].opcode == 0 && commandsArray -> arrayPointer[i].translate == 1) {
+    //Define all functions as global
+    for(unsigned i = 0; i < compileState->fileCount; i++) {
+        for(size_t j = 0; j < compileState -> files[i].functionCount; j++) {
             //Write the function name with the prefix ".global" to the file
-            fprintf(outputFile, ".global %s\n", commandsArray -> arrayPointer[i].parameters[0]);
+            fprintf(outputFile, ".global %s\n", compileState -> files[i].functions[j].name);
         }
     }
 
@@ -251,41 +187,132 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
     fprintf(outputFile, "\n.extern GetStdHandle\n.extern WriteFile\n.extern ReadFile\n");
     #endif
 
-    #ifdef MACOS
     fprintf(outputFile, "\n.data\n\t");
-    #else
-    fprintf(outputFile, "\n.section .data\n\t");
-    #endif
-
     fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
 
-    //Write the file info if we are using stabs
-    if(useStabs) {
-        stabs_writeFileInfo(outputFile);
-    }
-
-   
-    #ifdef MACOS
-    fprintf(outputFile, "\n\n.text\n\t");
-    #else    
-    fprintf(outputFile, "\n\n.section .text\n");
+    //Struct for martyrdom command
+    #ifdef LINUX
+    fprintf(outputFile, "\t.LsigStruct:\n"
+                        "\t\t.Lsa_handler: .quad 0\n"
+                        "\t\t.quad 0x04000000\n"
+                        "\t\t.quad 0, 0\n\n");
+    #elif defined(MACOS)
+    fprintf(outputFile, "\t.LsigStruct:\n"
+                        "\t\t.Lsa_handler: .quad 0\n"
+                        "\t\t.Lsa_handler_2: .quad 0\n"
+                        "\t\t.quad 0, 0\n\n");
     #endif
 
+    fprintf(outputFile, "\n\n.text\n\t");
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
-    for(size_t i = 0; i < commandsArray -> size; i++) {
-        if(i == commandsArray -> randomIndex) {
-            fprintf(outputFile, "\t.LConfusedStonks: ");
+    #ifndef WINDOWS
+    fprintf(outputFile, "killParent:\n"
+                        #ifdef LINUX
+                        "    mov rax, 110\n"
+                        #else
+                        "    mov rax, 0x2000027\n"
+                        #endif
+                        "    syscall\n"
+                        "\n"
+                        "    mov rdi, rax\n"
+                        "    mov rsi, 9\n"
+                        #ifdef LINUX
+                        "    mov rax, 62\n"
+                        #else
+                        "    mov rax, 0x2000025\n"
+                        #endif
+                        "    syscall\n"
+                        "\n"
+                        "    mov rdi, 0\n"
+                        "    mov rax, 60\n"
+                        "    syscall\n"
+                        "    ret\n\n");
+
+    #endif
+
+    for(unsigned i = 0; i < compileState->fileCount; i++) {
+        struct file currentFile = compileState -> files[i];
+        //Write the file info if we are using stabs
+        if(compileState -> useStabs) {
+            stabs_writeFileInfo(outputFile, currentFile.fileName);
         }
 
-        if(commandsArray -> arrayPointer[i].translate == 1) {
-            printDebugMessageWithNumber("Translating Index:", (int) i);
-            translateToAssembly(commandsArray, i, outputFile);
+        size_t line = 0;
+        for(size_t j = 0; j < currentFile.functionCount; j++) {
+            struct function currentFunction = currentFile.functions[j];
+
+            for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
+                #ifndef WINDOWS
+                const char *const mainFuncName =
+                #ifdef MACOS
+                        "_main";
+                #else
+                        "main";
+                #endif
+
+                if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
+                    fprintf(outputFile, "push rax\n"
+                                        "    push rdi\n"
+                                        "    push rsi\n"
+                                        "    push rdx\n"
+                                        "    push r10\n"
+                                        "    push rcx\n"
+                                        "    push r11\n"
+                                        "    \n"
+                                        "    lea rax, [rip + killParent]\n"
+                                        "    mov [rip + .Lsa_handler], rax\n"
+                                        #ifdef MACOS
+                                        //For some reason, signaling SIGINT on MacOS leads to a segmentation fault if the second qword of the sigaction struct
+                                        //doesn't contain the address as well
+                                        "    mov [rip + .Lsa_handler_2], rax\n"
+                                        #endif
+                                        "\n"
+                                        #ifdef LINUX
+                                        "    mov rax, 13\n"
+                                        #else
+                                        "    mov rax, 0x200002E\n"
+                                        #endif
+                                        "    mov rdi, 2\n"
+                                        "    lea rsi, [rip + .LsigStruct]\n"
+                                        "    xor rdx, rdx\n"
+                                        "    mov r10, 8\n"
+                                        "    syscall\n"
+                                        "    \n"
+                                        "    pop r11\n"
+                                        "    pop rcx\n"
+                                        "    pop r10\n"
+                                        "    pop rdx\n"
+                                        "    pop rsi\n"
+                                        "    pop rdi\n"
+                                        "    pop rax\n\n");
+                }
+                #endif
+
+                struct parsedCommand currentCommand = currentFunction.commands[k];
+
+                //Print the confused stonks label now if it should be at this position
+                if (line == currentFile.randomIndex) {
+                    fprintf(outputFile, "\t.LConfusedStonks_%u: \n", i);
+                }
+
+                //If it should be translated, translate it
+                if (currentCommand.translate) {
+                    translateToAssembly(compileState, currentFunction.name, currentCommand, i,
+                                        (k == currentFunction.numberOfCommands - 1), outputFile);
+                }
+
+                //Insert STABS function-info
+                if (compileState->useStabs) {
+                    stabs_writeFunctionInfo(outputFile, currentFunction.name);
+                }
+                line++;
+            }
         }
     }
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
-    if(optimisationLevel != 42069) {
+    if(compileState -> optimisationLevel != o42069) {
         #ifdef WINDOWS
         //Using Windows API
         fprintf(outputFile,
@@ -355,11 +382,11 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                             "push rdx\n\t"
                             "mov rdx, 1\n\t"
                             "lea rsi, [rip + .LCharacter]\n\t"
-			    #ifdef LINUX
+                            #ifdef LINUX
                             "mov rax, 1\n\t"
- 			    #else
-			    "mov rax, 0x2000004\n\t"
-			    #endif
+ 			                #else
+			                "mov rax, 0x2000004\n\t"
+			                 #endif
                             "syscall\n\t"
                             "pop rdx\n\t"
                             "pop rsi\n\t"
@@ -379,11 +406,11 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
                             "mov rdx, 1\n\t"
                             "lea rsi, [rip + .LCharacter]\n\t"
                             "mov rdi, 0\n\t"
-			    #ifdef LINUX
+			                #ifdef LINUX
                             "mov rax, 0\n\t"
-			    #else
-			    "mov rax, 0x2000003\n\t"
-			    #endif
+			                #else
+			                "mov rax, 0x2000003\n\t"
+			                #endif
                             "syscall\n\n\t"
                             "pop rdx\n\t"
                             "pop rsi\n\t"
@@ -395,21 +422,13 @@ void writeToFile(struct commandsArray *commandsArray, FILE *outputFile) {
         #endif
     }
 
-    //If we are using stabs, we now need to save all function info to the file
-    if(useStabs) {
-        //Traverse the commandsArray to look for any functions
-        for(size_t i = 0; i < commandsArray -> size; i++) {
-            if(commandsArray -> arrayPointer[i].opcode == 0 && commandsArray -> arrayPointer[i].translate == 1) {
-                //Write the stabs info
-                stabs_writeFunctionInfo(outputFile, commandsArray -> arrayPointer[i].parameters[0]);
-            }
-        }
-
+    //Add an "end marker" if we are using stabs
+    if(compileState -> useStabs) {
         fprintf(outputFile, "\n.LEOF:\n");
         fprintf(outputFile, ".stabs \"\", %d, 0, 0, .LEOF\n", N_SO);
     }
 
-    if(optimisationLevel == -4) {
+    if(compileState->optimisationLevel == o_s) {
         fprintf(outputFile, ".align 536870912\n");
     }
 }

@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021 Tobias Kamm
+ Copyright © 2021-2022 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,18 +17,12 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef MEMEASSEMBLY_FUNCTIONS_H
-#define MEMEASSEMBLY_FUNCTIONS_H
+#ifndef MEMEASSEMBLY_FUNCTIONPARSER_H
+#define MEMEASSEMBLY_FUNCTIONPARSER_H
 
-#include "../commands.h"
-#include <stddef.h>
+#include "parser.h"
+#include "fileParser.h"
 
-struct function {
-    char* name;
-    size_t definedInLine;
-    size_t numberOfCommands;
-};
+void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray, struct compileState* compileState);
 
-void checkFunctionValidity(struct commandsArray *commandsArray, int functionDeclarationOpcode);
-
-#endif //MEMEASSEMBLY_FUNCTIONS_H
+#endif
