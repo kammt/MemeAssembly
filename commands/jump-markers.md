@@ -26,6 +26,9 @@ return to monke [monke marker name]
 Defines a Monke jump marker and jumps back to that marker at a later point. Monke jump markers must only contain the letters ‘a’ and ‘u’, of which both must appear at least once. \
 For example, "uuuaaauauauauauaaaua" is valid, while "uuuuuu" or "a" are not.
 
+?> These labels are globally defined and allow the programmer to jump between MemeASM-files
+
+
 ## Comparison jumps
 ### Definition
 ```
@@ -37,6 +40,8 @@ who would win? [value/register] or [value/register]
 ```
 ### Description
 Compares the two given values or registers and jumps to the jump marker of the value or register that is greater than the other. If they are equal, no jump is performed.
+
+!> [value/register] wins must be defined within the same file, cross-file jumping is not allowed
 
 ## Check for equivalence
 ### Definition

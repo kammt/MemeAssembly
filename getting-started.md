@@ -62,6 +62,7 @@ Download the latest installer file (*.rpm) [here](https://github.com/kammt/MemeA
 
 Compiler options:
 - `g` - write debug info into the compiled file. Currently, only the STABS format is supported.
+- `-fno-martyrdom` - disables martyrdom
 - `-O-1` - reverse optimisation stage 1: A nop is inserted after every command.
 - `-O-2` - reverse optimisation stage 2: A register is moved to and from the stack
 - `-O-3` - reverse optimisation stage 3: A xmm-register is moved to and from the stack using *movups*

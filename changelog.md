@@ -1,3 +1,21 @@
+## v1.4
+New features:
+- MemeAssembly now supports multiple input files. Split your code into multiple input files to make it somewhat more understandable. Or don't, I'm just a sign (418215d2d7e97348e709ec3538a732582b5bffa1)
+- Have you ever thought about the feelings your compiled executable has? Well they do have feelings and now MemeAssembly-executables will take revenge - introducing **Martyrdom - drop a live grenade when killed**
+When attempting to kill a running MemeAssembly programm (using `SIGINT` aka. pressing Ctrl+C), the program will send `SIGKILL` to the parent process, taking your shell down with it (c7b9595d92b84cef9d40bf1b84b2f607d930e3fd). This feature is enabled by default and must explicitly be disabled using `-fno-martyrdom`. Also PROTIP: it would be good for your computer if *init* is not the parent process
+This feature is not supported on Windows because I'm not mentally stable enough to take the pain of [implementing such a thing using the Windows API](https://stackoverflow.com/a/558251)
+- New command: `[function name]: whomst has summoned the almighty one` - call a function (36b7270eeba09ef8eee77c3a41be04ecc98766ab)
+
+Improvements:
+- MemeAssembly now runs blazingly fast - with a pretty simple optimisation that you too can implement in your project. It is called: Not implicitly compiling with `-O0`
+- Apart from that, much of the code has been reworked and should:tm: be a lot more readable - especially the analyser-functions were reworked from the ground up
+
+Bug fixes:
+- The signed division command has been fixed *again*, since it couldn't handle a division with a negative number (which is quite funny considering it's a *signed* division command) (f9c5f9e68af974b2d2440abc198939c0e5951f99)
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.4)
+
+
 ## v1.3
 New features: 
 - MemeAssembly now supports Windows and MacOS! (#55, thank you to @xarantolus for helping on this one!)
