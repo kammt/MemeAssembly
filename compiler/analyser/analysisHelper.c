@@ -114,3 +114,41 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
         parentCommand = parentCommand -> next;
     }
 }
+
+/**
+ * This is a helper function that can be used by analysis functions. It checks that for all function calls the call target (function) exists
+ * @param functionDefinitions list of function definitions
+ * @param functionCalls list of function calls
+ * @param compileState the compile state
+ */
+void checkFunctionCallsValid(struct commandLinkedList *functionDefinitions, struct commandLinkedList *functionCalls, struct compileState *compileState) {
+    struct commandLinkedList *call = functionCalls;
+
+    // Go through every function call and make sure we have a matching function definition
+    while (call != NULL)
+    {
+        int callExists = false;
+
+        struct commandLinkedList *definition = functionDefinitions;
+        while (definition != NULL)
+        {
+            // If we find a function definition for this call, then everything is fine
+            if (strcmp(call->command->parameters[0], definition->command->parameters[0]) == 0)
+            {
+                callExists = true;
+                break;
+            }
+
+            definition = definition->next;
+        }
+
+        if (!callExists)
+        {
+            // We could not find a function definition for this call, so it's incorrect
+            printError(compileState->files[call->definedInFile].fileName, call->command->lineNum, compileState,
+                       "function \"%s\" was called, but never defined in any input file", 1, call->command->parameters[0]);
+        }
+
+        call = call->next;
+    }
+}
