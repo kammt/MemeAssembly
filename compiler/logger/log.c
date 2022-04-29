@@ -156,3 +156,29 @@ void printNote(char* message, unsigned varArgNum, ...) {
     vprintf(message, vaList);
     printf("\n");
 }
+
+/**
+ * Prints all function definitions present in functionDefinitions
+ * @param compileState compile state (for file info)
+ * @param functionDefinitions list of available function definitions
+ */
+void printAvailableFunctionDefinitions(struct commandLinkedList *call, struct compileState *compileState, struct commandLinkedList *functionDefinitions)
+{
+    if (!functionDefinitions)
+    {
+        printError(compileState->files[call->definedInFile].fileName, call->command->lineNum, compileState,
+        "There are no defined functions\n", 0);
+        return;
+    }
+
+    printError(compileState->files[call->definedInFile].fileName, call->command->lineNum, compileState,
+    "The following function definitions are available:", 0);
+
+    struct commandLinkedList *definition = functionDefinitions;
+    while (definition != NULL)
+    {
+        printError(compileState->files[call->definedInFile].fileName, call->command->lineNum, compileState,
+                   "\t%s (%s:%ld)", 3, definition->command->parameters[0], compileState->files[definition->definedInFile].fileName, definition->command->lineNum);
+        definition = definition->next;
+    }
+}

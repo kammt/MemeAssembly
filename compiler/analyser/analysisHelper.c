@@ -121,7 +121,10 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
  * @param functionCalls list of function calls
  * @param compileState the compile state
  */
-void checkFunctionCallsValid(struct commandLinkedList *functionDefinitions, struct commandLinkedList *functionCalls, struct compileState *compileState) {
+void checkFunctionCallsValid(struct commandLinkedList *functionDefinitions, struct commandLinkedList *functionCalls, struct compileState *compileState)
+{
+    printDebugMessage(compileState->logLevel, "Starting function call validity check", 0);
+
     struct commandLinkedList *call = functionCalls;
 
     // Go through every function call and make sure we have a matching function definition
@@ -129,12 +132,23 @@ void checkFunctionCallsValid(struct commandLinkedList *functionDefinitions, stru
     {
         int callExists = false;
 
+        printDebugMessage(compileState->logLevel, "\tChecking call of \"%s\" in %s:%d", 3,
+                          call->command->parameters[0], compileState->files[call->definedInFile].fileName, call->command->lineNum);
+
         struct commandLinkedList *definition = functionDefinitions;
         while (definition != NULL)
         {
-            // If we find a function definition for this call, then everything is fine
+// If we find a function definition for this call, then everything is fine.
+// Note that on MacOS functions automatically have a "_"-prefix that we need to ignore
+#ifdef MACOS
+// TODO: Actually ignore the MACOS prefix
             if (strcmp(call->command->parameters[0], definition->command->parameters[0]) == 0)
+#else
+            if (strcmp(call->command->parameters[0], definition->command->parameters[0]) == 0)
+#endif
             {
+                printDebugMessage(compileState->logLevel, "\t\tThe definition is in %s:%ld", 2,
+                                  compileState->files[definition->definedInFile].fileName, definition->command->lineNum);
                 callExists = true;
                 break;
             }
@@ -147,6 +161,7 @@ void checkFunctionCallsValid(struct commandLinkedList *functionDefinitions, stru
             // We could not find a function definition for this call, so it's incorrect
             printError(compileState->files[call->definedInFile].fileName, call->command->lineNum, compileState,
                        "function \"%s\" was called, but never defined in any input file", 1, call->command->parameters[0]);
+            printAvailableFunctionDefinitions(call, compileState, functionDefinitions);
         }
 
         call = call->next;
