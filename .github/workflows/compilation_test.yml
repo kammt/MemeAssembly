@@ -50,8 +50,8 @@ jobs:
         shell: powershell
         run: ./memeasm.exe -S -d -o example.S .github\workflows\example.memeasm
 
-        - name: Check that compiling multiple input files works
-          run: ./memeasm.exe -d -o tmp.exe .github/workflows/multiple_files/*.memeasm
+      - name: Check that compiling multiple input files works
+        run: ./memeasm.exe -d -o tmp.exe .github/workflows/multiple_files/*.memeasm
 
   compile_macos:
     # The type of runner that the job will run on
