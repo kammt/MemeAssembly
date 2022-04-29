@@ -141,8 +141,8 @@ void checkFunctionCallsValid(struct commandLinkedList *functionDefinitions, stru
 // If we find a function definition for this call, then everything is fine.
 // Note that on MacOS functions automatically have a "_"-prefix that we need to ignore
 #ifdef MACOS
-// TODO: Actually ignore the MACOS prefix
-            if (strcmp(call->command->parameters[0], definition->command->parameters[0]) == 0)
+            // The "+ 1" skips the "_" prefix
+            if (definition->command->parameters[0][0] == '_' && strcmp(call->command->parameters[0], definition->command->parameters[0] + 1) == 0)
 #else
             if (strcmp(call->command->parameters[0], definition->command->parameters[0]) == 0)
 #endif
