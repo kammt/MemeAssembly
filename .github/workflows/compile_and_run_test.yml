@@ -49,8 +49,8 @@ jobs:
           shell: powershell
           run: ./tmp.exe
 
-      - name: Check that compiling multiple input files works
-        run: ./memeasm.exe -d -o tmp.exe .github/workflows/multiple_files/*.memeasm
+        - name: Check that compiling multiple input files works
+          run: ./memeasm.exe -d -o tmp.exe .github/workflows/multiple_files/*.memeasm
 
   run_macos:
     runs-on: macos-latest
