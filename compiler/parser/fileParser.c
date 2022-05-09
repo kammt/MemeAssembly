@@ -206,7 +206,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
                     }
 
                     #ifdef MACOS
-                    if (i == 0) {
+                    if (i == 0 || i == 4) {
                         strcpy(variable, "_");
                         strncat(variable, lineToken, parameterLength);
                         variable[parameterLength + 1] = '\0';
