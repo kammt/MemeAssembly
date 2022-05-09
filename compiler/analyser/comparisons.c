@@ -35,7 +35,7 @@ void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, un
     checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 1, "comparison jump marker");
 
     //Second check: "p wins" was declared
-    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 2, "comparison jump label");
+    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 2, true, "comparison jump label");
 }
 
 
@@ -53,5 +53,5 @@ void analyseTheyreTheSamePictureCommands(struct commandLinkedList** commandLinke
     checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 0, "\"they're the same picture\"");
 
     //Check 2: "they're the same picture" must exist if a comparison was used
-    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 0, "\"they're the same picture\"");
+    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 0, true, "\"they're the same picture\"");
 }

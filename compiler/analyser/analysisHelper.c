@@ -65,9 +65,10 @@ void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struc
  * @param compileState the compile state
  * @param parametersToCheck how many parameters should be checked. Note that when this is set to e.g. 2,
  *                          it will look for a command with a first parameter that matches param1 and a separate command with a first parameter that matches param2
+ * @param sameFile whether or not the companion command has to exist within the same file. Is true for all commands except function calls
  * @param itemName the name of the item. Will be inserted in the error message ("%s wasn't defined [for parameter _]")
  */
-void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, struct commandLinkedList* childCommands, struct compileState* compileState, uint8_t parametersToCheck, char* itemName) {
+void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, struct commandLinkedList* childCommands, struct compileState* compileState, uint8_t parametersToCheck, bool sameFile, char* itemName) {
     if(parametersToCheck > 2) {
         parametersToCheck = 2;
     }
@@ -82,7 +83,7 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
         struct commandLinkedList* childCommand = childCommands;
         while(childCommand != NULL) {
 
-            if(parentCommand -> definedInFile == childCommand -> definedInFile) {
+            if(!sameFile || parentCommand -> definedInFile == childCommand -> definedInFile) {
                 //The first child was found if either no parameters must match or the first parameter matches
                 if(parametersToCheck == 0 || (parametersToCheck >= 1 && strcmp( command -> parameters[0], childCommand -> command -> parameters[0]) == 0)) {
                     childFound[0] = true;

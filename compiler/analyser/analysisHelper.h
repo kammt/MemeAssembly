@@ -23,6 +23,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "analyser.h"
 
 void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struct compileState* compileState, bool oncePerFile, uint8_t parametersToCheck, char* itemName);
-void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, struct commandLinkedList* childCommands, struct compileState* compileState, uint8_t parametersToCheck, char* itemName);
+void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, struct commandLinkedList* childCommands, struct compileState* compileState, uint8_t parametersToCheck, bool sameFile, char* itemName);
 
 #endif //MEMEASSEMBLY_ANALYSISHELPER_H
