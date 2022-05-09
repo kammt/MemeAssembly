@@ -29,6 +29,17 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "translator/translator.h"
 #include "logger/log.h"
 
+
+void blockIOCommands(struct commandLinkedList** commandLinkedList, unsigned int opcode, struct compileState* compileState) {
+    struct commandLinkedList* ioCommand = commandLinkedList[opcode];
+    while (ioCommand != NULL) {
+        struct parsedCommand command = *ioCommand->command;
+
+        printError(compileState->files[ioCommand->definedInFile].fileName, command.lineNum, compileState, "I/O commands are unsupported on this platform", 0);
+        ioCommand = ioCommand->next;
+    }
+}
+
 const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
@@ -273,7 +284,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "what can I say except {p}",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisFunction = &blockIOCommands,
             .allowedParamTypes = {REG8 | CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
                                   "test rsp, 0xF\n\t"
@@ -288,7 +299,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisFunction = &blockIOCommands,
             .allowedParamTypes = {REG8},
             .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
