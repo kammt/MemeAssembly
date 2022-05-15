@@ -50,7 +50,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
 
         //Is this a new function definition
         if(opcode == 0) {
-            if(functionEndIndex != index - 1) {
+            if(functionEndIndex != functionStartAtIndex + index - 1) {
                 //Throw an error since the last statement was not a return
                 printError(inputFileName, parsedCommand.lineNum, compileState,
                            "expected a return statement, but got a new function definition", 0);
