@@ -33,9 +33,9 @@ jobs:
         run: |
           sudo make install
           cd .github/workflows/multiple_files
-          make && return 0 || return 1 
-          make fail_undefined && return 1 || return 0
-          make fail_no_main && return 1 || return 0
+          make && exit 0 || exit 1 
+          make fail_undefined && exit 1 || exit 0
+          make fail_no_main && exit 1 || exit 0
 
   compile_windows:
     # The type of runner that the job will run on
