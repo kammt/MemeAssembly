@@ -29,8 +29,12 @@ jobs:
       - name: run the compiler on example.memeasm
         run: ./memeasm -S -d -o example.S .github/workflows/example.memeasm
 
-      - name: Check that compiling multiple input files works
-        run: ./memeasm -d -o tmp .github/workflows/multiple_files/*.memeasm
+      - name: Function parser tests
+        run: |
+          cd .github/workflows/multiple_files
+          make && return 0 || return 1 
+          make fail_undefined && return 1 || return 0
+          make fail_no_main && return 1 || return 0
 
   compile_windows:
     # The type of runner that the job will run on
@@ -69,5 +73,9 @@ jobs:
       - name: run the compiler on example.memeasm
         run: ./memeasm -S -d -o example.S .github/workflows/example.memeasm
 
-      - name: Check that compiling multiple input files works
-        run: ./memeasm -d -o tmp .github/workflows/multiple_files/*.memeasm
+      - name: Function parser tests
+        run: |
+          cd .github/workflows/multiple_files
+          make && return 0 || return 1 
+          make fail_undefined && return 1 || return 0
+          make fail_no_main && return 1 || return 0
