@@ -53,9 +53,11 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
             functionDefinition = functionDefinition -> next;
         }
 
+        /*
         if (!mainFunctionExists) {
             printError(compileState -> files[0].fileName, 0, compileState, "unable to create an executable if no main-function was defined", 0);
         }
+        */
     }
 }
 
