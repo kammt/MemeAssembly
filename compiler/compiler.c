@@ -385,7 +385,6 @@ void compile(struct compileState compileState, char* outputFileName) {
 
     //Analysis done. If any errors occurred until now, print to stderr and exit
     if(compileState.compilerErrors > 0) {
-        printErrorASCII();
         fprintf(stderr, "Compilation failed with %u error(s), please check your code and try again.\n", compileState.compilerErrors);
         exit(EXIT_FAILURE);
     }
