@@ -187,49 +187,8 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fprintf(outputFile, "\n.extern GetStdHandle\n.extern WriteFile\n.extern ReadFile\n");
     #endif
 
-    fprintf(outputFile, "\n.data\n\t");
-    fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
-
-    //Struct for martyrdom command
-    #ifdef LINUX
-    fprintf(outputFile, "\t.LsigStruct:\n"
-                        "\t\t.Lsa_handler: .quad 0\n"
-                        "\t\t.quad 0x04000000\n"
-                        "\t\t.quad 0, 0\n\n");
-    #elif defined(MACOS)
-    fprintf(outputFile, "\t.LsigStruct:\n"
-                        "\t\t.Lsa_handler: .quad 0\n"
-                        "\t\t.Lsa_handler_2: .quad 0\n"
-                        "\t\t.quad 0, 0\n\n");
-    #endif
-
     fprintf(outputFile, "\n\n.text\n\t");
     fprintf(outputFile, "\n\n.Ltext0:\n");
-
-    #ifndef WINDOWS
-    fprintf(outputFile, "killParent:\n"
-                        #ifdef LINUX
-                        "    mov rax, 110\n"
-                        #else
-                        "    mov rax, 0x2000027\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, rax\n"
-                        "    mov rsi, 9\n"
-                        #ifdef LINUX
-                        "    mov rax, 62\n"
-                        #else
-                        "    mov rax, 0x2000025\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, 0\n"
-                        "    mov rax, 60\n"
-                        "    syscall\n"
-                        "    ret\n\n");
-
-    #endif
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         struct file currentFile = compileState -> files[i];
@@ -243,52 +202,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
             struct function currentFunction = currentFile.functions[j];
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
-                #ifndef WINDOWS
-                const char *const mainFuncName =
-                #ifdef MACOS
-                        "_main";
-                #else
-                        "main";
-                #endif
-
-                if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
-                    fprintf(outputFile, "push rax\n"
-                                        "    push rdi\n"
-                                        "    push rsi\n"
-                                        "    push rdx\n"
-                                        "    push r10\n"
-                                        "    push rcx\n"
-                                        "    push r11\n"
-                                        "    \n"
-                                        "    lea rax, [rip + killParent]\n"
-                                        "    mov [rip + .Lsa_handler], rax\n"
-                                        #ifdef MACOS
-                                        //For some reason, signaling SIGINT on MacOS leads to a segmentation fault if the second qword of the sigaction struct
-                                        //doesn't contain the address as well
-                                        "    mov [rip + .Lsa_handler_2], rax\n"
-                                        #endif
-                                        "\n"
-                                        #ifdef LINUX
-                                        "    mov rax, 13\n"
-                                        #else
-                                        "    mov rax, 0x200002E\n"
-                                        #endif
-                                        "    mov rdi, 2\n"
-                                        "    lea rsi, [rip + .LsigStruct]\n"
-                                        "    xor rdx, rdx\n"
-                                        "    mov r10, 8\n"
-                                        "    syscall\n"
-                                        "    \n"
-                                        "    pop r11\n"
-                                        "    pop rcx\n"
-                                        "    pop r10\n"
-                                        "    pop rdx\n"
-                                        "    pop rsi\n"
-                                        "    pop rdi\n"
-                                        "    pop rax\n\n");
-                }
-                #endif
-
                 struct parsedCommand currentCommand = currentFunction.commands[k];
 
                 //Print the confused stonks label now if it should be at this position
@@ -311,116 +224,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
         }
     }
 
-    //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
-    if(compileState -> optimisationLevel != o42069) {
-        #ifdef WINDOWS
-        //Using Windows API
-        fprintf(outputFile,
-                "\n\nwritechar:\n"
-                "\tpush rcx\n"
-                "\tpush rax\n"
-                "\tpush rdx\n"
-                "\tpush r8\n"
-                "\tpush r9\n"
-                //Get Handle of stdout
-                "\tsub rsp, 32\n"
-                "\tmov rcx, -11\n" //-11=stdout
-                "\tcall GetStdHandle\n"//return value is in rax
-                //Prepare the parameters for output
-                "\tmov rcx, rax\n" //move Handle of stdout into rcx
-                "\tlea rdx, [rip + .LCharacter]\n"
-                "\tmov r8, 1\n" //Length of message = 1 character
-                "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes written, just discard that value
-                "\tmov QWORD PTR [rsp + 32], 0\n"
-                "\tcall WriteFile\n"
-                "\tadd rsp, 32\n"
-
-                //Restore all registers
-                "\tpop r9\n"
-                "\tpop r8\n"
-                "\tpop rdx\n"
-                "\tpop rax\n"
-                "\tpop rcx\n"
-                "\tret\n");
-
-        fprintf(outputFile,
-                "\n\nreadchar:\n"
-                "\tpush rcx\n"
-                "\tpush rax\n"
-                "\tpush rdx\n"
-                "\tpush r8\n"
-                "\tpush r9\n"
-                //Get Handle of stdin
-                "\tsub rsp, 32\n"
-                "\tmov rcx, -10\n" //-10=stdin
-                "\tcall GetStdHandle\n"//return value is in rax
-                //Prepare the parameters for reading from input
-                "\tmov rcx, rax\n" //move Handle of stdin into rcx
-                "\tlea rdx, [rip + .LCharacter]\n"
-                "\tmov r8, 1\n" //Bytes to read = 1 character
-                "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes read, just discard that value
-                //Parameter 5 and then 4 Bytes of emptiness on the stack
-                "\tmov QWORD PTR [rsp + 32], 0\n"
-                "\tcall ReadFile\n"
-                "\tadd rsp, 32\n"
-
-                //Restore all registers
-                "\tpop r9\n"
-                "\tpop r8\n"
-                "\tpop rdx\n"
-                "\tpop rax\n"
-                "\tpop rcx\n"
-                "\tret\n");
-        #else
-        //Using Linux syscalls
-        fprintf(outputFile, "\n\nwritechar:\n\t"
-                            "push rcx\n\t"
-                            "push r11\n\t"
-                            "push rax\n\t"
-                            "push rdi\n\t"
-                            "push rsi\n\t"
-                            "push rdx\n\t"
-                            "mov rdx, 1\n\t"
-                            "lea rsi, [rip + .LCharacter]\n\t"
-                            #ifdef LINUX
-                            "mov rax, 1\n\t"
- 			                #else
-			                "mov rax, 0x2000004\n\t"
-			                 #endif
-                            "syscall\n\t"
-                            "pop rdx\n\t"
-                            "pop rsi\n\t"
-                            "pop rdi\n\t"
-                            "pop rax\n\t"
-                            "pop r11\n\t"
-                            "pop rcx\n\t\n\t"
-                            "ret\n");
-
-        fprintf(outputFile, "\n\nreadchar:\n\t"
-                            "push rcx\n\t"
-                            "push r11\n\t"
-                            "push rax\n\t"
-                            "push rdi\n\t"
-                            "push rsi\n\t"
-                            "push rdx\n\n\t"
-                            "mov rdx, 1\n\t"
-                            "lea rsi, [rip + .LCharacter]\n\t"
-                            "mov rdi, 0\n\t"
-			                #ifdef LINUX
-                            "mov rax, 0\n\t"
-			                #else
-			                "mov rax, 0x2000003\n\t"
-			                #endif
-                            "syscall\n\n\t"
-                            "pop rdx\n\t"
-                            "pop rsi\n\t"
-                            "pop rdi\n\t"
-                            "pop rax\n\t"
-                            "pop r11\n\t"
-                            "pop rcx\n\t"
-                            "ret\n");
-        #endif
-    }
 
     //Add an "end marker" if we are using stabs
     if(compileState -> useStabs) {
