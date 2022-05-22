@@ -69,6 +69,7 @@ typedef enum { normal, info, debug } logLevel;
 
 struct compileState {
     compileMode compileMode;
+    char* gcc_args;
     uint32_t fileCount;
     struct file* files;
 
