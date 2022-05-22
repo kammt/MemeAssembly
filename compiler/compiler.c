@@ -178,12 +178,12 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 2,
             .allowedParamTypes = {REG64 | DECIMAL | CHAR, REG64},
             .analysisFunction = NULL,
-            .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {0}\n\t"
+            .translationPattern = "mov QWORD PTR [rsp - 0x78], {0}\n\t"
                               "push rdx\n\t"
                               "cqo\n\t"
                               "push rax\n\t"
                               "mov rax, {1}\n\t"
-                              "idiv QWORD PTR [rip + .Ltmp64]\n\t"
+                              "idiv QWORD PTR [rsp - 0x68]\n\t"
                               "push rax\n\t"
                               "mov rax, [rsp + 8]\n\t"
                               "pop {1}\n\t"
@@ -195,8 +195,8 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 2,
             .allowedParamTypes = {REG64, REG64 | DECIMAL | CHAR},
             .analysisFunction = NULL,
-            .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {1}\n\t"
-                              "cmp QWORD PTR [rip + .Ltmp64], 0\n\t"
+            .translationPattern = "mov QWORD PTR [rsp - 0x78], {1}\n\t"
+                              "cmp QWORD PTR [rsp - 0x78], 0\n\t"
                               "jne 2f\n\t" //Jump forward to 2 if not zero
                               //y is zero, load 1 and jump to the end (numeric label 4)
                               "xor {0}, {0}\n\t"
@@ -204,9 +204,9 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
                               "jmp 4f\n\t"
                               //Now loop until our y is zero
                               "2: push {0}\n\t" //Preparation: push x to the stack to remember it for later
-                              "dec QWORD PTR [rip + .Ltmp64]\n\t"
+                              "dec QWORD PTR [rsp - 0x70]\n\t"
                               "3: imul {0}, [rsp]\n\t"
-                              "dec QWORD PTR [rip + .Ltmp64]\n\t"
+                              "dec QWORD PTR [rsp - 0x70]\n\t"
                               "jnz 3b\n\t" //If the result was not zero (ZF set from subtraction), jump back
                               "add rsp, 8\n\t"
                               "4:\n\t"
