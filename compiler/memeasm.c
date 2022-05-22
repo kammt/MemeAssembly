@@ -58,12 +58,13 @@ void printExplanationMessage(char* programName) {
 
 int main(int argc, char* argv[]) {
     struct compileState compileState = {
-        .optimisationLevel = none,
-        .translateMode = intSISD,
-        .compileMode = executable,
-        .useStabs = false,
-        .compilerErrors = 0,
-        .logLevel = normal
+            .optimisationLevel = none,
+            .translateMode = intSISD,
+            .compileMode = executable,
+            .useStabs = false,
+            .compilerErrors = 0,
+            .logLevel = normal,
+            .gcc_args = NULL
     };
 
     char *outputFileString = NULL;
@@ -72,18 +73,18 @@ int main(int argc, char* argv[]) {
     int optimisationLevel = 0;
     int martyrdom = true;
     const struct option long_options[] = {
-            {"output",  required_argument, 0, 'o'},
-            {"help",    no_argument,       0, 'h'},
-            {"debug",   no_argument,       0, 'd'},
-            {"info",    no_argument,       0, 'i'},
-            {"gcc-args", required_argument, 0, 'a'},
-            {"fno-martyrdom",    no_argument, &martyrdom, false},
-            {"O-1",     no_argument,      &optimisationLevel, -1},
-            {"O-2",     no_argument,      &optimisationLevel, -2},
-            {"O-3",     no_argument,      &optimisationLevel,-3},
-            {"O-s",     no_argument,      &optimisationLevel,-4},
-            {"O69420",     no_argument,      &optimisationLevel, 69420},
-            { 0, 0, 0, 0 }
+            {"output",        required_argument, 0,                  'o'},
+            {"help",          no_argument,       0,                  'h'},
+            {"debug",         no_argument,       0,                  'd'},
+            {"info",          no_argument,       0,                  'i'},
+            {"gcc-args",      required_argument, 0,                  'a'},
+            {"fno-martyrdom", no_argument,       &martyrdom,         false},
+            {"O-1",           no_argument,       &optimisationLevel, -1},
+            {"O-2",           no_argument,       &optimisationLevel, -2},
+            {"O-3",           no_argument,       &optimisationLevel, -3},
+            {"O-s",           no_argument,       &optimisationLevel, -4},
+            {"O69420",        no_argument,       &optimisationLevel, 69420},
+            {0, 0,                               0,                  0}
     };
 
     int opt;
@@ -93,9 +94,6 @@ int main(int argc, char* argv[]) {
         switch (opt) {
             case 'a':
                 compileState.gcc_args = optarg;
-                //Remove ""
-                compileState.gcc_args++;
-                compileState.gcc_args[strlen(compileState.gcc_args) - 1] = '\0';
                 break;
             case 'h':
                 printHelpPage(argv[0]);
@@ -116,15 +114,15 @@ int main(int argc, char* argv[]) {
                 outputFileString = optarg;
                 break;
             case 'g':
-                #ifdef WINDOWS
+#ifdef WINDOWS
                 //If we use Windows, STABS does not work - output a warning, but don't do anything
                 fprintf(stderr, YEL"Info: -g is not supported under Windows, ignoring..\n"RESET);
-                #elif defined(MACOS)
-		        //If we use MacOS, STABS does not work - output a warning, but don't do anything
+#elif defined(MACOS)
+                //If we use MacOS, STABS does not work - output a warning, but don't do anything
                 fprintf(stderr, YEL"Info: -g is not supported under MacOS, ignoring..\n"RESET);
-		        #else
+#else
                 compileState.useStabs = true;
-                #endif
+#endif
                 break;
             case '?':
                 fprintf(stderr, "Error: Unknown option provided\n");
@@ -134,7 +132,10 @@ int main(int argc, char* argv[]) {
     }
     compileState.martyrdom = martyrdom;
 
-    if(outputFileString == NULL) {
+    if(compileState.gcc_args == NULL) {
+        fprintf(stderr, "Fatal: -gcc-args not specified\nPlease contact an admin to get this fixed\n");
+        return 1;
+    } else if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
         printExplanationMessage(argv[0]);
         return 1;
