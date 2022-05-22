@@ -21,6 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "compiler.h"
 #include "parser/parser.h"
@@ -47,6 +48,8 @@ void printHelpPage(char* programName) {
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -i \t\t- enables information logs\n");
     printf(" -d \t\t- enables debug logs\n");
+    printf(" -gccargs \t- A string of custom arguments that should be passed to gcc\n");
+    printf(" -gcc \t- Path to custom gcc executable\n");
 }
 
 void printExplanationMessage(char* programName) {
@@ -73,6 +76,7 @@ int main(int argc, char* argv[]) {
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
             {"info",    no_argument,       0, 'i'},
+            {"gcc-args",    no_argument,       0, 'a'},
             {"fno-martyrdom",    no_argument,&martyrdom, false},
             {"O-1",     no_argument,      &optimisationLevel, -1},
             {"O-2",     no_argument,      &optimisationLevel, -2},
@@ -85,8 +89,14 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hOdigS", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hOdigSa:e:", long_options, &option_index)) != -1) {
         switch (opt) {
+            case 'a':
+                compileState.gcc_args = optarg;
+                //Remove ""
+                compileState.gcc_args++;
+                compileState.gcc_args[strlen(compileState.gcc_args) - 1] = '\0';
+                break;
             case 'h':
                 printHelpPage(argv[0]);
                 return 0;

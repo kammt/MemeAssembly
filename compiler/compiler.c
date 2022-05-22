@@ -402,19 +402,14 @@ void compile(struct compileState compileState, char* outputFileName) {
         }
     //When letting gcc do the work for us (object file or executable), we just pipe the code into gcc via stdin
     } else {
-        char* commandPrefix;
         if(compileState.compileMode == objectFile) {
-            commandPrefix = "gcc -O -c -x assembler - -o";
-        } else {
-            #ifndef LINUX
-            commandPrefix = "gcc -O -x assembler - -o";
-            #else
-            commandPrefix = "gcc -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
-            #endif
+            fprintf(stderr, "-O unsupported on rasptest platform, defaulting to executable\n");
         }
 
-        char command[strlen(commandPrefix) + strlen(outputFileName) + 1];
-        strcpy(command, commandPrefix);
+
+        char command[strlen(compileState.gcc_args) + strlen(" -x assembler - -o ") + strlen(outputFileName) + 1];
+        strcpy(command, compileState.gcc_args);
+        strcat(command, " -x assembler - -o ");
         strcat(command, outputFileName);
 
         // Pipe assembler code directly to GCC via stdin
@@ -430,7 +425,7 @@ void compile(struct compileState compileState, char* outputFileName) {
     }
 
     if(gccResult != 0) {
-        fprintf(stderr, "gcc exited unexpectedly with exit code %d. If you did not expect this to happen, please report this issue at https://github.com/kammt/MemeAssembly/issues so that it can be fixed\n", gccResult);
+        fprintf(stderr, "gcc exited unexpectedly with exit code %d. If you did not expect this to happen, please report this issue via Zulip (in the respective channel or as a PM to Tobias Kamm) so it can be fixed\n", gccResult);
         exit(EXIT_FAILURE);
     } else {
         exit(EXIT_SUCCESS);
