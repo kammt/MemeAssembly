@@ -327,7 +327,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
         },
         {
-            .pattern = "oh no, anyway!",
+            .pattern = "oh no! anyway",
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "nop"
