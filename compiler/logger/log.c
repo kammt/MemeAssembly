@@ -21,14 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdarg.h>
 
 const char* const version_string = "v1.4";
-const char* const platform_suffix =
-    #ifdef WINDOWS
-        "Windows";
-    #elif defined(MACOS)
-        "MacOS";
-    #else
-        "Linux";
-    #endif
+const char* const platform_suffix = "rasptest";
 
 /**
  * Prints an ASCII-Art title and version information.
