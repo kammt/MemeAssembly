@@ -76,8 +76,8 @@ int main(int argc, char* argv[]) {
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
             {"info",    no_argument,       0, 'i'},
-            {"gcc-args",    no_argument,       0, 'a'},
-            {"fno-martyrdom",    no_argument,&martyrdom, false},
+            {"gcc-args", required_argument, 0, 'a'},
+            {"fno-martyrdom",    no_argument, &martyrdom, false},
             {"O-1",     no_argument,      &optimisationLevel, -1},
             {"O-2",     no_argument,      &optimisationLevel, -2},
             {"O-3",     no_argument,      &optimisationLevel,-3},
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hOdigSa:e:", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "a:o:hOdigS", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'a':
                 compileState.gcc_args = optarg;
