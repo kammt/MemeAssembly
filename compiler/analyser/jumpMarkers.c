@@ -33,7 +33,7 @@ void analyseMonkeMarkers(struct commandLinkedList** commandLinkedList, unsigned 
     printDebugMessage(compileState -> logLevel, "Beginning Monke jump label validity check", 0);
 
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, false, 1, "monke jump marker");
-    checkCompanionCommandExistence(commandLinkedList[opcode + 1], commandLinkedList[opcode], compileState, 1, "monke jump marker");
+    checkCompanionCommandExistence(commandLinkedList[opcode + 1], commandLinkedList[opcode], compileState, 1, false, "monke jump marker");
 }
 
 /**
@@ -48,5 +48,5 @@ void analyseJumpMarkers(struct commandLinkedList** commandLinkedList, unsigned o
     printDebugMessage(compileState -> logLevel, "Starting jump label validity check for opcode %u", 1, opcode);
 
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, true, 0, "jump marker");
-    checkCompanionCommandExistence(commandLinkedList[opcode + 1], commandLinkedList[opcode], compileState, 0, "jump marker");
+    checkCompanionCommandExistence(commandLinkedList[opcode + 1], commandLinkedList[opcode], compileState, 0, true, "jump marker");
 }

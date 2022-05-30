@@ -66,5 +66,5 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
  * @param compileState the current compile state
  */
 void analyseCall(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
-    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[0], compileState, 1, "function");
+    checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[0], compileState, 1, false, "function");
 }

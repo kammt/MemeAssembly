@@ -25,7 +25,7 @@ jobs:
 
       - name: Run the executable
         run: ./tmp
-        
+
   run_windows:
       runs-on: windows-2019
 
@@ -36,12 +36,12 @@ jobs:
           shell: powershell
           run: |
             $env:Path += ";C:\msys64\mingw64\bin"
-            mingw32-make.exe debug     
+            mingw32-make.exe debug
 
         - name: Run compiler on runnable_example.memeasm
           shell: powershell
-          run: ./memeasm.exe -d -o tmp.exe .github\workflows\runnable_example.memeasm  
-          
+          run: ./memeasm.exe -d -o tmp.exe .github\workflows\runnable_example.memeasm
+
         - name: Run the executable
           shell: powershell
           run: ./tmp.exe

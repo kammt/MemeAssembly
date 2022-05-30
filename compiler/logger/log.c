@@ -20,7 +20,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "log.h"
 #include <stdarg.h>
 
-const char* const version_string = "v1.4";
+const char* const version_string = "v1.5";
 const char* const platform_suffix =
     #ifdef WINDOWS
         "Windows";

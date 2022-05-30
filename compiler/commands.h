@@ -25,7 +25,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define NUMBER_OF_COMMANDS 39
+#define NUMBER_OF_COMMANDS 41
 #define MAX_PARAMETER_COUNT 2
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
@@ -40,6 +40,7 @@ struct commandLinkedList {
 struct parsedCommand {
     uint8_t opcode;
     char *parameters[MAX_PARAMETER_COUNT];
+    uint8_t paramTypes[MAX_PARAMETER_COUNT];
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter, ...
     size_t lineNum;
     bool translate; //Default is 1 (true). Is set to false in case this command is selected for deletion by "perfectly balanced as all things should be"
