@@ -375,7 +375,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
     //Now do a final check: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
     for(int i = 0; i < MAX_PARAMETER_COUNT; i++) {
         uint8_t otherParamType = parsedCommand->paramTypes[(i + 1) % MAX_PARAMETER_COUNT];
-        if(parsedCommand->isPointer == i && otherParamType <= REG8) {
+        if(parsedCommand->isPointer == i + 1 && otherParamType > REG8) {
             printError(inputFileName, parsedCommand -> lineNum, compileState, "invalid parameter combination: operand size unknown", 0);
         }
     }
