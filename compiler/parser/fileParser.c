@@ -102,6 +102,12 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
         }
     }
 
+    //On Windows, file endings are done using \r\n. This means that there will be a \r at the end of every string, breaking the entire compiler
+    //To fix this, check if the string ends with \r\n. If so, replace it with \n
+    if(*(result - 2) == '\r') {
+        *(result - 2) = '\n';
+        result--;
+    }
     //We got to the end of a line or the end of a file, now append a '\0'
     *result = '\0';
     return bytesRead;
