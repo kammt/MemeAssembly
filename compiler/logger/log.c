@@ -104,8 +104,8 @@ void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...
         va_list vaList;
         va_start(vaList, varArgNum);
 
-        vprintf(message, vaList);
-        printf("\n");
+        vfprintf(stderr, message, vaList);
+        fprintf(stderr, "\n");
     }
 }
 
