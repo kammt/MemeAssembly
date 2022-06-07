@@ -413,6 +413,10 @@ void compile(struct compileState compileState, char* outputFileName) {
 
         // Pipe assembler code directly to GCC via stdin
         output = popen(command, "w");
+        if(output == NULL) {
+            perror("Failed opening pipe to gcc, please report the following error to an admin");
+            exit(EXIT_FAILURE);
+        }
     }
 
     writeToFile(&compileState, output);
