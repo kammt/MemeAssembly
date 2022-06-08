@@ -463,7 +463,8 @@ void compile(struct compileState compileState, char* outputFileName) {
         posix_spawn_file_actions_addclose(&action, child.err[0]);
 
         //Call posix_spawn
-        int res = posix_spawn(&gccPid, argv[0], &action, NULL, argv, NULL);
+        extern char **environ;
+        int res = posix_spawn(&gccPid, argv[0], &action, NULL, argv, environ);
         if(res != 0) {
             fprintf(stderr, "fatal: Failed to call posix_spawn(), return value was %d\nPlease report this error to get this fixed\n", res);
             exit(EXIT_FAILURE);
@@ -486,8 +487,7 @@ void compile(struct compileState compileState, char* outputFileName) {
     fprintf(output, "\n");
 
     if(compileState.compileMode != assemblyFile) {
-        //write(child.in[1])
-        close(child.in[1]);
+        fclose(output);
         //stdin is closed, print stdout
         bool compilerOutput = false;
         bool stdoutStart = false;
