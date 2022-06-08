@@ -395,11 +395,7 @@ void compile(struct compileState compileState, char* outputFileName) {
     ///Translation
     FILE* output;
     int gccResult = 0;
-    struct child {
-        int in[2];
-        int out[2];
-        int err[2];
-    } child;
+    int gccStdin[2];
     pid_t gccPid;
 
     //When generating an assembly file, we open the output file in writing mode directly
@@ -440,27 +436,16 @@ void compile(struct compileState compileState, char* outputFileName) {
         argv[i] = NULL;
 
         /// Pipe assembler code directly to GCC via stdin
-        //Set up pipes for stdin, stdout, and stderr
-
-        if(pipe(child.in) < 0)
-            perror("pipe");
-        if(pipe(child.out) < 0)
-            perror("pipe");
-        if(pipe(child.err) < 0)
+        //Set up pipes for stdin
+        if(pipe(gccStdin) < 0)
             perror("pipe");
 
 
         posix_spawn_file_actions_t action;
         posix_spawn_file_actions_init(&action);
         //stdin
-        posix_spawn_file_actions_adddup2(&action, child.in[0], STDIN_FILENO);
-        posix_spawn_file_actions_addclose(&action, child.in[1]);
-        //stdout
-        posix_spawn_file_actions_adddup2(&action, child.out[1], STDOUT_FILENO);
-        posix_spawn_file_actions_addclose(&action, child.out[0]);
-        //stderr
-        posix_spawn_file_actions_adddup2(&action, child.err[1], STDERR_FILENO);
-        posix_spawn_file_actions_addclose(&action, child.err[0]);
+        posix_spawn_file_actions_adddup2(&action, gccStdin[0], STDIN_FILENO);
+        posix_spawn_file_actions_addclose(&action, gccStdin[1]);
 
         //Call posix_spawn
         extern char **environ;
@@ -470,12 +455,10 @@ void compile(struct compileState compileState, char* outputFileName) {
             exit(EXIT_FAILURE);
         }
 
-        //Close unneeded fds
-        close(child.in[0]);
-        close(child.out[1]);
-        close(child.err[1]);
+        //Close unneeded fd
+        close(gccStdin[0]);
 
-        output = fdopen(child.in[1], "w");
+        output = fdopen(gccStdin[1], "w");
         if(!output) {
             perror("fatal: fdopen() of child's stdin failed");
             exit(EXIT_FAILURE);
@@ -485,49 +468,10 @@ void compile(struct compileState compileState, char* outputFileName) {
 
     writeToFile(&compileState, output);
     fprintf(output, "\n");
+    fclose(output);
 
     if(compileState.compileMode != assemblyFile) {
-        fclose(output);
-        //stdin is closed, print stdout
-        bool compilerOutput = false;
-        bool stdoutStart = false;
-        bool stderrStart = false;
-
         waitpid(gccPid, &gccResult, 0);
-
-        char buf[1024];
-        ssize_t bytesRead = 1;
-        while((bytesRead = read(child.out[0], buf, sizeof buf)) > 0) {
-            if(!compilerOutput) {
-                compilerOutput = true;
-                printf("--- gcc output below: ---\n");
-            }
-            if(!stdoutStart) {
-                printf("## stdout: ##\n");
-                stdoutStart = true;
-            }
-
-            write(STDOUT_FILENO, buf, bytesRead);
-            printf("\n");
-        }
-
-        while((bytesRead = read(child.err[0], buf, sizeof buf)) > 0) {
-            if(!compilerOutput) {
-                compilerOutput = true;
-                printf("--- gcc output below: ---\n");
-            }
-            if(!stderrStart) {
-                printf("## stderr: ##\n");
-                stderrStart = true;
-            }
-
-            write(STDOUT_FILENO, buf, bytesRead);
-            printf("\n");
-        }
-
-        close(child.out[0]);
-        close(child.err[0]);
-
     }
 
     if(gccResult != 0) {
