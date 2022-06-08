@@ -26,6 +26,14 @@ Escape Sequence  | Usage
 ### Description
 Reads a single character from stdin into the specified register. If the user pressed enter, the register will contain \n, which is 10 in ASCII.
 
+
+## Perform a syscall
+### Definition
+`we need air support`
+
+### Description
+Performs a syscall
+
 ## Examples
 #### 1. Hello World!
 ```

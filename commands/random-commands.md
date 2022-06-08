@@ -18,6 +18,12 @@ Jumps to a random line of code that is decided at compilation time.
 ### Description
 Restore balance to your code by randomly deleting half the commands at compile-time. When using this command multiple times, half the lines are deleted for every instance of this command.
 
+## Do nothing
+### Definition
+`oh no! anyway`
+### Description
+This command gets translated to a `nop`. It literally does nothing.
+
 ## Violating the ABI
 ### Definition
 `wait, that's illegal`

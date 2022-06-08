@@ -1,3 +1,16 @@
+## v1.5
+Okay so before we start: Can we all just take a moment to appreciate that the PR to merge these changes into main was PR #69? (NICE :tada:)
+
+New features:
+- New commands: `oh no! anyway` and `we need air support` (#67, thanks @Joshy1970!)
+
+Bug Fixes:
+- The function parser was.. let's say not well tested. The compile tests have been extended to test the function parser a bit and all bugs have been squashed (#68, #65, thanks @xarantolus!)
+- When combining a pointer with a non-register parameter, as would not be happy, complaining that the operand size is unknown. So to fix that, the MemeAssembly compiler now complains that the operand size is unknown (5383c07)
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.5)
+
+
 ## v1.4
 New features:
 - MemeAssembly now supports multiple input files. Split your code into multiple input files to make it somewhat more understandable. Or don't, I'm just a sign (418215d2d7e97348e709ec3538a732582b5bffa1)
