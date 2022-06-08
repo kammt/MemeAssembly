@@ -1,6 +1,6 @@
 ## Adding two values
 ### Definition
-```[register] units are ready, with [value/register] units well on the way```
+```[register] units are ready, with [value/register] more well on the way```
 ### Description
 Adds a value to the specified destination register
 
