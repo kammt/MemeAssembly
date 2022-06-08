@@ -23,6 +23,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <spawn.h>
+#include <sys/wait.h>
 
 #include "parser/parser.h"
 #include "analyser/analyser.h"
@@ -392,6 +395,13 @@ void compile(struct compileState compileState, char* outputFileName) {
     ///Translation
     FILE* output;
     int gccResult = 0;
+    struct child {
+        int in[2];
+        int out[2];
+        int err[2];
+    } child;
+    pid_t gccPid;
+
     //When generating an assembly file, we open the output file in writing mode directly
     if(compileState.compileMode == assemblyFile) {
         output = fopen(outputFileName, "w") ;
@@ -405,26 +415,119 @@ void compile(struct compileState compileState, char* outputFileName) {
             fprintf(stderr, "-O unsupported on rasptest platform, defaulting to executable\n");
         }
 
+        //We receive out arguments for gcc as a string, we now need to convert it to an array
+        //1. How many args are there
+        size_t argc = 0;
+        for(size_t i = 0; i < strlen(compileState.gcc_args); i++) {
+            if(compileState.gcc_args[i] == ' ') {
+                argc++;
+            }
+        }
+        argc++; //Arg at the end does not have a space
 
-        char command[strlen(compileState.gcc_args) + strlen(" -x assembler - -o ") + strlen(outputFileName) + 1];
-        strcpy(command, compileState.gcc_args);
-        strcat(command, " -x assembler - -o ");
-        strcat(command, outputFileName);
+        char* argv[argc + 1]; //include NULL-arg
+        size_t i = 0;
+        //2. Clone every arg into the array
+        for(compileState.gcc_args = strtok(compileState.gcc_args, " "); compileState.gcc_args != NULL; compileState.gcc_args = strtok(NULL, " ")) {
+            argv[i] = strdup(compileState.gcc_args);
+            if(argv[i] == NULL) {
+                perror("fatal: strdup() of gcc-args failed");
+                exit(EXIT_FAILURE);
+            }
+            i++;
+        }
+        //3. last arg must be NULL
+        argv[i] = NULL;
 
-        // Pipe assembler code directly to GCC via stdin
-        output = popen(command, "w");
-        if(output == NULL) {
-            perror("Failed opening pipe to gcc, please report the following error to an admin");
+        /// Pipe assembler code directly to GCC via stdin
+        //Set up pipes for stdin, stdout, and stderr
+
+        if(pipe(child.in) < 0)
+            perror("pipe");
+        if(pipe(child.out) < 0)
+            perror("pipe");
+        if(pipe(child.err) < 0)
+            perror("pipe");
+
+
+        posix_spawn_file_actions_t action;
+        posix_spawn_file_actions_init(&action);
+        //stdin
+        posix_spawn_file_actions_adddup2(&action, child.in[0], STDIN_FILENO);
+        posix_spawn_file_actions_addclose(&action, child.in[1]);
+        //stdout
+        posix_spawn_file_actions_adddup2(&action, child.out[1], STDOUT_FILENO);
+        posix_spawn_file_actions_addclose(&action, child.out[0]);
+        //stderr
+        posix_spawn_file_actions_adddup2(&action, child.err[1], STDERR_FILENO);
+        posix_spawn_file_actions_addclose(&action, child.err[0]);
+
+        //Call posix_spawn
+        int res = posix_spawn(&gccPid, argv[0], &action, NULL, argv, NULL);
+        if(res != 0) {
+            fprintf(stderr, "fatal: Failed to call posix_spawn(), return value was %d\nPlease report this error to get this fixed\n", res);
             exit(EXIT_FAILURE);
         }
+
+        //Close unneeded fds
+        close(child.in[0]);
+        close(child.out[1]);
+        close(child.err[1]);
+
+        output = fdopen(child.in[1], "w");
+        if(!output) {
+            perror("fatal: fdopen() of child's stdin failed");
+            exit(EXIT_FAILURE);
+        }
+
     }
 
     writeToFile(&compileState, output);
+    fprintf(output, "\n");
 
-    if(compileState.compileMode == assemblyFile) {
-        fclose(output);
-    } else {
-        gccResult = pclose(output);
+    if(compileState.compileMode != assemblyFile) {
+        //write(child.in[1])
+        close(child.in[1]);
+        //stdin is closed, print stdout
+        bool compilerOutput = false;
+        bool stdoutStart = false;
+        bool stderrStart = false;
+
+        waitpid(gccPid, &gccResult, 0);
+
+        char buf[1024];
+        ssize_t bytesRead = 1;
+        while((bytesRead = read(child.out[0], buf, sizeof buf)) > 0) {
+            if(!compilerOutput) {
+                compilerOutput = true;
+                printf("--- gcc output below: ---\n");
+            }
+            if(!stdoutStart) {
+                printf("## stdout: ##\n");
+                stdoutStart = true;
+            }
+
+            write(STDOUT_FILENO, buf, bytesRead);
+            printf("\n");
+        }
+
+        while((bytesRead = read(child.err[0], buf, sizeof buf)) > 0) {
+            if(!compilerOutput) {
+                compilerOutput = true;
+                printf("--- gcc output below: ---\n");
+            }
+            if(!stderrStart) {
+                printf("## stderr: ##\n");
+                stderrStart = true;
+            }
+
+            write(STDOUT_FILENO, buf, bytesRead);
+            printf("\n");
+        }
+
+        close(child.out[0]);
+        close(child.err[0]);
+
     }
 
     if(gccResult != 0) {
