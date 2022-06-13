@@ -349,7 +349,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "we need air support",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisFunction = &blockIOCommands,
             .translationPattern = "syscall"
         },
 
