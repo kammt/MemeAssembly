@@ -244,14 +244,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "monke {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
+            .allowedParamTypes = {MONKE_LABEL},
             .analysisFunction = &analyseMonkeMarkers,
             .translationPattern = ".L{0}:"
         },
         {
             .pattern = "return to monke {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
+            .allowedParamTypes = {MONKE_LABEL},
             .analysisFunction = NULL,
             .translationPattern = "jmp .L{0}"
         },
