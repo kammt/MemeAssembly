@@ -372,7 +372,21 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         printParameterUsageNote(allowedTypes);
     }
 
-    //Now do a final check: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
+    //Now do some parameter checks
+    //1: If two registers are used, they must be of the same size
+    uint8_t currentReg = 0; //
+    for(int i = 0; i < MAX_PARAMETER_COUNT; i++) {
+        uint8_t paramType = parsedCommand->paramTypes[i];
+        if(currentReg == 0) {
+            if(paramType <= REG8) {
+                currentReg = paramType;
+            }
+        } else if(paramType <= REG8 && paramType != currentReg) {
+            printError(inputFileName, parsedCommand -> lineNum, compileState, "invalid parameter combination: cannot combine registers of different size", 0);
+        }
+    }
+
+    //2: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
     for(int i = 0; i < MAX_PARAMETER_COUNT; i++) {
         uint8_t otherParamType = parsedCommand->paramTypes[(i + 1) % MAX_PARAMETER_COUNT];
         if(parsedCommand->isPointer == i + 1 && otherParamType > REG8) {
