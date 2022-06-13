@@ -289,7 +289,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
     }
 
     parsedCommand.opcode = INVALID_COMMAND_OPCODE;
-    printError(inputFileName, lineNum, compileState, "Failed to parse command: \"%s\"", 1, line);
+    printError(inputFileName, lineNum, compileState, "Invalid command: \"%s\"", 1, line);
     //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
     //We don't exit immediately because we want to print every error possible
     return parsedCommand;
