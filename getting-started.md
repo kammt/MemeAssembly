@@ -32,10 +32,10 @@ See [Manual Installation (Linux)](getting-started?id=manual-installation-linux)
 
 ### Linux
 #### Debian-based distributions (Ubuntu, Linux Mint etc.)
-Download the latest installer file (*.deb) [here](https://github.com/kammt/MemeAssembly/releases/download/v1.3/memeassembly_1.3.0_amd64.deb)
+Download the latest installer file (*.deb) [here](https://github.com/kammt/MemeAssembly/releases/latest)
 
 #### RPM-based distributions (Fedora, OpenSUSE, Red Hat etc.)
-Download the latest installer file (*.rpm) [here](https://github.com/kammt/MemeAssembly/releases/download/v1.3/memeassembly-1.3.0.x86_64.rpm)
+Download the latest installer file (*.rpm) [here](https://github.com/kammt/MemeAssembly/releases/latest)
 
 #### Arch-based Distributions (Arch Linux, Manjaro etc.)
 1. If not already done, install a package manager that is able to access the AUR. [Yay](https://github.com/Jguer/yay) is recommended.
