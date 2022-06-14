@@ -383,10 +383,10 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         for (int i = 0; i < usedParameters; i++) { //Go over all parameters
             uint8_t paramType = parsedCommand->paramTypes[i];
             if (currentReg == 0) { //If no register was found yet...
-                if (PARAM_ISREG(paramType)) { //...and this parameter is a register...
+                if (PARAM_ISREG(paramType) && parsedCommand->isPointer != i + 1) { //...and this parameter is a register...
                     currentReg = paramType; //...set it as the expected size
                 }
-            } else if (PARAM_ISREG(paramType) && paramType != currentReg) { //If we then find another register with differing size, throw an error
+            } else if (PARAM_ISREG(paramType) && parsedCommand->isPointer != i + 1 && paramType != currentReg) { //If we then find another register with differing size, throw an error
                 printError(inputFileName, parsedCommand->lineNum, compileState,
                            "invalid parameter combination: cannot combine registers of different size", 0);
             }
