@@ -5,12 +5,12 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>MemeAssembly WASM Compiler</title>
 </head>
 
 <body>
     <div class="parent">
-        <textarea id="input-text">
+        <textarea placeholder="Enter your MemeAssembly code here..." id="input-text">
 I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     eax is brilliant, but I like 65
 
@@ -26,8 +26,8 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 
     I see this as an absolute win
     </textarea>
-        <textarea readonly id="compiler-output"></textarea>
-        <textarea readonly id="output-text"></textarea>
+        <textarea readonly id="compiler-output" placeholder="There's currently no compiler output"></textarea>
+        <textarea readonly id="output-text" placeholder="No generated code so far"></textarea>
     </div>
     <style>
         html,
@@ -43,25 +43,34 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
             min-height: 100%;
         }
 
+        @media (prefers-color-scheme: dark) {
+            body,
+            textarea {
+                background: #111;
+                color: #fff;
+            }
+        }
+
         .parent {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(2, 1fr);
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
             grid-column-gap: 0px;
             grid-row-gap: 0px;
         }
 
         #input-text {
-            grid-area: 1 / 1 / 3 / 2;
+            grid-area: 1 / 1 / 5 / 4;
         }
 
         #compiler-output {
-            grid-area: 1 / 2 / 2 / 3;
+            grid-area: 5 / 1 / 6 / 4;
         }
 
         #output-text {
-            grid-area: 2 / 2 / 3 / 3;
+            grid-area: 1 / 4 / 6 / 6;
         }
+
     </style>
     <script type="module">
         import runMemeAssemblyCompiler from "./memeasm.js";
