@@ -12,6 +12,7 @@ jobs:
 
       - name: Install and Build
         run: |
+          chmod +x wasm/install_emcc.sh
           wasm/install_emcc.sh
           make wasm
 
