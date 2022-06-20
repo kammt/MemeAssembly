@@ -12,7 +12,7 @@ jobs:
 
       - name: Install and Build
         run: |
-          bash wasm/install_emcc.sh
+          wasm/install_emcc.sh
           make wasm
 
       - name: Deploy
