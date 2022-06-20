@@ -82,6 +82,8 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 
             let out = document.querySelector("#compiler-output");
             out.value = "";
+
+            let oldScroll = document.querySelector("#output-text").scrollTop;
             document.querySelector("#output-text").value = "";
 
             let appendText = function (text) {
@@ -101,6 +103,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
             let result = new TextDecoder("utf-8").decode(output);
 
             document.querySelector("#output-text").value = result;
+            document.querySelector("#output-text").scrollTop = oldScroll;
         }
         input.addEventListener('input', runCompiler);
 
