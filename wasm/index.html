@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <div class="parent">
+        <textarea id="input-text">
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
+    eax is brilliant, but I like 65
+
+    upgrade
+    what can I say except al
+    what can I say except \s
+    upvote eax
+    corporate needs you to find the difference between eax and 91
+    fuck go back
+
+    they're the same picture
+    what can I say except \n
+
+    I see this as an absolute win
+    </textarea>
+        <textarea readonly id="compiler-output"></textarea>
+        <textarea readonly id="output-text"></textarea>
+    </div>
+    <style>
+        html,
+        body,
+        parent,
+        div {
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+            height: 100%;
+            min-height: 100%;
+        }
+
+        .parent {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            grid-column-gap: 0px;
+            grid-row-gap: 0px;
+        }
+
+        #input-text {
+            grid-area: 1 / 1 / 3 / 2;
+        }
+
+        #compiler-output {
+            grid-area: 1 / 2 / 2 / 3;
+        }
+
+        #output-text {
+            grid-area: 2 / 2 / 3 / 3;
+        }
+    </style>
+    <script type="module">
+        import runMemeAssemblyCompiler from "./memeasm.js";
+
+        let input = document.querySelector("#input-text");
+
+        async function runCompiler() {
+            const memeasm_source = input.value;
+
+            let out = document.querySelector("#compiler-output");
+            out.value = "";
+            document.querySelector("#output-text").value = "";
+
+            let appendText = function (text) {
+                out.value += text + "\n";
+            }
+
+            let module = await runMemeAssemblyCompiler({
+                arguments: ["-fno-martyrdom", "-S", "-o", "output.S", "input.memeasm"],
+                preRun: function (module) {
+                    module.FS.writeFile('input.memeasm', memeasm_source)
+                },
+                print: appendText,
+                printErr: appendText,
+            });
+
+            let output = module.FS.readFile('output.S');
+            let result = new TextDecoder("utf-8").decode(output);
+
+            document.querySelector("#output-text").value = result;
+        }
+        input.addEventListener('input', runCompiler);
+
+        runCompiler();
+    </script>
+</body>
+
+</html>
