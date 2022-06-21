@@ -27,7 +27,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     I see this as an absolute win
     </textarea>
         <textarea readonly id="compiler-output" placeholder="There's currently no compiler output"></textarea>
-        <textarea readonly id="output-text" placeholder="No generated code so far"></textarea>
+        <textarea readonly id="output-text" placeholder="No generated code so far or error. See compiler output for more info"></textarea>
     </div>
     <style>
         html,
@@ -110,12 +110,17 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
             await module.FS.writeFile("input.memeasm", input.value);
 
             // copy args array as it is modified
-            await module.callMain([...args]);
+            const exitCode = await module.callMain([...args]);
+
+            appendText(`Compiler exited with code ${exitCode} (${exitCode == 0 ? 'Success' : 'Failure'})`);
+
+            if (exitCode !== 0) {
+                return;
+            }
 
             try {
                 let output = await module.FS.readFile('output.S');
                 let result = new TextDecoder("utf-8").decode(output);
-
 
                 compilationResult.value = result;
                 compilationResult.scrollTop = oldScroll;
