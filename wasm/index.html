@@ -44,6 +44,7 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
         }
 
         @media (prefers-color-scheme: dark) {
+
             body,
             textarea {
                 background: #111;
@@ -70,44 +71,72 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
         #output-text {
             grid-area: 1 / 4 / 6 / 6;
         }
-
     </style>
     <script type="module">
         import runMemeAssemblyCompiler from "./memeasm.js";
 
         let input = document.querySelector("#input-text");
+        let compilationResult = document.querySelector("#output-text");
+        let compilerLog = document.querySelector("#compiler-output");
+
+        const args = ["-fno-martyrdom", "-S", "-o", "output.S", "input.memeasm"];
+
+
+        let appendText = function (text) {
+            compilerLog.value += text + "\n";
+        }
+
+        // Download & compile WebAssembly binary
+        let module = await runMemeAssemblyCompiler({
+            noInitialRun: true,
+            arguments: args,
+            print: appendText,
+            printErr: appendText,
+        });
+
+        await module.ready;
+
 
         async function runCompiler() {
-            const memeasm_source = input.value;
+            module.calledRun = false;
 
-            let out = document.querySelector("#compiler-output");
-            out.value = "";
+            // Save old scroll state
+            let oldScroll = compilationResult.scrollTop;
+            // And reset the compilation result & output
+            compilerLog.value = "";
+            compilationResult.value = "";
 
-            let oldScroll = document.querySelector("#output-text").scrollTop;
-            document.querySelector("#output-text").value = "";
+            // Write the input file
+            await module.FS.writeFile("input.memeasm", input.value);
 
-            let appendText = function (text) {
-                out.value += text + "\n";
+            // copy args array as it is modified
+            await module.callMain([...args]);
+
+            try {
+                let output = await module.FS.readFile('output.S');
+                let result = new TextDecoder("utf-8").decode(output);
+
+
+                compilationResult.value = result;
+                compilationResult.scrollTop = oldScroll;
+            } catch (e) {
+                throw 'Reading compilation result output file: ' + String(e) +
+                    (typeof e === 'object') ? JSON.stringify(e, null, "    ") : '';
             }
-
-            let module = await runMemeAssemblyCompiler({
-                arguments: ["-fno-martyrdom", "-S", "-o", "output.S", "input.memeasm"],
-                preRun: function (module) {
-                    module.FS.writeFile('input.memeasm', memeasm_source)
-                },
-                print: appendText,
-                printErr: appendText,
-            });
-
-            let output = module.FS.readFile('output.S');
-            let result = new TextDecoder("utf-8").decode(output);
-
-            document.querySelector("#output-text").value = result;
-            document.querySelector("#output-text").scrollTop = oldScroll;
         }
-        input.addEventListener('input', runCompiler);
+        async function compileWrap() {
+            try {
+                await runCompiler();
+            } catch (e) {
+                appendText(String(e));
+                if (typeof e === "object")
+                    appendText(JSON.stringify(e, null, "    "))
+            }
+        }
 
-        runCompiler();
+        input.addEventListener('input', compileWrap);
+
+        compileWrap();
     </script>
 </body>
 
