@@ -75,73 +75,75 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     <script type="module">
         import runMemeAssemblyCompiler from "./memeasm.js";
 
-        let input = document.querySelector("#input-text");
-        let compilationResult = document.querySelector("#output-text");
-        let compilerLog = document.querySelector("#compiler-output");
+        (async function asyncWrapOrElseChromeWillComplainAboutAwaits() {
+            let input = document.querySelector("#input-text");
+            let compilationResult = document.querySelector("#output-text");
+            let compilerLog = document.querySelector("#compiler-output");
 
-        const args = ["-fno-martyrdom", "-S", "-o", "output.S", "input.memeasm"];
-
-
-        let appendText = function (text) {
-            compilerLog.value += text + "\n";
-        }
-
-        // Download & compile WebAssembly binary
-        let module = await runMemeAssemblyCompiler({
-            noInitialRun: true,
-            arguments: args,
-            print: appendText,
-            printErr: appendText,
-        });
-
-        await module.ready;
+            const args = ["-fno-martyrdom", "-S", "-o", "output.S", "input.memeasm"];
 
 
-        async function runCompiler() {
-            module.calledRun = false;
-
-            // Save old scroll state
-            let oldScroll = compilationResult.scrollTop;
-            // And reset the compilation result & output
-            compilerLog.value = "";
-            compilationResult.value = "";
-
-            // Write the input file
-            await module.FS.writeFile("input.memeasm", input.value);
-
-            // copy args array as it is modified
-            const exitCode = await module.callMain([...args]);
-
-            appendText(`Compiler exited with code ${exitCode} (${exitCode == 0 ? 'Success' : 'Failure'})`);
-
-            if (exitCode !== 0) {
-                return;
+            let appendText = function (text) {
+                compilerLog.value += text + "\n";
             }
 
-            try {
-                let output = await module.FS.readFile('output.S');
-                let result = new TextDecoder("utf-8").decode(output);
+            // Download & compile WebAssembly binary
+            let module = await runMemeAssemblyCompiler({
+                noInitialRun: true,
+                arguments: args,
+                print: appendText,
+                printErr: appendText,
+            });
 
-                compilationResult.value = result;
-                compilationResult.scrollTop = oldScroll;
-            } catch (e) {
-                throw 'Reading compilation result output file: ' + String(e) +
-                    (typeof e === 'object') ? JSON.stringify(e, null, "    ") : '';
+            await module.ready;
+
+
+            async function runCompiler() {
+                module.calledRun = false;
+
+                // Save old scroll state
+                let oldScroll = compilationResult.scrollTop;
+                // And reset the compilation result & output
+                compilerLog.value = "";
+                compilationResult.value = "";
+
+                // Write the input file
+                await module.FS.writeFile("input.memeasm", input.value);
+
+                // copy args array as it is modified
+                const exitCode = await module.callMain([...args]);
+
+                appendText(`Compiler exited with code ${exitCode} (${exitCode == 0 ? 'Success' : 'Failure'})`);
+
+                if (exitCode !== 0) {
+                    return;
+                }
+
+                try {
+                    let output = await module.FS.readFile('output.S');
+                    let result = new TextDecoder("utf-8").decode(output);
+
+                    compilationResult.value = result;
+                    compilationResult.scrollTop = oldScroll;
+                } catch (e) {
+                    throw 'Reading compilation result output file: ' + String(e) +
+                        (typeof e === 'object') ? JSON.stringify(e, null, "    ") : '';
+                }
             }
-        }
-        async function compileWrap() {
-            try {
-                await runCompiler();
-            } catch (e) {
-                appendText(String(e));
-                if (typeof e === "object")
-                    appendText(JSON.stringify(e, null, "    "))
+            async function compileWrap() {
+                try {
+                    await runCompiler();
+                } catch (e) {
+                    appendText(String(e));
+                    if (typeof e === "object")
+                        appendText(JSON.stringify(e, null, "    "))
+                }
             }
-        }
 
-        input.addEventListener('input', compileWrap);
+            input.addEventListener('input', compileWrap);
 
-        compileWrap();
+            compileWrap();
+        }) ();
     </script>
 </body>
 
