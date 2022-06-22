@@ -382,6 +382,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                             "push rdx\n\t"
                             "mov rdx, 1\n\t"
                             "lea rsi, [rip + .LCharacter]\n\t"
+                            "mov rdi, 1\n\t"
                             #ifdef LINUX
                             "mov rax, 1\n\t"
  			                #else
