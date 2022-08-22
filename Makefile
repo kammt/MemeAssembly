@@ -13,7 +13,7 @@ else
 endif
 
 # Compiler Flags
-CFLAGS+=-std=gnu11 -D $(PLATFORM_MACRO) -O2
+CFLAGS+=-std=gnu17 -D $(PLATFORM_MACRO) -O2
 CFLAGS_DEBUG+=-O0 -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 
 # Destination directory for make install
