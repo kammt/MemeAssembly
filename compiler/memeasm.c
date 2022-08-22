@@ -21,6 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #include "compiler.h"
 #include "parser/parser.h"
@@ -74,18 +75,13 @@ int main(int argc, char* argv[]) {
             {"debug",   no_argument,       0, 'd'},
             {"info",    no_argument,       0, 'i'},
             {"fno-martyrdom",    no_argument,&martyrdom, false},
-            {"O-1",     no_argument,      &optimisationLevel, -1},
-            {"O-2",     no_argument,      &optimisationLevel, -2},
-            {"O-3",     no_argument,      &optimisationLevel,-3},
-            {"O-s",     no_argument,      &optimisationLevel,-4},
-            {"O69420",     no_argument,      &optimisationLevel, 69420},
             { 0, 0, 0, 0 }
     };
 
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hOdigS", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hO::digS", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printHelpPage(argv[0]);
@@ -94,7 +90,22 @@ int main(int argc, char* argv[]) {
                 compileState.compileMode = assemblyFile;
                 break;
             case 'O':
-                compileState.compileMode = objectFile;
+                if(!optarg) {
+                    compileState.compileMode = objectFile;
+                } else {
+                    char* endptr;
+                    errno = 0;
+                    long res = strtol(optarg, &endptr, 10);
+                    if (errno) {
+                        perror("Invalid optimisation level specified");
+                        return 1;
+                    } else if(endptr == optarg || *endptr != '\0' || (res != 69420 && res != -1 && res != -2 && res != -3)) {
+                        fprintf(stderr, "Invalid optimisation level specified: %s\n", optarg);
+                        return 1;
+                    }
+
+                    compileState.optimisationLevel = res;
+                }
                 break;
             case 'd':
                 compileState.logLevel = debug;
