@@ -29,6 +29,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_16_BIT_REGISTERS 16
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
+#define PARAM_ISREG(param) (param <= REG8)
+
 //Parameters as strings
 const char* const paramNames[] = {"64 bit Register", "32 bit Register", "16 bit Register", "8 bit Register", "decimal number", "character", "monke jump marker name", "function name"};
 
@@ -222,7 +224,8 @@ void printParameterUsageNote(uint8_t allowedParams) {
  */
 void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, struct compileState* compileState) {
     printDebugMessage(compileState -> logLevel, "Starting parameter validity check", 0);
-    for(int parameterNum = 0; parameterNum < commandList[(*parsedCommand).opcode].usedParameters; parameterNum++) {
+    uint8_t usedParameters = commandList[(*parsedCommand).opcode].usedParameters;
+    for(uint8_t parameterNum = 0; parameterNum < usedParameters; parameterNum++) {
         //Get the current parameter
         char* parameter = (*parsedCommand).parameters[parameterNum];
         printDebugMessage( compileState -> logLevel, "\tChecking parameter %s", 1, parameter);
@@ -372,11 +375,31 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         printParameterUsageNote(allowedTypes);
     }
 
-    //Now do a final check: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
-    for(int i = 0; i < MAX_PARAMETER_COUNT; i++) {
-        uint8_t otherParamType = parsedCommand->paramTypes[(i + 1) % MAX_PARAMETER_COUNT];
-        if(parsedCommand->isPointer == i + 1 && otherParamType > REG8) {
-            printError(inputFileName, parsedCommand -> lineNum, compileState, "invalid parameter combination: operand size unknown", 0);
+    //We only compare parameters if there are at least two of them
+    if(usedParameters >= 2) {
+        //Now do some parameter checks
+        //1: If two registers are used, they must be of the same size
+        uint8_t currentReg = 0; // The first encountered register is set as the expected size. If 0, no register was found until now
+        for (int i = 0; i < usedParameters; i++) { //Go over all parameters
+            uint8_t paramType = parsedCommand->paramTypes[i];
+            if (currentReg == 0) { //If no register was found yet...
+                if (PARAM_ISREG(paramType) && parsedCommand->isPointer != i + 1) { //...and this parameter is a register...
+                    currentReg = paramType; //...set it as the expected size
+                }
+            } else if (PARAM_ISREG(paramType) && parsedCommand->isPointer != i + 1 && paramType != currentReg) { //If we then find another register with differing size, throw an error
+                printError(inputFileName, parsedCommand->lineNum, compileState,
+                           "invalid parameter combination: cannot combine registers of different size", 0);
+            }
+        }
+
+        //2: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
+        if(parsedCommand->isPointer != 0) { //If there is a pointer parameter
+            for (int i = 0; i < usedParameters; i++) { //Go over all parameters
+                if (parsedCommand->isPointer != i + 1 && !PARAM_ISREG(parsedCommand->paramTypes[i])) {
+                    printError(inputFileName, parsedCommand->lineNum, compileState,
+                               "invalid parameter combination: operand size unknown", 0);
+                }
+            }
         }
     }
 }
