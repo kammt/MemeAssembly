@@ -17,8 +17,9 @@ A clear and concise description of what the bug is.
 
 </pre></details>
 
-Used compiler flags[e.g. -O-1 -c]:
+Used compiler flags[e.g. -O-1 -S]:
 
+<!-- If the following infos below are not relevant for your issues (e.g. because it affects all platforms), you can just delete them -->
 **Debug Output**
 <!-- Please paste the debug output here (use the -d option when compiling) -->
 <details>
