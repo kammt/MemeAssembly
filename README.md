@@ -28,6 +28,13 @@ In short, MemeAssembly is the revolution the tech industry has been waiting for.
 - **Complexity: <span style="color:#ff5050">Not Stonks</span>** \
     Can you even remember all the commands that your 'shiny new' programming language has to offer? Are you overwhelmed and confused by all the ways a modern programming language can be used for? Well look no further than MemeAssembly! MemeASM is your best choice, since it only supports a tiny fraction of instructions.
 
+## So it is basically Assembly?
+I'd just like to interject for a moment. What you're refering to as Assembly, is in fact, MemeAssembly, or as I've recently taken to calling it, Meme plus Assembly. Assembly is not a Meme operating system unto itself, but rather another free component of a fully functioning Meme system made useful by the Meme corelibs, Twitter bots and vital system components comprising a full Meme OS as defined by Reddit.
+
+Many computer users run a modified version of the Meme system every day, without realizing it. Through a peculiar turn of events, the version of Meme which is widely used today is often called Assembly, and many of its users are not aware that it is basically the Meme system, developed by the Meme Project.
+
+There really is a Assembly, and these people are using it, but it is just a part of the system they use. Assembly is the basis: the element of the system that allocates the people's resources to the other Memes that you publish. This basis is an essential part of a Meme operating system, but useless by itself; it can only function in the context of a complete Meme operating system. Assembly is normally used in combination with the Meme operating system: the whole system is basically Meme with Assembly added, or MemeAssembly. All the so-called Assembly distributions are really distributions of MemeAssembly!
+
 ## Who is it for?
 MemeAssembly is the best choice for...
 ### ...Silicon Valley Developers :iphone:
