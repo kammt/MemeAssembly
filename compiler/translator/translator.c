@@ -123,7 +123,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
             if(formatSpecifier == 'F') {
                 fprintf(outputFile, "%u", fileNum);
             //Is it a parameter?
-            } else if(formatSpecifier <= (char) command.usedParameters + 47) {
+            } else if(formatSpecifier >= '0' && formatSpecifier < command.usedParameters + '0') {
                 char *parameter = parsedCommand.parameters[formatSpecifier - 48];
                 if(parsedCommand.isPointer == (formatSpecifier - 48) + 1) {
                     fprintf(outputFile, "[%s]", parameter);
