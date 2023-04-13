@@ -119,6 +119,21 @@ char *translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
         "'\\n'", "' '", "' '", "'\\t'", "'\\f'", "'\\b'", "'\\v'", "'\\\"'", "'\\?'", "'\\\\'"
 };
 
+uint8_t getRegisterSize(uint8_t paramType) {
+    switch(paramType) {
+        case REG8:
+            return 8;
+        case REG16:
+            return 16;
+        case REG32:
+            return 32;
+        case REG64:
+            return 64;
+        default:
+            return 0;
+    }
+}
+
 /**
  * Compares the parameter against all possible values in a pre-defined list
  * @param parameter the given parameter
@@ -378,7 +393,22 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
     //We only compare parameters if there are at least two of them
     if(usedParameters >= 2) {
         //Now do some parameter checks
-        //1: If two registers are used, they must be of the same size
+        //1: If a number and a register are used, they number must fit in the register
+        if((parsedCommand->paramTypes[0] == DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
+                (parsedCommand->paramTypes[1] == DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
+            unsigned decimalIndex = (parsedCommand->paramTypes[0] == DECIMAL) ? 0 : 1;
+            unsigned regIndex = 1 - decimalIndex;
+
+            unsigned bitsNeeded = 64 - __builtin_clzll(strtoll(parsedCommand->parameters[decimalIndex], NULL, 10));
+            if(bitsNeeded > getRegisterSize(parsedCommand->paramTypes[regIndex])) {
+                printError(inputFileName, parsedCommand->lineNum, compileState,
+                           "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u", 3,
+                           parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex],
+                           getRegisterSize(parsedCommand->paramTypes[regIndex]));
+            }
+        }
+
+        //2: If two (or potentially more) registers are used, they must be of the same size
         uint8_t currentReg = 0; // The first encountered register is set as the expected size. If 0, no register was found until now
         for (int i = 0; i < usedParameters; i++) { //Go over all parameters
             uint8_t paramType = parsedCommand->paramTypes[i];
@@ -392,7 +422,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             }
         }
 
-        //2: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
+        //3: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
         if(parsedCommand->isPointer != 0) { //If there is a pointer parameter
             for (int i = 0; i < usedParameters; i++) { //Go over all parameters
                 if (parsedCommand->isPointer != i + 1 && !PARAM_ISREG(parsedCommand->paramTypes[i])) {
