@@ -267,7 +267,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         }
         if((allowedTypes & DECIMAL) != 0) { //Decimal number
             char* endPtr;
-            long int number = strtol(parameter, &endPtr, 10);
+            long long int number = strtoll(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
             if(*endPtr == '\0') {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a decimal number", 0);
