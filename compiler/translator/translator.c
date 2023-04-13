@@ -124,18 +124,17 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                 fprintf(outputFile, "%u", fileNum);
             //Is it a parameter?
             } else if(formatSpecifier >= '0' && formatSpecifier < command.usedParameters + '0') {
-                char *parameter = parsedCommand.parameters[formatSpecifier - 48];
-                if(parsedCommand.isPointer == (formatSpecifier - 48) + 1) {
+                uint8_t index = formatSpecifier - 48;
+                char *parameter = parsedCommand.parameters[index];
+                if(parsedCommand.isPointer == index + 1) {
                     fprintf(outputFile, "[%s]", parameter);
                 } else {
                     /*
                      * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
                      * The check is only needed here, as a decimal number cannot be a pointer
                      */
-                    char* endPtr;
-                    long long int number = strtoll(parameter, &endPtr, 10);
-                    if(*endPtr == '\0') {
-                        fprintf(outputFile, "0x%llX", number);
+                    if(parsedCommand.paramTypes[index] == DECIMAL) {
+                        fprintf(outputFile, "0x%llX", strtoll(parameter, NULL, 10));
                     } else {
                         fprintf(outputFile, "%s", parameter);
                     }
