@@ -128,7 +128,17 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                 if(parsedCommand.isPointer == (formatSpecifier - 48) + 1) {
                     fprintf(outputFile, "[%s]", parameter);
                 } else {
-                    fprintf(outputFile, "%s", parameter);
+                    /*
+                     * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
+                     * The check is only needed here, as a decimal number cannot be a pointer
+                     */
+                    char* endPtr;
+                    long long int number = strtoll(parameter, &endPtr, 10);
+                    if(*endPtr == '\0') {
+                        fprintf(outputFile, "0x%llX", number);
+                    } else {
+                        fprintf(outputFile, "%s", parameter);
+                    }
                 }
             } else {
                 fprintf(stderr, RED "Internal compiler error: " RESET "Invalid translation format specifier '%c' for opcode %u\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new", formatSpecifier, parsedCommand.opcode);
