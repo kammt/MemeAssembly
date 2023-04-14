@@ -57,6 +57,12 @@ jobs:
 
       - name: Run the compiler on runnable_example.memeasm
         run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
-
       - name: Run the executable
-        run: ./tmp
+        run: |
+          ulimit -c unlimited   
+          sudo ./tmp
+          sudo chmod -R +rwx /cores/*
+      - uses: actions/upload-artifact@master # capture all crashes as build artifacts
+        with:
+          name: crashes
+          path: /cores
