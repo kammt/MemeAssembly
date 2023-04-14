@@ -87,12 +87,12 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
 }
 
 /**
- *
- * @param compileState
- * @param currentFunctionName
- * @param parsedCommand
- * @param fileNum
- * @param outputFile
+ * Receives a command and writes its assembly translation into the output file
+ * @param compileState the current compile state
+ * @param currentFunctionName the name of the current function. Needed for writing some stabs debugging info
+ * @param parsedCommand the command to be translated
+ * @param fileNum the id of the current file
+ * @param outputFile the file where the translation should be written to
  */
 void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
     if(parsedCommand.opcode != 0 && compileState->optimisationLevel == o42069) {
@@ -111,7 +111,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    if(parsedCommand.opcode != 0) {
+    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
         fprintf(outputFile, "\t");
     }
     for(size_t i = 0; i < strlen(translationPattern); i++) {
@@ -166,7 +166,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
     }
 
-    if(compileState -> useStabs && parsedCommand.opcode != 0) {
+    if(compileState -> useStabs && commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
         //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
         if(lastCommand) {
             stabs_writeFunctionEndLabel(outputFile, currentFunctionName);
