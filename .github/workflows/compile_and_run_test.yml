@@ -62,7 +62,8 @@ jobs:
         run: |
           ulimit -c unlimited   
           sudo ./tmp
-          sudo chmod -R +rwx /cores/*
+      - name: make core-dumps accessible
+        run: sudo chmod -R +rwx /cores/*
       - uses: actions/upload-artifact@master # capture all crashes as build artifacts
         with:
           name: crashes
