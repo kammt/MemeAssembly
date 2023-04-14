@@ -78,7 +78,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
     //First, count how many function definitions there are
     size_t functionDefinitions = 0;
     for (size_t i = 0; i < commandsArray.size; ++i) {
-        if(commandsArray.arrayPointer[i].opcode == 0) {
+        if(commandList[commandsArray.arrayPointer[i].opcode].commandType == COMMAND_TYPE_FUNC_DEF) {
             functionDefinitions++;
         }
     }
@@ -97,7 +97,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
     while (commandArrayIndex < commandsArray.size) {
         //Here, we have not found another function definition yet. Traverse over all commands. If they are not function definitions, throw an error. If they are, break and start parsing that function
         for (; commandArrayIndex < commandsArray.size; commandArrayIndex++) {
-            if(commandsArray.arrayPointer[commandArrayIndex].opcode != 0) {
+            if(commandList[commandsArray.arrayPointer[commandArrayIndex].opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
                 printError(fileStruct -> fileName, commandsArray.arrayPointer[commandArrayIndex].lineNum, compileState, "command does not belong to any function", 0);
             } else {
                 break;

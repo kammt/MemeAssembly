@@ -95,7 +95,7 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
  * @param outputFile the file where the translation should be written to
  */
 void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
-    if(parsedCommand.opcode != 0 && compileState->optimisationLevel == o42069) {
+    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o42069) {
         printDebugMessage(compileState -> logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
     }
@@ -103,7 +103,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     //If we are supposed to create STABS info, we now need to create labels
     if(compileState -> useStabs) {
         //If this is a function declaration, update the current function name
-        if(parsedCommand.opcode != 0) {
+        if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
             stabs_writeLineLabel(outputFile, parsedCommand);
         }
     }
