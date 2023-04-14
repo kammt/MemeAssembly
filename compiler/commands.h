@@ -92,6 +92,12 @@ struct compileState {
 #define PARAM_MONKE_LABEL 64
 #define PARAM_FUNC_NAME 128
 
+// Command types
+#define COMMAND_TYPE_MOV 1
+#define COMMAND_TYPE_RETURN 2
+#define COMMAND_TYPE_FUNC_DEF 3
+#define COMMAND_TYPE_FUNC_CALL 4
+
 struct command {
     char *pattern;
     uint8_t usedParameters;

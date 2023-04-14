@@ -33,6 +33,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}",
+            .commandType = COMMAND_TYPE_FUNC_DEF,
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_FUNC_NAME},
             .analysisFunction = &analyseFunctions,
@@ -40,24 +41,28 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         },
         {
             .pattern = "right back at ya, buckaroo",
+            .commandType = COMMAND_TYPE_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "ret"
         },
         {
             .pattern = "no, I don't think I will",
+            .commandType = COMMAND_TYPE_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "mov rax, 1\n\tret"
         },
         {
             .pattern = "I see this as an absolute win",
+            .commandType = COMMAND_TYPE_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "xor rax, rax\n\tret"
         },
         {
             .pattern = "{p}: whomst has summoned the almighty one",
+            .commandType = COMMAND_TYPE_FUNC_CALL,
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_FUNC_NAME},
             .analysisFunction = &analyseCall,
@@ -106,6 +111,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         },
         {
             .pattern = "{p} is brilliant, but I like {p}",
+            .commandType = COMMAND_TYPE_MOV,
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
