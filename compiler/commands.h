@@ -107,6 +107,13 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
+    /*
+     * The command type contains a special value that can be used to identify the type of command
+     * without specifying the index of the command. Some examples:
+     *  - return statements
+     *  - mov-command
+     */
+    uint8_t commandType;
     void (*analysisFunction)(struct commandLinkedList**, unsigned, struct compileState*); //commandLinkedList-list, opcode (index), compileState
 
     //TODO replace with char* translationPatterns[6];
