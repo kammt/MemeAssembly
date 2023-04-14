@@ -29,7 +29,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_16_BIT_REGISTERS 16
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
-#define PARAM_ISREG(param) (param <= REG8)
+#define PARAM_ISREG(param) (param <= PARAM_REG8)
 
 //Parameters as strings
 const char* const paramNames[] = {"64 bit Register", "32 bit Register", "16 bit Register", "8 bit Register", "decimal number", "character", "monke jump marker name", "function name"};
@@ -121,13 +121,13 @@ char *translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
 
 uint8_t getRegisterSize(uint8_t paramType) {
     switch(paramType) {
-        case REG8:
+        case PARAM_REG8:
             return 8;
-        case REG16:
+        case PARAM_REG16:
             return 16;
-        case REG32:
+        case PARAM_REG32:
             return 32;
-        case REG64:
+        case PARAM_REG64:
             return 64;
         default:
             return 0;
@@ -248,39 +248,39 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         //Get the allowed parameter types for this parameter
         uint8_t allowedTypes = commandList[(*parsedCommand).opcode].allowedParamTypes[parameterNum];
 
-        if((allowedTypes & REG64) != 0) { //64 bit registers
+        if((allowedTypes & PARAM_REG64) != 0) { //64 bit registers
             if(isInArray(parameter, registers_64_bit, NUMBER_OF_64_BIT_REGISTERS)) {
                 printDebugMessage( compileState -> logLevel, "\t\tParameter is a 64 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = REG64;
+                parsedCommand->paramTypes[parameterNum] = PARAM_REG64;
                 continue;
             }
             printDebugMessage( compileState -> logLevel, "\t\tParameter is not a 64 bit register", 0);
         }
-        if((allowedTypes & REG32) != 0) { //32 bit registers
+        if((allowedTypes & PARAM_REG32) != 0) { //32 bit registers
             if(isInArray(parameter, registers_32_bit, NUMBER_OF_32_BIT_REGISTERS)) {
                 printDebugMessage( compileState -> logLevel, "\t\tParameter is a 32 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = REG32;
+                parsedCommand->paramTypes[parameterNum] = PARAM_REG32;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not a 32 bit register", 0);
         }
-        if((allowedTypes & REG16) != 0) { //16 bit registers
+        if((allowedTypes & PARAM_REG16) != 0) { //16 bit registers
             if(isInArray(parameter, registers_16_bit, NUMBER_OF_16_BIT_REGISTERS)) {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a 16 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = REG16;
+                parsedCommand->paramTypes[parameterNum] = PARAM_REG16;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not a 16 bit register", 0);
         }
-        if((allowedTypes & REG8) != 0) { //8 bit registers
+        if((allowedTypes & PARAM_REG8) != 0) { //8 bit registers
             if(isInArray(parameter, registers_8_bit, NUMBER_OF_8_BIT_REGISTERS)) {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is an 8 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = REG8;
+                parsedCommand->paramTypes[parameterNum] = PARAM_REG8;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not an 8 bit register", 0);
         }
-        if((allowedTypes & DECIMAL) != 0) { //Decimal number
+        if((allowedTypes & PARAM_DECIMAL) != 0) { //Decimal number
             char* endPtr;
             long long int number = strtoll(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
@@ -292,12 +292,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 if(number == 69 || number == 420) {
                     printNiceASCII();
                 }
-                parsedCommand->paramTypes[parameterNum] = DECIMAL;
+                parsedCommand->paramTypes[parameterNum] = PARAM_DECIMAL;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not a decimal number", 0);
         }
-        if((allowedTypes & CHAR) != 0) { //Characters (including escape sequences) / ASCII-code
+        if((allowedTypes & PARAM_CHAR) != 0) { //Characters (including escape sequences) / ASCII-code
             //Check if any of the escape sequences match
             if(isInArray(parameter, (char **) escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES)) {
                 translateEscapeSequence(parameter, parameterNum, parsedCommand);
@@ -305,7 +305,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
                 }
-                parsedCommand->paramTypes[parameterNum] = CHAR;
+                parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
                 continue;
             //If not, check if the parameter is only one character
             } else if(strlen(parameter) == 1) {
@@ -314,7 +314,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
                 }
-                parsedCommand->paramTypes[parameterNum] = CHAR;
+                parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is neither a character nor an escape sequence", 0);
@@ -329,12 +329,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
                 }
-                parsedCommand->paramTypes[parameterNum] = CHAR;
+                parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not an ASCII-code", 0);
         }
-        if((allowedTypes & MONKE_LABEL) != 0) { //Monke Jump label
+        if((allowedTypes & PARAM_MONKE_LABEL) != 0) { //Monke Jump label
             //Iterate through each character and check if it is either a U or an A
             //Define variables that are set to 1 if either a U or an A are found. That way, you can check if both of them occurred at least once
             uint8_t a_used = 0;
@@ -356,12 +356,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printError(inputFileName, parsedCommand -> lineNum, compileState, "a jump marker cannot be a pointer", 0);
                 }
-                parsedCommand->paramTypes[parameterNum] = MONKE_LABEL;
+                parsedCommand->paramTypes[parameterNum] = PARAM_MONKE_LABEL;
                 continue;
             }
             printDebugMessage(compileState -> logLevel, "\t\tParameter is not a valid Monke jump label", 0);
         }
-        if((allowedTypes & FUNC_NAME) != 0) { //Function name
+        if((allowedTypes & PARAM_FUNC_NAME) != 0) { //Function name
             bool unexpectedCharacter = false;
             for(size_t i = 0; i < strlen(parameter); i++) {
                 char character = parameter[i];
@@ -381,7 +381,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 if(parsedCommand -> isPointer == parameterNum + 1) {
                     printError(inputFileName, parsedCommand -> lineNum, compileState, "a function name cannot be a pointer", 0);
                 }
-                parsedCommand->paramTypes[parameterNum] = FUNC_NAME;
+                parsedCommand->paramTypes[parameterNum] = PARAM_FUNC_NAME;
                 continue;
             }
         }
@@ -394,9 +394,9 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
     if(usedParameters >= 2) {
         //Now do some parameter checks
         //1: If a number and a register are used, they number must fit in the register
-        if((parsedCommand->paramTypes[0] == DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
-                (parsedCommand->paramTypes[1] == DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
-            unsigned decimalIndex = (parsedCommand->paramTypes[0] == DECIMAL) ? 0 : 1;
+        if((parsedCommand->paramTypes[0] == PARAM_DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
+           (parsedCommand->paramTypes[1] == PARAM_DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
+            unsigned decimalIndex = (parsedCommand->paramTypes[0] == PARAM_DECIMAL) ? 0 : 1;
             unsigned regIndex = 1 - decimalIndex;
 
             unsigned bitsNeeded = 64 - __builtin_clzll(strtoll(parsedCommand->parameters[decimalIndex], NULL, 10));

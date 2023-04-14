@@ -34,7 +34,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
+            .allowedParamTypes = {PARAM_FUNC_NAME},
             .analysisFunction = &analyseFunctions,
             .translationPattern = "{0}:"
         },
@@ -59,7 +59,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "{p}: whomst has summoned the almighty one",
             .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
+            .allowedParamTypes = {PARAM_FUNC_NAME},
             .analysisFunction = &analyseCall,
             .translationPattern = "call {0}"
         },
@@ -68,14 +68,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "stonks {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "push {0}"
         },
         {
             .pattern = "not stonks {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64},
+            .allowedParamTypes = {PARAM_REG64},
             .analysisFunction = NULL,
             .translationPattern = "pop {0}"
         },
@@ -85,14 +85,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "bitconneeeeeeect {p} {p}",
             .usedParameters = 2,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .translationPattern = "and {0}, {1}"
         },
         {
             .pattern = "{p} \\s",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .translationPattern = "not {0}"
         },
 
@@ -100,14 +100,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "sneak 100 {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "xor {0}, {0}"
         },
         {
             .pattern = "{p} is brilliant, but I like {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "mov {0}, {1}"
         },
@@ -116,56 +116,56 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "upvote {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "add {0}, 1"
         },
         {
             .pattern = "downvote {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "sub {0}, 1"
         },
         {
             .pattern = "parry {p} you filthy casual {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR, REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "sub {1}, {0}"
         },
         {
             .pattern = "{p} units are ready, with {p} more well on the way",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "add {0}, {1}"
         },
         {
             .pattern = "upgrades, people. Upgrades {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "shl {0}, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "shr {0}, 1"
         },
         {
             .pattern = "{p} is getting out of hand, now there are {p} of them",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32, REG64 | REG32 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "imul {0}, {1}"
         },
         {
             .pattern = "look at what {p} needs to mimic a fraction of {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | DECIMAL | CHAR, REG64},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64},
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {0}\n\t"
                               "push rdx\n\t"
@@ -182,7 +182,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "{p} UNLIMITED POWER {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64, REG64 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {1}\n\t"
                               "cmp QWORD PTR [rip + .Ltmp64], 0\n\t"
@@ -230,35 +230,35 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "monke {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {MONKE_LABEL},
+            .allowedParamTypes = {PARAM_MONKE_LABEL},
             .analysisFunction = &analyseMonkeMarkers,
             .translationPattern = ".L{0}:"
         },
         {
             .pattern = "return to monke {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {MONKE_LABEL},
+            .allowedParamTypes = {PARAM_MONKE_LABEL},
             .analysisFunction = NULL,
             .translationPattern = "jmp .L{0}"
         },
         {
             .pattern = "who would win? {p} or {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = &analyseWhoWouldWinCommands,
             .translationPattern = "cmp {0}, {1}\n\tjg .L{0}Wins_{F}\n\tjl .L{1}Wins_{F}"
         },
         {
             .pattern = "{p} wins",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = ".L{0}Wins_{F}:"
         },
         {
             .pattern = "corporate needs you to find the difference between {p} and {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = &analyseTheyreTheSamePictureCommands,
             .translationPattern = "cmp {0}, {1}\n\tje .LSamePicture_{F}"
         },
@@ -274,7 +274,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "what can I say except {p}",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG8 | CHAR},
+            .allowedParamTypes = {PARAM_REG8 | PARAM_CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
                                   "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
@@ -289,7 +289,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG8},
+            .allowedParamTypes = {PARAM_REG8},
             .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
                                   "sub rsp, 8\n\t"

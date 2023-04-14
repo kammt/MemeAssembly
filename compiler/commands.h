@@ -82,14 +82,15 @@ struct compileState {
     logLevel logLevel;
 };
 
-#define REG64 1
-#define REG32 2
-#define REG16 4
-#define REG8 8
-#define DECIMAL 16
-#define CHAR 32
-#define MONKE_LABEL 64
-#define FUNC_NAME 128
+// Parameter types
+#define PARAM_REG64 1
+#define PARAM_REG32 2
+#define PARAM_REG16 4
+#define PARAM_REG8 8
+#define PARAM_DECIMAL 16
+#define PARAM_CHAR 32
+#define PARAM_MONKE_LABEL 64
+#define PARAM_FUNC_NAME 128
 
 struct command {
     char *pattern;

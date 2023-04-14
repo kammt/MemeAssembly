@@ -133,7 +133,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                      * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
                      * The check is only needed here, as a decimal number cannot be a pointer
                      */
-                    if(parsedCommand.paramTypes[index] == DECIMAL) {
+                    if(parsedCommand.paramTypes[index] == PARAM_DECIMAL) {
                         fprintf(outputFile, "0x%llX", strtoll(parameter, NULL, 10));
                     } else {
                         fprintf(outputFile, "%s", parameter);
