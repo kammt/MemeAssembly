@@ -394,21 +394,27 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
     if(usedParameters >= 2) {
         //Now do some parameter checks
         //1: If a number and a register are used, they number must fit in the register
+        //2: If a number and a 64 Bit register are used (and the command is not a mov-command), can the number be sign-extended from 32 Bits?
         if((parsedCommand->paramTypes[0] == PARAM_DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
            (parsedCommand->paramTypes[1] == PARAM_DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
             unsigned decimalIndex = (parsedCommand->paramTypes[0] == PARAM_DECIMAL) ? 0 : 1;
             unsigned regIndex = 1 - decimalIndex;
+            unsigned regSize = getRegisterSize(parsedCommand->paramTypes[regIndex]);
 
-            unsigned bitsNeeded = 64 - __builtin_clzll(strtoll(parsedCommand->parameters[decimalIndex], NULL, 10));
-            if(bitsNeeded > getRegisterSize(parsedCommand->paramTypes[regIndex])) {
+            long long number = strtoll(parsedCommand->parameters[decimalIndex], NULL, 10);
+            unsigned bitsNeeded = 64 - __builtin_clzll(number);
+            if(bitsNeeded > regSize) {
                 printError(inputFileName, parsedCommand->lineNum, compileState,
                            "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u", 3,
-                           parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex],
-                           getRegisterSize(parsedCommand->paramTypes[regIndex]));
+                           parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex], regSize);
+            //If command is not mov, are the last 33 Bits all 0 or all 1?
+            } else if(commandList[parsedCommand->opcode].commandType != COMMAND_TYPE_MOV && regSize == 64 && !((number & 0xFFFFFFFF80000000) == 0 || (number | 0x7FFFFFFF) == -1)) {
+                printError(inputFileName, parsedCommand->lineNum, compileState,
+                           "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits", 0);
             }
         }
 
-        //2: If two (or potentially more) registers are used, they must be of the same size
+        //3: If two (or potentially more) registers are used, they must be of the same size
         uint8_t currentReg = 0; // The first encountered register is set as the expected size. If 0, no register was found until now
         for (int i = 0; i < usedParameters; i++) { //Go over all parameters
             uint8_t paramType = parsedCommand->paramTypes[i];
@@ -422,7 +428,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             }
         }
 
-        //3: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
+        //4: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
         if(parsedCommand->isPointer != 0) { //If there is a pointer parameter
             for (int i = 0; i < usedParameters; i++) { //Go over all parameters
                 if (parsedCommand->isPointer != i + 1 && !PARAM_ISREG(parsedCommand->paramTypes[i])) {
