@@ -68,3 +68,7 @@ jobs:
         with:
           name: crashes
           path: /cores
+      - uses: actions/upload-artifact@master # upload executable
+        with:
+          name: executable
+          path: ./tmp
