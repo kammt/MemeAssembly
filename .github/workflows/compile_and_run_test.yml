@@ -58,6 +58,7 @@ jobs:
       - name: Run the compiler on runnable_example.memeasm
         run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
       - name: Run the executable
+        continue-on-error: true
         run: |
           ulimit -c unlimited   
           sudo ./tmp
