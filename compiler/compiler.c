@@ -41,21 +41,21 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         },
         {
             .pattern = "right back at ya, buckaroo",
-            .commandType = COMMAND_TYPE_RETURN,
+            .commandType = COMMAND_TYPE_FUNC_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "ret"
         },
         {
             .pattern = "no, I don't think I will",
-            .commandType = COMMAND_TYPE_RETURN,
+            .commandType = COMMAND_TYPE_FUNC_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "mov rax, 1\n\tret"
         },
         {
             .pattern = "I see this as an absolute win",
-            .commandType = COMMAND_TYPE_RETURN,
+            .commandType = COMMAND_TYPE_FUNC_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "xor rax, rax\n\tret"

@@ -94,7 +94,7 @@ struct compileState {
 
 // Command types
 #define COMMAND_TYPE_MOV 1
-#define COMMAND_TYPE_RETURN 2
+#define COMMAND_TYPE_FUNC_RETURN 2
 #define COMMAND_TYPE_FUNC_DEF 3
 #define COMMAND_TYPE_FUNC_CALL 4
 

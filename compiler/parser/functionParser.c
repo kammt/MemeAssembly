@@ -20,6 +20,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "functionParser.h"
 #include "../logger/log.h"
 
+extern const struct command commandList[];
+
 /**
  * Creates a function struct by starting at the function definition and then traversing the
  * command array until a return statement, new function definition or end of array is found
@@ -49,14 +51,14 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
         uint8_t opcode = parsedCommand.opcode;
 
         //Is this a new function definition
-        if(opcode == 0) {
+        if(commandList[opcode].commandType == COMMAND_TYPE_FUNC_DEF) {
             if(functionEndIndex != functionStartAtIndex + index - 1) {
                 //Throw an error since the last statement was not a return
                 printError(inputFileName, parsedCommand.lineNum, compileState,
                            "expected a return statement, but got a new function definition", 0);
             }
             break;
-        } if(opcode > 0 && opcode <= 3) { //command is a return statement
+        } else if(commandList[opcode].commandType == COMMAND_TYPE_FUNC_RETURN) { //command is a return statement
             functionEndIndex = functionStartAtIndex + index;
         }
         index++;
