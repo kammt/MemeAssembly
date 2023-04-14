@@ -402,7 +402,13 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             unsigned regSize = getRegisterSize(parsedCommand->paramTypes[regIndex]);
 
             long long number = strtoll(parsedCommand->parameters[decimalIndex], NULL, 10);
-            unsigned bitsNeeded = 64 - __builtin_clzll(number);
+            /*
+             * To calculate the number of bits needed, we need to keep in mind that we use the two's complement. So there are two scenarios:
+             *  - positive number: just check how many leading zeros there are. These zeros are not needed => 64 - clz
+             *  - negative number: Meaning the last bit is a 1. Flip all bits. Now do the same calculation as before, but add 1 at the end,
+             *                     since the number requires at least one bit at the end that is set to one
+             */
+            unsigned bitsNeeded = (__builtin_clzll(number) > 0) ? 64 - __builtin_clzll(number) : 64 - __builtin_clzll(~number) + 1;
             if(bitsNeeded > regSize) {
                 printError(inputFileName, parsedCommand->lineNum, compileState,
                            "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u", 3,
