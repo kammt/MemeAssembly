@@ -371,7 +371,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
 
 /**
  *
- * @param compileState a struct containing all necessary infos. Most notably, it contains the compileMode, optimisation level and all parsed input files
+ * @param compileState a struct containing all necessary infos. Most notably, it contains the outputMode, optimisation level and all parsed input files
  * @param outputFileName the name of the output file
  */
 void compile(struct compileState compileState, char* outputFileName) {
@@ -389,7 +389,7 @@ void compile(struct compileState compileState, char* outputFileName) {
     FILE* output;
     int gccResult = 0;
     //When generating an assembly file, we open the output file in writing mode directly
-    if(compileState.compileMode == assemblyFile) {
+    if(compileState.outputMode == assemblyFile) {
         output = fopen(outputFileName, "w") ;
         if(output == NULL) {
             perror("Failed to open output file");
@@ -398,7 +398,7 @@ void compile(struct compileState compileState, char* outputFileName) {
     //When letting gcc do the work for us (object file or executable), we just pipe the code into gcc via stdin
     } else {
         char* commandPrefix;
-        if(compileState.compileMode == objectFile) {
+        if(compileState.outputMode == objectFile) {
             commandPrefix = "gcc -O -c -x assembler - -o";
         } else {
             #ifndef LINUX
@@ -418,7 +418,7 @@ void compile(struct compileState compileState, char* outputFileName) {
 
     writeToFile(&compileState, output);
 
-    if(compileState.compileMode == assemblyFile) {
+    if(compileState.outputMode == assemblyFile) {
         fclose(output);
     } else {
         gccResult = pclose(output);

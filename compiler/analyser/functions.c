@@ -36,7 +36,7 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, false, 1, "function");
 
     //Check 2: Does a main-function exist?
-    if(compileState -> compileMode == executable) {
+    if(compileState -> outputMode == executable) {
         bool mainFunctionExists = false;
         struct commandLinkedList *functionDefinition = commandLinkedList[opcode];
         while (functionDefinition != NULL) {

@@ -63,13 +63,15 @@ struct file {
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
-typedef enum { executable, assemblyFile, objectFile } compileMode;
+typedef enum { noob, bully, obfuscated } compileMode;
+typedef enum { executable, assemblyFile, objectFile } outputMode;
 typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateMode;
 typedef enum { none, o_1, o_2, o_3, o_s, o42069 } optimisationLevel;
 typedef enum { normal, info, debug } logLevel;
 
 struct compileState {
     compileMode compileMode;
+    outputMode outputMode;
     uint32_t fileCount;
     struct file* files;
 
