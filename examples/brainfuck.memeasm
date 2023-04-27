@@ -1,9 +1,6 @@
 What the hell happened here? This is a brainfuck interpreter written in MemeASM
 What the hell happened here? Usage: Provide a string of BF-Code as a single argument to this program
 What the hell happened here? Some notes:
-What the hell happened here?  - The code size is limited to 42069 instructions. There is no error handling in place, so having more instructions than
-What the hell happened here?    that will lead to undefined behavior, since there then would be ambiguous/non-existing commands and - well - you
-What the hell happened here?    are overflowing a buffer, so yeah. That's also a problem
 What the hell happened here?  - The cell "band" is 10.000 Bytes large. However, there is again no error handling for a pointer moving out of bounds.
 What the hell happened here?    meaning that you could theoretically modify stuff like the return address etc. - basically anything on the stack
 What the hell happened here?  - Also, I know that not supplying any argument will segfault because I don't check argc
