@@ -339,6 +339,12 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "nop"
         },
         {
+            .pattern = "you shall not pass!",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "1: xor rax, rax\n\tjmp 1b"
+        },
+        {
             .pattern = "we need air support",
             .usedParameters = 0,
             .analysisFunction = NULL,
