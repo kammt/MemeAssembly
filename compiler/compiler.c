@@ -339,6 +339,13 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "nop"
         },
         {
+            .pattern = "it's over 9000 {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .analysisFunction = NULL,
+            .translationPattern = "cmp {0}, 9000\n\tjg 1f\n\thlt\n\t1:"
+        },
+        {
             .pattern = "you shall not pass!",
             .usedParameters = 0,
             .analysisFunction = NULL,
