@@ -39,7 +39,6 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
     function.name = functionStart.parameters[0];
     function.definedInLine = (size_t) functionStart.lineNum;
     function.definedInFile = inputFileName;
-    function.freeCommandsArray = false; //This is not a separate heap chunk, only a pointer to somewhere in a heap chunk. Don't free that.
 
     printDebugMessage(compileState -> logLevel, "\tParsing function:", 1, functionStart.parameters[0]);
 
@@ -167,7 +166,6 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             functions[functionArrayIndex].definedInFile = fileStruct->fileName;
             functions[functionArrayIndex].numberOfCommands = numCommands;
             functions[functionArrayIndex].name = funcName;
-            functions[functionArrayIndex].freeCommandsArray = true;
             functions[functionArrayIndex].commands = commands;
 
             //Increase the index

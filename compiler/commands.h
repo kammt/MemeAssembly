@@ -52,7 +52,6 @@ struct function {
     size_t definedInLine;
     size_t numberOfCommands;
     struct parsedCommand* commands;
-    bool freeCommandsArray; //Is set to true if "commands" points to the start of a separate heap chunk and needs to be deallocated. Only used in bully mode
 };
 
 struct file {
