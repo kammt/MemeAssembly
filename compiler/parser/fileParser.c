@@ -294,13 +294,13 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         /*
          * In bully mode, we replace this non-working command with a valid one
          * But we want to make it deterministic, with a lot of possible commands,
-         * we take the sum of ascii characters in this line, and use this value
+         * so we take the sum of ascii characters in this line, and use this value
          * to create the random command
          *
          * The variable "computedIndex" is global, meaning that the value
          * is dependent on the previous illegal commands - *perfection*
          */
-        char* randomParams[] = {"rax", "rcx", "rbx", "r8", "r9", "r10", "r12", "rsp", "rbp", "ax", "al", "r8b", "r9d", "r14b", "99", "1238", "12", "420", "987654321", "8", "9", "69", "8268", "2", "_", "a", "b", "d", "f", "F", "sigreturn", "uaauuaa", "uau", "uu", "main", "gets", "srand", "mprotect", "au", "\\n", "space"};
+        const char* randomParams[] = {"rax", "rcx", "rbx", "r8", "r9", "r10", "r12", "rsp", "rbp", "ax", "al", "r8b", "r9d", "r14b", "99", "1238", "12", "420", "987654321", "8", "9", "69", "8268", "2", "_", "a", "b", "d", "f", "F", "sigreturn", "uaauuaa", "uau", "uu", "main", "gets", "srand", "mprotect", "au", "\\n", "space"};
         unsigned randomParamCount = sizeof randomParams / sizeof(char*);
 
         for(size_t i = 0; i < strlen(line); i++) {
