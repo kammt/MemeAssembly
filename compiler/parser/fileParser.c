@@ -105,7 +105,8 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
 
     //On Windows, file endings are done using \r\n. This means that there will be a \r at the end of every string, breaking the entire compiler
     //To fix this, check if the string ends with \r\n. If so, replace it with \n
-    if(*(result - 2) == '\r') {
+    //However, we first need to check that we are not reading out of bounds
+    if(((uintptr_t) result - 2 >= (uintptr_t) *lineptr) && *(result - 2) == '\r') {
         *(result - 2) = '\n';
         result--;
     }
