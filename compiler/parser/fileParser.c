@@ -340,7 +340,9 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
     printDebugMessage(compileState -> logLevel, "The number of lines are %lu", 1, loc);
 
     if(loc == 0) {
-        printError(inputFileName, 0, compileState, "file does not contain any commands", 0);
+        if(compileState->compileMode != bully) {
+            printError(inputFileName, 0, compileState, "file does not contain any commands", 0);
+        }
 
         commandsArray->arrayPointer = NULL;
         commandsArray->size = 0;
