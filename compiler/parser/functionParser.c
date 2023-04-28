@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <string.h>
 #include "functionParser.h"
 #include "../logger/log.h"
 
@@ -38,6 +39,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
     function.name = functionStart.parameters[0];
     function.definedInLine = (size_t) functionStart.lineNum;
     function.definedInFile = inputFileName;
+    function.freeCommandsArray = false; //This is not a separate heap chunk, only a pointer to somewhere in a heap chunk. Don't free that.
 
     printDebugMessage(compileState -> logLevel, "\tParsing function:", 1, functionStart.parameters[0]);
 
@@ -52,10 +54,14 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
 
         //Is this a new function definition
         if(commandList[opcode].commandType == COMMAND_TYPE_FUNC_DEF) {
+            //If the previous command was a return statement, everything is fine. But if not, then we have a new function
+            //definition, while the previous function did not return yet
             if(functionEndIndex != functionStartAtIndex + index - 1) {
-                //Throw an error since the last statement was not a return
-                printError(inputFileName, parsedCommand.lineNum, compileState,
-                           "expected a return statement, but got a new function definition", 0);
+                if(compileState->compileMode != bully) {
+                    //Throw an error since the last statement was not a return
+                    printError(inputFileName, parsedCommand.lineNum, compileState,
+                               "expected a return statement, but got a new function definition", 0);
+                }
             }
             break;
         } else if(commandList[opcode].commandType == COMMAND_TYPE_FUNC_RETURN) { //command is a return statement
@@ -65,7 +71,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
     }
     printDebugMessage(compileState -> logLevel, "\t\tIteration stopped at index %lu", 1, index);
 
-    if(functionEndIndex == 0) {
+    if(functionEndIndex == 0 && compileState->compileMode != bully) {
         printError(inputFileName, functionStart.lineNum, compileState, "function does not return", 0);
     }
 
@@ -95,13 +101,77 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
     //We now traverse the commands array again, this time parsing the functions
     size_t commandArrayIndex = 0; //At which command we currently are
     while (commandArrayIndex < commandsArray.size) {
-        //Here, we have not found another function definition yet. Traverse over all commands. If they are not function definitions, throw an error. If they are, break and start parsing that function
+        /*
+         * Here, we have not found another function definition yet. Traverse over all commands.
+         * - If they are not function definitions, we need to check if bully mode is on
+         *    - if not, just throw a compiler error for each command that does not belong to a function
+         *    - if so, those "orphaned" commands are added to newly created functions, with a random function name
+         * - If they are, break and start parsing that function
+         */
+        size_t startIndex = commandArrayIndex;
+        bool orphanedCommands = false;
         for (; commandArrayIndex < commandsArray.size; commandArrayIndex++) {
-            if(commandList[commandsArray.arrayPointer[commandArrayIndex].opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
-                printError(fileStruct -> fileName, commandsArray.arrayPointer[commandArrayIndex].lineNum, compileState, "command does not belong to any function", 0);
+            if (commandList[commandsArray.arrayPointer[commandArrayIndex].opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
+                orphanedCommands = true;
+                if(compileState->compileMode != bully) {
+                    printError(fileStruct->fileName, commandsArray.arrayPointer[commandArrayIndex].lineNum,
+                               compileState, "command does not belong to any function", 0);
+                }
             } else {
                 break;
             }
+        }
+
+        //If we're in bully mode and there were orphaned commands, then they range from startIndex to commandArrayIndex - 1
+        //Inject a fake function with those commands
+        if(compileState->compileMode == bully && orphanedCommands) {
+            printf("Creating fake function\n");
+            char *functionNames[] = {"mprotect", "kill", "signal", "raise", "dump", "atoi",
+                                           "generateExcellence", "isExcellent", "memeify", "uwufy", "test",
+                                           "helloWorld", "snake_case_sucks", "gets", "uwu", "skillIssue"};
+            char* funcName = functionNames[commandArrayIndex % (sizeof(functionNames) / sizeof(char*))];
+
+            //We create two extra commands (function definition and return)
+            size_t numCommands = commandArrayIndex - startIndex + 2;
+            struct parsedCommand *commands = calloc(numCommands, sizeof(struct parsedCommand));
+            //There is one more function, so resize our functions array
+            size_t functionsArraySize = 0;
+            if (__builtin_umull_overflow(++functionDefinitions, sizeof(struct function), &functionsArraySize)) {
+                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                exit(EXIT_FAILURE);
+            }
+            functions = realloc(functions, functionsArraySize);
+            if (!functions || !commands) {
+                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                exit(EXIT_FAILURE);
+            }
+
+            //Copy over the commands
+            //The first one is a function definition
+            commands[0].opcode = 0;
+            commands[0].lineNum = 69; //That doesn't matter, there are no error messages anyway
+            commands[0].parameters[0] = funcName;
+            commands[0].translate = true;
+
+            //memcpy the other commands
+            //We don't check for mult-overflow here, since numCommands*sizeof(...) was performed earlier in calloc, which succeeded => no overflow
+            memcpy(commands + 1, &commandsArray.arrayPointer[startIndex], (numCommands - 2) * sizeof(struct parsedCommand));
+
+            //The last one is a return
+            commands[numCommands - 1].opcode = 1;
+            commands[numCommands - 1].lineNum = 420;
+            commands[numCommands - 1].translate = true;
+
+
+            //Set the function-struct accordingly
+            functions[functionArrayIndex].definedInFile = fileStruct->fileName;
+            functions[functionArrayIndex].numberOfCommands = numCommands;
+            functions[functionArrayIndex].name = funcName;
+            functions[functionArrayIndex].freeCommandsArray = true;
+            functions[functionArrayIndex].commands = commands;
+
+            //Increase the index
+            functionArrayIndex++;
         }
 
         if(commandArrayIndex >= commandsArray.size) {
