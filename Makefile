@@ -1,5 +1,4 @@
 CC_win=x86_64-w64-mingw32-gcc
-CC_wasm=emcc
 
 PLATFORM_MACRO=
 ifeq ($(OS),Windows_NT)     # is Windows_NT on XP, 2000, 7, Vista, 10...
@@ -31,7 +30,8 @@ all:
 
 wasm: wasm/memeasm.js
 wasm/memeasm.js:
-	$(CC_wasm) -o $@ -s WASM=1 -s INVOKE_RUN=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORTED_RUNTIME_METHODS="['FS', 'callMain', 'cwrap']" -s 'EXPORT_NAME="runMemeAssemblyCompiler"' $(FILES) $(CFLAGS)
+	docker run --rm -v $(shell pwd):/src -u $(shell id -u):$(shell id -g) \
+		emscripten/emsdk emcc -o $@ -s WASM=1 -s INVOKE_RUN=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORTED_RUNTIME_METHODS="['FS', 'callMain', 'cwrap']" -s 'EXPORT_NAME="runMemeAssemblyCompiler"' $(FILES) $(CFLAGS)
 
 # Compilation with debugging-flags
 debug:
@@ -39,7 +39,7 @@ debug:
 
 # Remove the compiled executable from this directory
 clean:
-	$(RM) memeasm
+	$(RM) memeasm wasm/memeasm.{js,wasm}
 
 # Removes "memeasm" from DESTDIR
 uninstall:
