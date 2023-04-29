@@ -27,7 +27,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "compiler.h"
 #include "parser/parser.h"
 #include "logger/log.h"
-
+extern const char* const versionString;
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
@@ -38,7 +38,8 @@ void printHelpPage(char* programName) {
     printf(" %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
     printf(" %s [options] -S -o outputFile.S [-i | -d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n", programName);
     printf(" %s [options] -O -o outputFile.o [-i | -d] inputFile\tOnly compiles the specified file and saves it an object file\n", programName);
-    printf(" %s (-h | --help)\t\t\t\t\tDisplays this help page\n\n", programName);
+    printf(" %s (-h | --help)\t\t\t\t\tDisplays this help page\n", programName);
+    printf(" %s -v\t\t\t\t\t\t\tPrints version information\n\n", programName);
     printf("Compiler options:\n");
     printf(" -O-1 \t\t- reverse optimisation stage 1: A nop is inserted after every command\n");
     printf(" -O-2 \t\t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
@@ -85,10 +86,14 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hO::digS", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hO::digSv", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printHelpPage(argv[0]);
+                return 0;
+            case 'v':
+                //Print the version number, but without the "v" at the beginning
+                printf("%s\n", versionString+1);
                 return 0;
             case 'S':
                 compileState.outputMode = assemblyFile;

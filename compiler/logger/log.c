@@ -20,8 +20,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "log.h"
 #include <stdarg.h>
 
-const char* const version_string = "v1.6";
-const char* const platform_suffix =
+const char* const versionString = "v1.6";
+const char* const platformSuffix =
     #ifdef WINDOWS
         "Windows";
     #elif defined(MACOS)
@@ -43,7 +43,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", version_string, platform_suffix);
+    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", versionString, platformSuffix);
 }
 
 /**
