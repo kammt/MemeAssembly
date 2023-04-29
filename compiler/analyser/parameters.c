@@ -408,7 +408,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
              *  - negative number: Meaning the last bit is a 1. Flip all bits. Now do the same calculation as before, but add 1 at the end,
              *                     since the number requires at least one bit at the end that is set to one
              */
-            unsigned bitsNeeded = (__builtin_clzll(number) > 0) ? 64 - __builtin_clzll(number) : 64 - __builtin_clzll(~number) + 1;
+            unsigned bitsNeeded = (number == 0) ? 1 : ((__builtin_clzll(number) > 0) ? 64 - __builtin_clzll(number) : 64 - __builtin_clzll(~number) + 1);
             if(bitsNeeded > regSize) {
                 printError(inputFileName, parsedCommand->lineNum, compileState,
                            "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u", 3,
