@@ -93,6 +93,7 @@ struct compileState {
 #define PARAM_CHAR 32
 #define PARAM_MONKE_LABEL 64
 #define PARAM_FUNC_NAME 128
+#define PARAM_ISREG(param) (param <= PARAM_REG8 && param > 0)
 
 // Command types
 #define COMMAND_TYPE_MOV 1

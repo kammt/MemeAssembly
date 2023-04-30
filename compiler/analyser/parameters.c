@@ -29,7 +29,10 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_16_BIT_REGISTERS 16
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
-#define PARAM_ISREG(param) (param <= PARAM_REG8)
+//Used to pseudo-random generation when using bully mode
+extern size_t computedIndex;
+extern char* functionNames[];
+extern unsigned numFunctionNames;
 
 //Parameters as strings
 const char* const paramNames[] = {"64 bit Register", "32 bit Register", "16 bit Register", "8 bit Register", "decimal number", "character", "monke jump marker name", "function name"};
@@ -131,6 +134,24 @@ uint8_t getRegisterSize(uint8_t paramType) {
             return 64;
         default:
             return 0;
+    }
+}
+
+/**
+ * Returns a random register for the specified size. Returned value may be NULL
+ */
+char* getRandomRegister(uint8_t paramType) {
+    switch(paramType) {
+        case PARAM_REG64:
+            return strdup(registers_64_bit[computedIndex % NUMBER_OF_64_BIT_REGISTERS]);
+        case PARAM_REG32:
+            return strdup(registers_32_bit[computedIndex % NUMBER_OF_32_BIT_REGISTERS]);
+        case PARAM_REG16:
+            return strdup(registers_16_bit[computedIndex % NUMBER_OF_16_BIT_REGISTERS]);
+        case PARAM_REG8:
+            return strdup(registers_8_bit[computedIndex % NUMBER_OF_8_BIT_REGISTERS]);
+        default:
+            return NULL;
     }
 }
 
@@ -287,7 +308,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             if(*endPtr == '\0') {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a decimal number", 0);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
-                    printError(inputFileName, parsedCommand -> lineNum, compileState, "a decimal number cannot be a pointer", 0);
+                    if(compileState->compileMode != bully) {
+                        printError(inputFileName, parsedCommand -> lineNum, compileState, "a decimal number cannot be a pointer", 0);
+                    } else {
+                        //Well then it's not a pointer :shrug:
+                        parsedCommand->isPointer = 0;
+                    }
                 }
                 if(number == 69 || number == 420) {
                     printNiceASCII();
@@ -303,7 +329,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 translateEscapeSequence(parameter, parameterNum, parsedCommand);
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is an escape sequence and has been translated", 0);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
-                    printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
+                    if(compileState->compileMode != bully) {
+                        printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
+                    } else {
+                        //Well then it's not a pointer :shrug:
+                        parsedCommand->isPointer = 0;
+                    }
                 }
                 parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
                 continue;
@@ -312,7 +343,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 translateCharacter(parameter, parameterNum, parsedCommand);
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a character, translated to: %s", 1, (*parsedCommand).parameters[parameterNum]);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
-                    printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
+                    if(compileState->compileMode != bully) {
+                        printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
+                    } else {
+                        //Well then it's not a pointer :shrug:
+                        parsedCommand->isPointer = 0;
+                    }
                 }
                 parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
                 continue;
@@ -327,7 +363,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             if(*endPtr == '\0' && result >= 0 && result <= 255) {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is an ASCII-code", 0);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
-                    printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
+                    if(compileState->compileMode != bully) {
+                        printError(inputFileName, parsedCommand -> lineNum, compileState, "a character cannot be a pointer", 0);
+                    } else {
+                        //Well then it's not a pointer :shrug:
+                        parsedCommand->isPointer = 0;
+                    }
                 }
                 parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
                 continue;
@@ -354,7 +395,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             if(a_used == 1 && u_used == 1 && unexpectedCharacter == 0) {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a valid Monke jump label", 0);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
-                    printError(inputFileName, parsedCommand -> lineNum, compileState, "a jump marker cannot be a pointer", 0);
+                    if(compileState->compileMode != bully) {
+                        printError(inputFileName, parsedCommand->lineNum, compileState,"a jump marker cannot be a pointer", 0);
+                    } else {
+                        //Well then it's not a pointer :shrug:
+                        parsedCommand->isPointer = 0;
+                    }
                 }
                 parsedCommand->paramTypes[parameterNum] = PARAM_MONKE_LABEL;
                 continue;
@@ -379,15 +425,94 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             if(!unexpectedCharacter) {
                 printDebugMessage(compileState -> logLevel, "\t\tParameter is a valid function name", 0);
                 if(parsedCommand -> isPointer == parameterNum + 1) {
-                    printError(inputFileName, parsedCommand -> lineNum, compileState, "a function name cannot be a pointer", 0);
+                    if(compileState->compileMode != bully) {
+                        printError(inputFileName, parsedCommand -> lineNum, compileState, "a function name cannot be a pointer", 0);
+                    } else {
+                        //Well then it's not a pointer :shrug:
+                        parsedCommand->isPointer = 0;
+                    }
                 }
                 parsedCommand->paramTypes[parameterNum] = PARAM_FUNC_NAME;
                 continue;
             }
         }
         printDebugMessage(compileState -> logLevel, "No checks succeeded, invalid parameter!", 0);
-        printError(inputFileName, parsedCommand -> lineNum, compileState, "invalid parameter provided: \"%s\"", 1, parameter);
-        printParameterUsageNote(allowedTypes);
+        if(compileState->compileMode != bully) {
+            printError(inputFileName, parsedCommand->lineNum, compileState, "invalid parameter provided: \"%s\"", 1, parameter);
+            printParameterUsageNote(allowedTypes);
+            parsedCommand->paramTypes[parameterNum] = 0;
+        } else {
+            /* To make this work, we need to replace this parameter with something that works
+             * To create something semi-random, we use the same technique used in fileParser.c:
+             * "computedIndex", which is dependent on the previous failed parameters, is used to pseudo-randomly
+             * generate a valid parameter
+             */
+            for(size_t i = 0; i < strlen(parameter); i++){
+                computedIndex = computedIndex * parameter[i] / 2;
+            }
+
+            //Choose a parameter. If it is not allowed, rotate the bitmask until we find a valid one
+            uint8_t chosenParameter = 1 << (computedIndex % 8);
+            while ((allowedTypes & chosenParameter) == 0) {
+                if(chosenParameter == (1 << 7)) {
+                    chosenParameter = 1;
+                } else {
+                    chosenParameter = chosenParameter << 1;
+                }
+            }
+
+            char* newParam;
+            switch(chosenParameter) {
+                case PARAM_REG64:
+                case PARAM_REG32:
+                case PARAM_REG16:
+                case PARAM_REG8:
+                    newParam = getRandomRegister(chosenParameter);
+                    break;
+                case PARAM_DECIMAL:
+                case PARAM_CHAR:
+                    newParam = malloc(10);
+                    if(!newParam) {
+                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                        exit(EXIT_FAILURE);
+                    }
+                    sprintf(newParam, "%lu", computedIndex % 128);
+                    break;
+                case PARAM_MONKE_LABEL:
+                    newParam = malloc(10);
+                    int j = 0;
+                    if(!newParam) {
+                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                        exit(EXIT_FAILURE);
+                    }
+                    unsigned length = computedIndex % 7 + 2;
+                    for(unsigned i = 0; i < length; i++) {
+                        newParam[j++] = (computedIndex % 2 == 0) ? 'u' : 'a';
+                        computedIndex = computedIndex * 3 / 2;
+                    }
+                    newParam[length] = 0;
+                    break;
+                case PARAM_FUNC_NAME:
+                    newParam = strdup(functionNames [computedIndex % numFunctionNames]);
+                    break;
+                default:
+                    fprintf(stderr, RED "Internal compiler error: " RESET "Random parameter generation unsupported for paramType %u\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new\n", chosenParameter);
+                    exit(EXIT_FAILURE);
+            }
+            if(parsedCommand->isPointer == parameterNum + 1) {
+                parsedCommand->isPointer = 0;
+            }
+
+            if(!newParam) {
+                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                exit(EXIT_FAILURE);
+            }
+            //Free the old parameter
+            free(parameter);
+            //Set the new parameter
+            parsedCommand->parameters[parameterNum] = newParam;
+            parsedCommand->paramTypes[parameterNum] = chosenParameter;
+        }
     }
 
     //We only compare parameters if there are at least two of them
@@ -410,13 +535,34 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
              */
             unsigned bitsNeeded = (number == 0) ? 1 : ((__builtin_clzll(number) > 0) ? 64 - __builtin_clzll(number) : 64 - __builtin_clzll(~number) + 1);
             if(bitsNeeded > regSize) {
-                printError(inputFileName, parsedCommand->lineNum, compileState,
-                           "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u", 3,
-                           parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex], regSize);
+                if(compileState->compileMode != bully) {
+                    printError(inputFileName, parsedCommand->lineNum, compileState,
+                               "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u",
+                               3, parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex], regSize);
+                } else {
+                    //We replace the number with something that is guaranteed to fit into all registers
+                    char* newParam = malloc(10);
+                    if(!newParam) {
+                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                        exit(EXIT_FAILURE);
+                    }
+                    sprintf(newParam, "%lu", computedIndex % 256);
+
+                    free(parsedCommand->parameters[decimalIndex]);
+                    parsedCommand->parameters[decimalIndex] = newParam;
+                }
             //If command is not mov, are the last 33 Bits all 0 or all 1?
             } else if(commandList[parsedCommand->opcode].commandType != COMMAND_TYPE_MOV && regSize == 64 && !((number & 0xFFFFFFFF80000000) == 0 || (number | 0x7FFFFFFF) == -1)) {
-                printError(inputFileName, parsedCommand->lineNum, compileState,
-                           "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits", 0);
+                if(compileState->compileMode != bully) {
+                    printError(inputFileName, parsedCommand->lineNum, compileState,
+                               "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits",0);
+                } else {
+                    //We just make the number shorter than 32 bits :bigBrain:
+                    parsedCommand->parameters[decimalIndex][computedIndex % 32] = 0;
+
+                    //Also, change computedIndex. Just because
+                    computedIndex += (number & 0xFFF);
+                }
             }
         }
 
@@ -429,17 +575,32 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                     currentReg = paramType; //...set it as the expected size
                 }
             } else if (PARAM_ISREG(paramType) && parsedCommand->isPointer != i + 1 && paramType != currentReg) { //If we then find another register with differing size, throw an error
-                printError(inputFileName, parsedCommand->lineNum, compileState,
-                           "invalid parameter combination: cannot combine registers of different size", 0);
+                if(compileState->compileMode != bully) {
+                    printError(inputFileName, parsedCommand->lineNum, compileState,
+                               "invalid parameter combination: cannot combine registers of different size", 0);
+                } else {
+                    //We just replace this register with one of the correct size
+                    free(parsedCommand->parameters[i]);
+                    parsedCommand->parameters[i] = getRandomRegister(currentReg);
+                    if(!parsedCommand->parameters[i]) {
+                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    parsedCommand->paramTypes[i] = currentReg;
+                }
             }
         }
 
         //4: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
-        if(parsedCommand->isPointer != 0) { //If there is a pointer parameter
-            for (int i = 0; i < usedParameters; i++) { //Go over all parameters
-                if (parsedCommand->isPointer != i + 1 && !PARAM_ISREG(parsedCommand->paramTypes[i])) {
-                    printError(inputFileName, parsedCommand->lineNum, compileState,
-                               "invalid parameter combination: operand size unknown", 0);
+        //This check is skipped in bully mode and done in translator.c, as fixing this issue requires to edit the translated assembly code
+        if(compileState->compileMode != bully) {
+            if (parsedCommand->isPointer != 0) { //If there is a pointer parameter
+                for (int i = 0; i < usedParameters; i++) { //Go over all parameters
+                    if (parsedCommand->isPointer != i + 1 && !PARAM_ISREG(parsedCommand->paramTypes[i])) {
+                        printError(inputFileName, parsedCommand->lineNum, compileState,
+                                   "invalid parameter combination: operand size unknown", 0);
+                    }
                 }
             }
         }

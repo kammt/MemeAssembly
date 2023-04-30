@@ -30,6 +30,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 extern struct command commandList[];
+
+//Used to pseudo-random generation when using bully mode
 size_t computedIndex = 69;
 
 /**

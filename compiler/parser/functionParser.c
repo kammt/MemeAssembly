@@ -22,6 +22,10 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "../logger/log.h"
 
 extern const struct command commandList[];
+char *functionNames[] = {"mprotect", "kill", "signal", "raise", "dump", "atoi",
+                         "generateExcellence", "isExcellent", "memeify", "uwufy", "test",
+                         "helloWorld", "snake_case_sucks", "gets", "uwu", "skillIssue"};
+unsigned numFunctionNames = sizeof(functionNames) / sizeof (char*);
 
 /**
  * Creates a function struct by starting at the function definition and then traversing the
@@ -125,9 +129,6 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
         //Inject a fake function with those commands
         if(compileState->compileMode == bully && orphanedCommands) {
             printf("Creating fake function\n");
-            char *functionNames[] = {"mprotect", "kill", "signal", "raise", "dump", "atoi",
-                                           "generateExcellence", "isExcellent", "memeify", "uwufy", "test",
-                                           "helloWorld", "snake_case_sucks", "gets", "uwu", "skillIssue"};
             char* funcName = functionNames[commandArrayIndex % (sizeof(functionNames) / sizeof(char*))];
 
             //We create two extra commands (function definition and return)

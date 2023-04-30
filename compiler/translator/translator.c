@@ -35,6 +35,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 extern const char* const versionString;
 extern const struct command commandList[];
 
+//Used to pseudo-random generation when using bully mode
+extern size_t computedIndex;
+
 /**
  * Creates the first STABS entry in which the origin file is stored
  * @param outputFile the output file
@@ -127,7 +130,16 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                 uint8_t index = formatSpecifier - 48;
                 char *parameter = parsedCommand.parameters[index];
                 if(parsedCommand.isPointer == index + 1) {
-                    fprintf(outputFile, "[%s]", parameter);
+                    /*
+                     * If we are in bully mode, we first need to check if the operand size is unknown (e.g. a pointer
+                     * and a decimal number are used). This is because this check is skipped in parameters.c
+                     */
+                    if(compileState->compileMode == bully && commandList[parsedCommand.opcode].usedParameters == 2 && !PARAM_ISREG(parsedCommand.paramTypes[index + 1 % 2])) {
+                        const char* operandSizes[] = {"BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR"};
+                        fprintf(outputFile, "%s [%s]", operandSizes[computedIndex % 4], parameter);
+                    } else {
+                        fprintf(outputFile, "[%s]", parameter);
+                    }
                 } else {
                     /*
                      * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
