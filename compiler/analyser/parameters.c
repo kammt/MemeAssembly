@@ -595,13 +595,9 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         //4: If there's a pointer parameter, is the other parameter a register? If not, we do not know the operand size, throw an error
         //This check is skipped in bully mode and done in translator.c, as fixing this issue requires to edit the translated assembly code
         if(compileState->compileMode != bully) {
-            if (parsedCommand->isPointer != 0) { //If there is a pointer parameter
-                for (int i = 0; i < usedParameters; i++) { //Go over all parameters
-                    if (parsedCommand->isPointer != i + 1 && !PARAM_ISREG(parsedCommand->paramTypes[i])) {
-                        printError(inputFileName, parsedCommand->lineNum, compileState,
-                                   "invalid parameter combination: operand size unknown", 0);
-                    }
-                }
+            if (parsedCommand->isPointer != 0 && !PARAM_ISREG(parsedCommand->paramTypes[parsedCommand->isPointer % 2])) {
+                printError(inputFileName, parsedCommand->lineNum, compileState,
+                           "invalid parameter combination: operand size unknown", 0);
             }
         }
     }
