@@ -439,7 +439,9 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         printDebugMessage(compileState->logLevel, "No checks succeeded, invalid parameter!", 0);
         if(compileState->compileMode != bully) {
             printError(inputFileName, parsedCommand->lineNum, compileState, "invalid parameter provided: \"%s\"", 1, parameter);
-            printParameterUsageNote(allowedTypes);
+            if(compileState->compileMode != obfuscated) {
+                printParameterUsageNote(allowedTypes);
+            }
             parsedCommand->paramTypes[parameterNum] = 0;
         } else {
             /* To make this work, we need to replace this parameter with something that works
