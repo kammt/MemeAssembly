@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm and contributors
+ Copyright © 2021-2023 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,33 +33,38 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}",
+            .commandType = COMMAND_TYPE_FUNC_DEF,
             .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
+            .allowedParamTypes = {PARAM_FUNC_NAME},
             .analysisFunction = &analyseFunctions,
             .translationPattern = "{0}:"
         },
         {
             .pattern = "right back at ya, buckaroo",
+            .commandType = COMMAND_TYPE_FUNC_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "ret"
         },
         {
             .pattern = "no, I don't think I will",
+            .commandType = COMMAND_TYPE_FUNC_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "mov rax, 1\n\tret"
         },
         {
             .pattern = "I see this as an absolute win",
+            .commandType = COMMAND_TYPE_FUNC_RETURN,
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "xor rax, rax\n\tret"
         },
         {
             .pattern = "{p}: whomst has summoned the almighty one",
+            .commandType = COMMAND_TYPE_FUNC_CALL,
             .usedParameters = 1,
-            .allowedParamTypes = {FUNC_NAME},
+            .allowedParamTypes = {PARAM_FUNC_NAME},
             .analysisFunction = &analyseCall,
             .translationPattern = "call {0}"
         },
@@ -68,14 +73,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "stonks {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "push {0}"
         },
         {
             .pattern = "not stonks {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64},
+            .allowedParamTypes = {PARAM_REG64},
             .analysisFunction = NULL,
             .translationPattern = "pop {0}"
         },
@@ -85,14 +90,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "bitconneeeeeeect {p} {p}",
             .usedParameters = 2,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .translationPattern = "and {0}, {1}"
         },
         {
             .pattern = "{p} \\s",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .translationPattern = "not {0}"
         },
 
@@ -100,14 +105,15 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "sneak 100 {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "xor {0}, {0}"
         },
         {
             .pattern = "{p} is brilliant, but I like {p}",
+            .commandType = COMMAND_TYPE_MOV,
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "mov {0}, {1}"
         },
@@ -116,56 +122,56 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "upvote {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "add {0}, 1"
         },
         {
             .pattern = "downvote {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "sub {0}, 1"
         },
         {
             .pattern = "parry {p} you filthy casual {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR, REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "sub {1}, {0}"
         },
         {
             .pattern = "{p} units are ready, with {p} more well on the way",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "add {0}, {1}"
         },
         {
             .pattern = "upgrades, people. Upgrades {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "shl {0}, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
             .analysisFunction = NULL,
             .translationPattern = "shr {0}, 1"
         },
         {
             .pattern = "{p} is getting out of hand, now there are {p} of them",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32, REG64 | REG32 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "imul {0}, {1}"
         },
         {
             .pattern = "look at what {p} needs to mimic a fraction of {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | DECIMAL | CHAR, REG64},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64},
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {0}\n\t"
                               "push rdx\n\t"
@@ -182,7 +188,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "{p} UNLIMITED POWER {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64, REG64 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {1}\n\t"
                               "cmp QWORD PTR [rip + .Ltmp64], 0\n\t"
@@ -230,35 +236,35 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "monke {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {MONKE_LABEL},
+            .allowedParamTypes = {PARAM_MONKE_LABEL},
             .analysisFunction = &analyseMonkeMarkers,
             .translationPattern = ".L{0}:"
         },
         {
             .pattern = "return to monke {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {MONKE_LABEL},
+            .allowedParamTypes = {PARAM_MONKE_LABEL},
             .analysisFunction = NULL,
             .translationPattern = "jmp .L{0}"
         },
         {
             .pattern = "who would win? {p} or {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = &analyseWhoWouldWinCommands,
             .translationPattern = "cmp {0}, {1}\n\tjg .L{0}Wins_{F}\n\tjl .L{1}Wins_{F}"
         },
         {
             .pattern = "{p} wins",
             .usedParameters = 1,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = ".L{0}Wins_{F}:"
         },
         {
             .pattern = "corporate needs you to find the difference between {p} and {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {REG64 | REG32 | REG16 | REG8, REG64 | REG32 | REG16 | REG8 | DECIMAL | CHAR},
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = &analyseTheyreTheSamePictureCommands,
             .translationPattern = "cmp {0}, {1}\n\tje .LSamePicture_{F}"
         },
@@ -274,7 +280,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "what can I say except {p}",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG8 | CHAR},
+            .allowedParamTypes = {PARAM_REG8 | PARAM_CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
                                   "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
@@ -289,7 +295,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {REG8},
+            .allowedParamTypes = {PARAM_REG8},
             .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
                                   "sub rsp, 8\n\t"
@@ -333,6 +339,25 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "nop"
         },
         {
+            .pattern = "it's over 9000 {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .analysisFunction = NULL,
+            .translationPattern = "cmp {0}, 9000\n\tjg 1f\n\thlt\n\t1:"
+        },
+        {
+            .pattern = "refuses to elaborate and leaves",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "mov rbp, rsp\n\tpop rsp"
+        },
+        {
+            .pattern = "you shall not pass!",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "1: xor rax, rax\n\tjmp 1b"
+        },
+        {
             .pattern = "we need air support",
             .usedParameters = 0,
             .analysisFunction = NULL,
@@ -365,7 +390,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
 
 /**
  *
- * @param compileState a struct containing all necessary infos. Most notably, it contains the compileMode, optimisation level and all parsed input files
+ * @param compileState a struct containing all necessary infos. Most notably, it contains the outputMode, optimisation level and all parsed input files
  * @param outputFileName the name of the output file
  */
 void compile(struct compileState compileState, char* outputFileName) {
@@ -383,7 +408,7 @@ void compile(struct compileState compileState, char* outputFileName) {
     FILE* output;
     int gccResult = 0;
     //When generating an assembly file, we open the output file in writing mode directly
-    if(compileState.compileMode == assemblyFile) {
+    if(compileState.outputMode == assemblyFile) {
         output = fopen(outputFileName, "w") ;
         if(output == NULL) {
             perror("Failed to open output file");
@@ -392,13 +417,17 @@ void compile(struct compileState compileState, char* outputFileName) {
     //When letting gcc do the work for us (object file or executable), we just pipe the code into gcc via stdin
     } else {
         char* commandPrefix;
-        if(compileState.compileMode == objectFile) {
-            commandPrefix = "gcc -O -c -x assembler - -o";
+        if(compileState.outputMode == objectFile) {
+            #ifndef LINUX
+            commandPrefix = "gcc -w -O -c -x assembler - -o";
+            #else
+            commandPrefix = "gcc -z execstack -w -O -c -x assembler - -o";
+            #endif
         } else {
             #ifndef LINUX
-            commandPrefix = "gcc -O -x assembler - -o";
+            commandPrefix = "gcc -w -O -x assembler - -o";
             #else
-            commandPrefix = "gcc -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
+            commandPrefix = "gcc -z execstack -w -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
             #endif
         }
 
@@ -412,7 +441,7 @@ void compile(struct compileState compileState, char* outputFileName) {
 
     writeToFile(&compileState, output);
 
-    if(compileState.compileMode == assemblyFile) {
+    if(compileState.outputMode == assemblyFile) {
         fclose(output);
     } else {
         gccResult = pclose(output);

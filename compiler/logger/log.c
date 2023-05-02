@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm and contributors
+ Copyright © 2021-2023 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,8 +20,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "log.h"
 #include <stdarg.h>
 
-const char* const version_string = "v1.5";
-const char* const platform_suffix =
+const char* const versionString = "v1.6";
+const char* const platformSuffix =
     #ifdef WINDOWS
         "Windows";
     #elif defined(MACOS)
@@ -43,7 +43,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", version_string, platform_suffix);
+    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", versionString, platformSuffix);
 }
 
 /**
@@ -126,7 +126,7 @@ void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...
  * @param ... variable arguments
  */
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...) {
-    compileState -> compilerErrors++;
+    compileState->compilerErrors++;
 
     //Initialise va_list to pass it on to vprintf
     va_list vaList;

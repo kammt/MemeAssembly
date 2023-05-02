@@ -27,12 +27,6 @@ jobs:
       - name: Build Linux
         run: make CFLAGS+=-Werror debug
 
-      - name: Install mingw-w64
-        run: sudo apt-get install mingw-w64
-
-      - name: Build Windows
-        run: make CFLAGS+=-Werror windows
-
   build_windows:
     # The type of runner that the job will run on
     runs-on: windows-2019

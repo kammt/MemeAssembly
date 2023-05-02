@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm
+ Copyright © 2021-2023 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,5 +25,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 void analyseCall(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
+bool mainFunctionExists(struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H

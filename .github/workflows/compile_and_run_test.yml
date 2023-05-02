@@ -47,7 +47,7 @@ jobs:
           run: ./tmp.exe
 
   run_macos:
-    runs-on: macos-latest
+    runs-on: macos-11
 
     steps:
       - uses: actions/checkout@v2
@@ -57,6 +57,5 @@ jobs:
 
       - name: Run the compiler on runnable_example.memeasm
         run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
-
       - name: Run the executable
         run: ./tmp
