@@ -295,7 +295,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
      */
     if(compileState->compileMode == bully && compileState->outputMode == executable && !mainFunctionExists(compileState)) {
         fprintf(outputFile, "\nmain:\n\t");
-        fprintf(outputFile, martyrdomCode);
+        fprintf(outputFile, "%s", martyrdomCode);
     }
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
@@ -319,7 +319,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                 #endif
 
                 if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
-                    fprintf(outputFile, martyrdomCode);
+                    fprintf(outputFile, "%s", martyrdomCode);
                 }
                 #endif
 
