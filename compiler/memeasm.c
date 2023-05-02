@@ -46,7 +46,7 @@ void printHelpPage(char* programName) {
     printf(" -O-3 \t\t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
     printf(" -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf(" -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
-    printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscate\n");
+    printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscated\n");
     printf(" -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -i \t\t- enables information logs\n");
@@ -139,12 +139,13 @@ int main(int argc, char* argv[]) {
             case 'c': //-fcompile-mode
                 if(strcmp(optarg, "bully") == 0) { //Bully mode
                     compileState.compileMode = bully;
-                } else if(strcmp(optarg, "obfuscate") == 0) { //obfuscate mode
+                } else if(strcmp(optarg, "obfuscated") == 0) { //obfuscated mode
                     compileState.compileMode = obfuscated;
                 } else if(strcmp(optarg, "noob") == 0) { //noob mode
                     compileState.compileMode = noob;
                 } else {
                     fprintf(stderr, "Error: invalid compile mode (must be one of \"noob\", \"bully\", \"obfuscate\")\n");
+                    return 1;
                 }
                 break;
             case '?':
