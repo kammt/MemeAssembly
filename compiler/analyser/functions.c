@@ -23,7 +23,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include <string.h>
 
-
 /**
  * Checks if the function definitions are valid. This includes making sure that
  *  - no function names are used twice
@@ -36,27 +35,32 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, false, 1, "function");
 
     //Check 2: Does a main-function exist?
-    if(compileState -> outputMode == executable) {
-        bool mainFunctionExists = false;
-        struct commandLinkedList *functionDefinition = commandLinkedList[opcode];
-        while (functionDefinition != NULL) {
+    //This check is skipped in bully mode
+    if(compileState -> outputMode == executable && compileState->compileMode != bully) {
+        if (!mainFunctionExists(compileState)) {
+            printError(compileState->files[0].fileName, 0, compileState,"unable to create an executable if no main-function was defined", 0);
+        }
+    }
+}
+
+/**
+ * Checks if a main function was defined anywhere
+ */
+bool mainFunctionExists(struct compileState* compileState) {
+    for(unsigned fileNum = 0; fileNum < compileState->fileCount; fileNum++) {
+        for(unsigned funcNum = 0; funcNum < compileState->files[fileNum].functionCount; funcNum++) {
             const char* const mainFunctionName =
                 #ifdef MACOS
                     "_main";
                 #else
                     "main";
                 #endif
-            if (strcmp(functionDefinition->command->parameters[0], mainFunctionName) == 0) {
-                mainFunctionExists = true;
+            if (strcmp(compileState->files[fileNum].functions[funcNum].name, mainFunctionName) == 0) {
+                return true;
             }
-
-            functionDefinition = functionDefinition -> next;
-        }
-
-        if (!mainFunctionExists) {
-            printError(compileState -> files[0].fileName, 0, compileState, "unable to create an executable if no main-function was defined", 0);
         }
     }
+    return false;
 }
 
 /**

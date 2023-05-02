@@ -19,6 +19,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "translator.h"
 #include "../logger/log.h"
+#include "../analyser/functions.h"
 
 #include <time.h>
 #include <string.h>
@@ -251,6 +252,15 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         "    ret\n\n");
 
     #endif
+
+    /*
+     * If we're in bully mode and an executable is to be generated, we omitted the check
+     * if there was a main-function
+     * We do that check now. If no main function exists, the first function in the file becomes the main function
+     */
+    if(compileState->compileMode == bully && compileState->outputMode == executable && !mainFunctionExists(compileState)) {
+        fprintf(outputFile, "\nmain:\n\t");
+    }
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         struct file currentFile = compileState -> files[i];

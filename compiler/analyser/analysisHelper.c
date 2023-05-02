@@ -46,7 +46,13 @@ void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struc
             if((!oncePerFile || duplicateItem -> definedInFile == listItem -> definedInFile) &&
              (parametersToCheck < 1 || strcmp( command -> parameters[0], duplicateItem -> command -> parameters[0]) == 0) &&
              (parametersToCheck != 2 || strcmp( command -> parameters[1], duplicateItem -> command -> parameters[1]) == 0)) {
-                printError(compileState -> files[duplicateItem -> definedInFile].fileName, duplicateItem -> command -> lineNum, compileState, "%s defined twice (already defined in %s:%lu)", 2, itemName, compileState -> files[listItem->definedInFile].fileName, command -> lineNum);
+                if(compileState->compileMode == bully) {
+                    printError(compileState->files[duplicateItem->definedInFile].fileName, duplicateItem->command->lineNum, compileState,
+                               "%s defined twice (already defined in %s:%lu)", 2, itemName, compileState->files[listItem->definedInFile].fileName, command->lineNum);
+                } else {
+                    //To fix this error in bully mode, only the first definition is valid, i.e. duplicateItem is removed
+                    duplicateItem->command->translate = false;
+                }
             }
 
             duplicateItem = duplicateItem -> next;
@@ -98,17 +104,33 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
         //We traversed all child commands, now we need to check if everything was defined properly
         if(parametersToCheck == 0) {
             if(!childFound[0]) {
-                printError(compileState->files[parentCommand -> definedInFile].fileName, command -> lineNum, compileState,
-                           "%s was not defined", 1, itemName);
+                if(compileState->compileMode != bully) {
+                    printError(compileState->files[parentCommand->definedInFile].fileName, command->lineNum,
+                               compileState,
+                               "%s was not defined", 1, itemName);
+                } else {
+                    //In bully mode, we just disregard the parent command
+                    parentCommand->command->translate = false;
+                }
             }
         } else {
             if(!childFound[0]) {
-                printError(compileState->files[parentCommand -> definedInFile].fileName, command -> lineNum, compileState,
-                           "%s was not defined for parameter \"%s\"", 2, itemName, command -> parameters[0]);
+                if(compileState->compileMode != bully) {
+                    printError(compileState->files[parentCommand->definedInFile].fileName, command->lineNum,
+                               compileState,"%s was not defined for parameter \"%s\"", 2, itemName, command->parameters[0]);
+                } else {
+                    //In bully mode, we just disregard the parent command
+                    parentCommand->command->translate = false;
+                }
             }
             if(parametersToCheck == 2 && !childFound[1]) {
-                printError(compileState->files[parentCommand -> definedInFile].fileName, command -> lineNum, compileState,
-                           "%s was not defined for parameter \"%s\"", 2, itemName, command -> parameters[1]);
+                if(compileState->compileMode != bully) {
+                    printError(compileState->files[parentCommand->definedInFile].fileName, command->lineNum,
+                               compileState,"%s was not defined for parameter \"%s\"", 2, itemName, command->parameters[1]);
+                } else {
+                    //In bully mode, we just disregard the parent command
+                    parentCommand->command->translate = false;
+                }
             }
         }
 
