@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
                 } else if(strcmp(optarg, "noob") == 0) { //noob mode
                     compileState.compileMode = noob;
                 } else {
-                    fprintf(stderr, "Error: invalid compile mode (must be one of \"noob\", \"bully\", \"obfuscate\")\n");
+                    fprintf(stderr, "Error: invalid compile mode (must be one of \"noob\", \"bully\", \"obfuscated\")\n");
                     return 1;
                 }
                 break;
