@@ -418,10 +418,14 @@ void compile(struct compileState compileState, char* outputFileName) {
     } else {
         char* commandPrefix;
         if(compileState.outputMode == objectFile) {
+            #ifndef LINUX
+            commandPrefix = "gcc -w -O -c -x assembler - -o";
+            #else
             commandPrefix = "gcc -z execstack -w -O -c -x assembler - -o";
+            #endif
         } else {
             #ifndef LINUX
-            commandPrefix = "gcc -z execstack -w -O -x assembler - -o";
+            commandPrefix = "gcc -w -O -x assembler - -o";
             #else
             commandPrefix = "gcc -z execstack -w -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
             #endif
