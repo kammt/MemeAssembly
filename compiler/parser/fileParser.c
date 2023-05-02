@@ -192,7 +192,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
 
         //Enter the comparison loop
         while (commandToken != NULL && lineToken != NULL) {
-            printDebugMessage(compileState -> logLevel, "\tcomparing with %s", 1, commandToken);
+            printDebugMessage(compileState->logLevel, "\tcomparing with %s", 1, commandToken);
 
             if(strstr(commandToken, "{p}") != NULL) {
                 //First check that everything before and after the {p} matches
@@ -248,13 +248,13 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
                     }
                 } else {
                     //Characters before and after parameter do not match
-                    printDebugMessage( compileState -> logLevel, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command", 0);
+                    printDebugMessage( compileState->logLevel, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command", 0);
                     freeAllocatedMemory(parsedCommand, numberOfParameters);
                     break;
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
-                printDebugMessage( compileState -> logLevel, "\t\tMatching failed, attempting to match next command", 0);
+                printDebugMessage( compileState->logLevel, "\t\tMatching failed, attempting to match next command", 0);
                 freeAllocatedMemory(parsedCommand, numberOfParameters);
                 break;
             }
@@ -277,12 +277,12 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
             parsedCommand.opcode = (uint8_t) i;
             return parsedCommand;
         } else if(lineToken == NULL) {
-            printDebugMessage(compileState -> logLevel, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", 0);
+            printDebugMessage(compileState->logLevel, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", 0);
             freeAllocatedMemory(parsedCommand, numberOfParameters);
             continue;
             //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
-            printDebugMessage(compileState -> logLevel, "\t\t'or draw 25' was found, replacing opcode", 0);
+            printDebugMessage(compileState->logLevel, "\t\t'or draw 25' was found, replacing opcode", 0);
             //Before we replace the opcode though, we need to free memory that was allocated for parameters
             for(int j = 0; j < commandList[i].usedParameters; j++) {
                 free(parsedCommand.parameters[j]);
@@ -340,7 +340,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
 
     //First, we create an array of command structs
     size_t loc = getLinesOfCode(inputFile);
-    printDebugMessage(compileState -> logLevel, "The number of lines are %lu", 1, loc);
+    printDebugMessage(compileState->logLevel, "The number of lines are %lu", 1, loc);
 
     if(loc == 0) {
         if(compileState->compileMode != bully) {
@@ -357,7 +357,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
         fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
         exit(EXIT_FAILURE);
     }
-    printDebugMessage( compileState -> logLevel, "Struct array was created successfully", 0);
+    printDebugMessage( compileState->logLevel, "Struct array was created successfully", 0);
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array
     int i = 0; //The number of structs in the array
@@ -369,7 +369,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
         if(isLineOfInterest(line, lineLength) == 1) {
             //Remove \n from the end of the line
             removeLineBreaksAndTabs(line);
-            printDebugMessage( compileState -> logLevel, "Parsing line: %s", 1, line);
+            printDebugMessage( compileState->logLevel, "Parsing line: %s", 1, line);
             //Parse the command and add the returned struct into the array
             *(commands + i) = parseLine(inputFileName, lineNumber, line, compileState);
             //Increase our number of structs in the array
@@ -378,8 +378,8 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
         lineNumber++;
     }
 
-    commandsArray -> size = loc;
-    commandsArray -> arrayPointer = commands;
+    commandsArray->size = loc;
+    commandsArray->arrayPointer = commands;
 
     free(line);
 }

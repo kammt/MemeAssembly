@@ -30,7 +30,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
  * @param compileState the current compile state
  */
 void analyseMonkeMarkers(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
-    printDebugMessage(compileState -> logLevel, "Beginning Monke jump label validity check", 0);
+    printDebugMessage(compileState->logLevel, "Beginning Monke jump label validity check", 0);
 
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, false, 1, "monke jump marker");
     checkCompanionCommandExistence(commandLinkedList[opcode + 1], commandLinkedList[opcode], compileState, 1, false, "monke jump marker");
@@ -45,7 +45,7 @@ void analyseMonkeMarkers(struct commandLinkedList** commandLinkedList, unsigned 
  * @param compileState the current compile state
  */
 void analyseJumpMarkers(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
-    printDebugMessage(compileState -> logLevel, "Starting jump label validity check for opcode %u", 1, opcode);
+    printDebugMessage(compileState->logLevel, "Starting jump label validity check for opcode %u", 1, opcode);
 
     checkDuplicateDefinition(commandLinkedList[opcode], compileState, true, 0, "jump marker");
     checkCompanionCommandExistence(commandLinkedList[opcode + 1], commandLinkedList[opcode], compileState, 0, true, "jump marker");

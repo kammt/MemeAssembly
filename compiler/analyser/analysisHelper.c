@@ -36,16 +36,16 @@ void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struc
 
     struct commandLinkedList* listItem = commandLinkedList;
     while (listItem != NULL) {
-        struct parsedCommand* command = listItem -> command;
+        struct parsedCommand* command = listItem->command;
 
-        printDebugMessage(compileState -> logLevel, "\tLabel duplicity check for %s in line %lu in file %u", 3, itemName, command -> lineNum, listItem -> definedInFile);
+        printDebugMessage(compileState->logLevel, "\tLabel duplicity check for %s in line %lu in file %u", 3, itemName, command->lineNum, listItem->definedInFile);
 
-        struct commandLinkedList* duplicateItem = listItem -> next;
+        struct commandLinkedList* duplicateItem = listItem->next;
         while(duplicateItem != NULL) {
-            printDebugMessage(compileState -> logLevel, "\t\tComparing against parameter %s", 1, duplicateItem -> command -> parameters[0]);
-            if((!oncePerFile || duplicateItem -> definedInFile == listItem -> definedInFile) &&
-             (parametersToCheck < 1 || strcmp( command -> parameters[0], duplicateItem -> command -> parameters[0]) == 0) &&
-             (parametersToCheck != 2 || strcmp( command -> parameters[1], duplicateItem -> command -> parameters[1]) == 0)) {
+            printDebugMessage(compileState->logLevel, "\t\tComparing against parameter %s", 1, duplicateItem->command->parameters[0]);
+            if((!oncePerFile || duplicateItem->definedInFile == listItem->definedInFile) &&
+             (parametersToCheck < 1 || strcmp( command->parameters[0], duplicateItem->command->parameters[0]) == 0) &&
+             (parametersToCheck != 2 || strcmp( command->parameters[1], duplicateItem->command->parameters[1]) == 0)) {
                 if(compileState->compileMode == bully) {
                     printError(compileState->files[duplicateItem->definedInFile].fileName, duplicateItem->command->lineNum, compileState,
                                "%s defined twice (already defined in %s:%lu)", 2, itemName, compileState->files[listItem->definedInFile].fileName, command->lineNum);
@@ -55,9 +55,9 @@ void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struc
                 }
             }
 
-            duplicateItem = duplicateItem -> next;
+            duplicateItem = duplicateItem->next;
         }
-        listItem = listItem -> next;
+        listItem = listItem->next;
     }
 }
 
@@ -82,23 +82,23 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
     struct commandLinkedList* parentCommand = parentCommands;
     while (parentCommand != NULL) {
         bool childFound[2] = {false};
-        struct parsedCommand* command = parentCommand -> command;
+        struct parsedCommand* command = parentCommand->command;
 
-        printDebugMessage(compileState -> logLevel, "\tLooking for %s of parent command in line %lu in file %u", 3, itemName, command -> lineNum, parentCommand -> definedInFile);
+        printDebugMessage(compileState->logLevel, "\tLooking for %s of parent command in line %lu in file %u", 3, itemName, command->lineNum, parentCommand->definedInFile);
 
         struct commandLinkedList* childCommand = childCommands;
         while(childCommand != NULL) {
 
-            if(!sameFile || parentCommand -> definedInFile == childCommand -> definedInFile) {
+            if(!sameFile || parentCommand->definedInFile == childCommand->definedInFile) {
                 //The first child was found if either no parameters must match or the first parameter matches
-                if(parametersToCheck == 0 || (parametersToCheck >= 1 && strcmp( command -> parameters[0], childCommand -> command -> parameters[0]) == 0)) {
+                if(parametersToCheck == 0 || (parametersToCheck >= 1 && strcmp( command->parameters[0], childCommand->command->parameters[0]) == 0)) {
                     childFound[0] = true;
-                } else if(parametersToCheck == 2 && strcmp( command -> parameters[1], childCommand -> command -> parameters[0]) == 0)  {
+                } else if(parametersToCheck == 2 && strcmp( command->parameters[1], childCommand->command->parameters[0]) == 0)  {
                     childFound[1] = true;
                 }
             }
 
-            childCommand = childCommand -> next;
+            childCommand = childCommand->next;
         }
 
         //We traversed all child commands, now we need to check if everything was defined properly
@@ -134,6 +134,6 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
             }
         }
 
-        parentCommand = parentCommand -> next;
+        parentCommand = parentCommand->next;
     }
 }

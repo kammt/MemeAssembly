@@ -100,12 +100,12 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
  */
 void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
     if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o42069) {
-        printDebugMessage(compileState -> logLevel, "\tCommand is not a function declaration, abort.", 0);
+        printDebugMessage(compileState->logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
     }
 
     //If we are supposed to create STABS info, we now need to create labels
-    if(compileState -> useStabs) {
+    if(compileState->useStabs) {
         //If this is a function declaration, update the current function name
         if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
             stabs_writeLineLabel(outputFile, parsedCommand);
@@ -165,21 +165,21 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     fprintf(outputFile, "\n");
 
     //Now, we need to insert more commands based on the current optimisation level
-    if (compileState -> optimisationLevel == o_1) {
+    if (compileState->optimisationLevel == o_1) {
         //Insert a nop
         fprintf(outputFile, "\tnop\n");
-    } else if (compileState -> optimisationLevel == o_2) {
+    } else if (compileState->optimisationLevel == o_2) {
         //Push and pop rax
         fprintf(outputFile, "\tpush rax\n\tpop rax\n");
-    } else if (compileState -> optimisationLevel == o_3) {
+    } else if (compileState->optimisationLevel == o_3) {
         //Save and restore xmm0 on the stack using movups
         fprintf(outputFile, "\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n");
-    } else if(compileState -> optimisationLevel == o42069) {
+    } else if(compileState->optimisationLevel == o42069) {
         //If we get here, then this was a function declaration. Insert a ret-statement and exit
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
     }
 
-    if(compileState -> useStabs && commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
+    if(compileState->useStabs && commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
         //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
         if(lastCommand) {
             stabs_writeFunctionEndLabel(outputFile, currentFunctionName);
@@ -198,9 +198,9 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
     //Define all functions as global
     for(unsigned i = 0; i < compileState->fileCount; i++) {
-        for(size_t j = 0; j < compileState -> files[i].functionCount; j++) {
+        for(size_t j = 0; j < compileState->files[i].functionCount; j++) {
             //Write the function name with the prefix ".global" to the file
-            fprintf(outputFile, ".global %s\n", compileState -> files[i].functions[j].name);
+            fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].name);
         }
     }
 
@@ -263,9 +263,9 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
-        struct file currentFile = compileState -> files[i];
+        struct file currentFile = compileState->files[i];
         //Write the file info if we are using stabs
-        if(compileState -> useStabs) {
+        if(compileState->useStabs) {
             stabs_writeFileInfo(outputFile, currentFile.fileName);
         }
 
@@ -343,7 +343,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
-    if(compileState -> optimisationLevel != o42069) {
+    if(compileState->optimisationLevel != o42069) {
         #ifdef WINDOWS
         //Using Windows API
         fprintf(outputFile,
@@ -455,7 +455,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
 
     //Add an "end marker" if we are using stabs
-    if(compileState -> useStabs) {
+    if(compileState->useStabs) {
         fprintf(outputFile, "\n.LEOF:\n");
         fprintf(outputFile, ".stabs \"\", %d, 0, 0, .LEOF\n", N_SO);
     }

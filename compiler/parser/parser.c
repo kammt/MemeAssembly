@@ -23,9 +23,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* compileState) {
     struct commandsArray commandsArray;
-    parseCommands(inputFile, fileStruct -> fileName, compileState, &commandsArray);
+    parseCommands(inputFile, fileStruct->fileName, compileState, &commandsArray);
 
     parseFunctions(fileStruct, commandsArray, compileState);
-    fileStruct -> loc = commandsArray.size;
-    fileStruct -> parsedCommands = commandsArray.arrayPointer;
+    fileStruct->loc = commandsArray.size;
+    fileStruct->parsedCommands = commandsArray.arrayPointer;
 }

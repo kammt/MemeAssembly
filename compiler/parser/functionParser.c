@@ -44,7 +44,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
     function.definedInLine = (size_t) functionStart.lineNum;
     function.definedInFile = inputFileName;
 
-    printDebugMessage(compileState -> logLevel, "\tParsing function:", 1, functionStart.parameters[0]);
+    printDebugMessage(compileState->logLevel, "\tParsing function:", 1, functionStart.parameters[0]);
 
     size_t index = 1;
     size_t functionEndIndex = 0; //This points to the last found return-statement and is 0 if no return statement was found until now
@@ -72,7 +72,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
         }
         index++;
     }
-    printDebugMessage(compileState -> logLevel, "\t\tIteration stopped at index %lu", 1, index);
+    printDebugMessage(compileState->logLevel, "\t\tIteration stopped at index %lu", 1, index);
 
     if(functionEndIndex == 0 && compileState->compileMode != bully) {
         printError(inputFileName, functionStart.lineNum, compileState, "function does not return", 0);
@@ -91,7 +91,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             functionDefinitions++;
         }
     }
-    printDebugMessage(compileState -> logLevel, "Number of functions: %lu", 1, functionDefinitions);
+    printDebugMessage(compileState->logLevel, "Number of functions: %lu", 1, functionDefinitions);
 
     //Now we create our array of functions
     int functionArrayIndex = 0;
@@ -178,7 +178,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
         }
 
         //Parse the function
-        functions[functionArrayIndex] = parseFunction(commandsArray, fileStruct -> fileName, commandArrayIndex, compileState);
+        functions[functionArrayIndex] = parseFunction(commandsArray, fileStruct->fileName, commandArrayIndex, compileState);
         //Set the commands
         functions[functionArrayIndex].commands = &commandsArray.arrayPointer[commandArrayIndex];
         //Increase our command index so that it points to the next unparsed command
@@ -188,6 +188,6 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
     }
 
     //Update the file struct
-    fileStruct -> functionCount = functionDefinitions;
-    fileStruct -> functions = functions;
+    fileStruct->functionCount = functionDefinitions;
+    fileStruct->functions = functions;
 }

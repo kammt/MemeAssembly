@@ -36,12 +36,12 @@ void setConfusedStonksJumpLabel(struct commandLinkedList** commandLinkedList, un
 
     srand((unsigned int) time(NULL));
 
-    for(unsigned i = 0; i < compileState -> fileCount; i++) {
+    for(unsigned i = 0; i < compileState->fileCount; i++) {
         if(compileState->files[i].loc == 0) {
             continue;
         }
-        compileState -> files[i].randomIndex = ((size_t) rand()) % (compileState -> files[i].loc);
-        printDebugMessage(compileState -> logLevel, "Chose random line for jump marker: %lu", 1, compileState -> files[i].randomIndex);
+        compileState->files[i].randomIndex = ((size_t) rand()) % (compileState->files[i].loc);
+        printDebugMessage(compileState->logLevel, "Chose random line for jump marker: %lu", 1, compileState->files[i].randomIndex);
     }
 }
 
@@ -52,20 +52,20 @@ void setConfusedStonksJumpLabel(struct commandLinkedList** commandLinkedList, un
  * @param compileState the current compile state
  */
 void chooseLinesToBeDeleted(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
-    printDebugMessage(compileState -> logLevel, "Starting analysis of the \"Perfectly balanced...\" command", 0);
+    printDebugMessage(compileState->logLevel, "Starting analysis of the \"Perfectly balanced...\" command", 0);
     unsigned perfectlyBalancedUsed = 0;
 
     struct commandLinkedList* listItem = commandLinkedList[opcode];
     while (listItem != NULL) {
         perfectlyBalancedUsed++;
-        listItem = listItem -> next;
+        listItem = listItem->next;
     }
 
-    printDebugMessage(compileState -> logLevel, "\tamount of times perfectly balanced was used: %u", 1, perfectlyBalancedUsed);
+    printDebugMessage(compileState->logLevel, "\tamount of times perfectly balanced was used: %u", 1, perfectlyBalancedUsed);
     //Calculating the number of lines to be deleted
     size_t loc = 0;
-    for(unsigned i = 0; i < compileState -> fileCount; i++) {
-        loc += compileState -> files[i].loc;
+    for(unsigned i = 0; i < compileState->fileCount; i++) {
+        loc += compileState->files[i].loc;
     }
 
     size_t linesToBeKept = loc;
@@ -74,7 +74,7 @@ void chooseLinesToBeDeleted(struct commandLinkedList** commandLinkedList, unsign
     }
     size_t linesToBeDeleted = loc - linesToBeKept;
 
-    printDebugMessage(compileState -> logLevel, "\tamount of lines to be deleted: %lu", 1, linesToBeDeleted);
+    printDebugMessage(compileState->logLevel, "\tamount of lines to be deleted: %lu", 1, linesToBeDeleted);
     if(linesToBeDeleted > 0) {
         printThanosASCII(linesToBeDeleted);
 
@@ -82,21 +82,21 @@ void chooseLinesToBeDeleted(struct commandLinkedList** commandLinkedList, unsign
         size_t selectedLines = 0;
         while(selectedLines < linesToBeDeleted) {
             //Generate a random file
-            unsigned randomFile = rand() % compileState -> fileCount;
+            unsigned randomFile = rand() % compileState->fileCount;
 
             //Generate a random line within file
-            size_t randomLine = rand() % compileState -> files[randomFile].loc;
-            printDebugMessage(compileState -> logLevel, "\tGenerated random line %lu in file %u", 2, randomLine, randomFile);
+            size_t randomLine = rand() % compileState->files[randomFile].loc;
+            printDebugMessage(compileState->logLevel, "\tGenerated random line %lu in file %u", 2, randomLine, randomFile);
 
             //Check if it was already selected
-            if(compileState -> files[randomFile].parsedCommands[randomLine].translate == false) {
-                printDebugMessage(compileState -> logLevel, "\t\tLine was already generated", 0);
+            if(compileState->files[randomFile].parsedCommands[randomLine].translate == false) {
+                printDebugMessage(compileState->logLevel, "\t\tLine was already generated", 0);
                 continue;
             }
 
             //If not, set the translate-field to false
-            compileState -> files[randomFile].parsedCommands[randomLine].translate = false;
-            printDebugMessage(compileState -> logLevel, "\t\tLine was added to the list", 0);
+            compileState->files[randomFile].parsedCommands[randomLine].translate = false;
+            printDebugMessage(compileState->logLevel, "\t\tLine was added to the list", 0);
 
             selectedLines++;
         }

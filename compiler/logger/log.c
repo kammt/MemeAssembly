@@ -126,7 +126,7 @@ void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...
  * @param ... variable arguments
  */
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...) {
-    compileState -> compilerErrors++;
+    compileState->compilerErrors++;
 
     //Initialise va_list to pass it on to vprintf
     va_list vaList;

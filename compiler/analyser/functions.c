@@ -36,7 +36,7 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
 
     //Check 2: Does a main-function exist?
     //This check is skipped in bully mode
-    if(compileState -> outputMode == executable && compileState->compileMode != bully) {
+    if(compileState->outputMode == executable && compileState->compileMode != bully) {
         if (!mainFunctionExists(compileState)) {
             printError(compileState->files[0].fileName, 0, compileState,"unable to create an executable if no main-function was defined", 0);
         }
