@@ -30,7 +30,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
 //Used to pseudo-random generation when using bully mode
-extern size_t computedIndex;
+extern uint64_t computedIndex;
 extern char* functionNames[];
 extern unsigned numFunctionNames;
 

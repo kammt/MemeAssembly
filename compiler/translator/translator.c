@@ -37,7 +37,7 @@ extern const char* const versionString;
 extern const struct command commandList[];
 
 //Used to pseudo-random generation when using bully mode
-extern size_t computedIndex;
+extern uint64_t computedIndex;
 
 const char* const martyrdomCode = "push rax\n"
                                   "    push rdi\n"

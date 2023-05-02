@@ -169,7 +169,7 @@ void printError(char* inputFileName, unsigned lineNum, struct compileState* comp
         printf("\n");
     } else {
         //Obfuscated mode: print a random error message instead
-        size_t computedIndex = lineNum;
+        uint64_t computedIndex = lineNum;
         for(size_t i = 0; i < strlen(inputFileName); i++) {
             computedIndex += inputFileName[i];
         }
