@@ -478,7 +478,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                         exit(EXIT_FAILURE);
                     }
-                    sprintf(newParam, "%lu", computedIndex % 128);
+                    sprintf(newParam, "%u", (unsigned) computedIndex % 128);
                     break;
                 case PARAM_MONKE_LABEL:
                     newParam = malloc(10);
@@ -548,7 +548,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                         exit(EXIT_FAILURE);
                     }
-                    sprintf(newParam, "%lu", computedIndex % 256);
+                    sprintf(newParam, "%u", (unsigned) computedIndex % 256);
 
                     free(parsedCommand->parameters[decimalIndex]);
                     parsedCommand->parameters[decimalIndex] = newParam;
