@@ -39,6 +39,41 @@ extern const struct command commandList[];
 //Used to pseudo-random generation when using bully mode
 extern size_t computedIndex;
 
+const char* const martyrdomCode = "push rax\n"
+                                  "    push rdi\n"
+                                  "    push rsi\n"
+                                  "    push rdx\n"
+                                  "    push r10\n"
+                                  "    push rcx\n"
+                                  "    push r11\n"
+                                  "    \n"
+                                  "    lea rax, [rip + killParent]\n"
+                                  "    mov [rip + .Lsa_handler], rax\n"
+                                  #ifdef MACOS
+                                  //For some reason, signaling SIGINT on MacOS leads to a segmentation fault if the second qword of the sigaction struct
+                                        //doesn't contain the address as well
+                                        "    mov [rip + .Lsa_handler_2], rax\n"
+                                  #endif
+                                  "\n"
+                                  #ifdef LINUX
+                                  "    mov rax, 13\n"
+                                  #else
+                                  "    mov rax, 0x200002E\n"
+                                  #endif
+                                  "    mov rdi, 2\n"
+                                  "    lea rsi, [rip + .LsigStruct]\n"
+                                  "    xor rdx, rdx\n"
+                                  "    mov r10, 8\n"
+                                  "    syscall\n"
+                                  "    \n"
+                                  "    pop r11\n"
+                                  "    pop rcx\n"
+                                  "    pop r10\n"
+                                  "    pop rdx\n"
+                                  "    pop rsi\n"
+                                  "    pop rdi\n"
+                                  "    pop rax\n\n";
+
 /**
  * Creates the first STABS entry in which the origin file is stored
  * @param outputFile the output file
@@ -260,6 +295,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
      */
     if(compileState->compileMode == bully && compileState->outputMode == executable && !mainFunctionExists(compileState)) {
         fprintf(outputFile, "\nmain:\n\t");
+        fprintf(outputFile, martyrdomCode);
     }
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
@@ -283,40 +319,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                 #endif
 
                 if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
-                    fprintf(outputFile, "push rax\n"
-                                        "    push rdi\n"
-                                        "    push rsi\n"
-                                        "    push rdx\n"
-                                        "    push r10\n"
-                                        "    push rcx\n"
-                                        "    push r11\n"
-                                        "    \n"
-                                        "    lea rax, [rip + killParent]\n"
-                                        "    mov [rip + .Lsa_handler], rax\n"
-                                        #ifdef MACOS
-                                        //For some reason, signaling SIGINT on MacOS leads to a segmentation fault if the second qword of the sigaction struct
-                                        //doesn't contain the address as well
-                                        "    mov [rip + .Lsa_handler_2], rax\n"
-                                        #endif
-                                        "\n"
-                                        #ifdef LINUX
-                                        "    mov rax, 13\n"
-                                        #else
-                                        "    mov rax, 0x200002E\n"
-                                        #endif
-                                        "    mov rdi, 2\n"
-                                        "    lea rsi, [rip + .LsigStruct]\n"
-                                        "    xor rdx, rdx\n"
-                                        "    mov r10, 8\n"
-                                        "    syscall\n"
-                                        "    \n"
-                                        "    pop r11\n"
-                                        "    pop rcx\n"
-                                        "    pop r10\n"
-                                        "    pop rdx\n"
-                                        "    pop rsi\n"
-                                        "    pop rdi\n"
-                                        "    pop rax\n\n");
+                    fprintf(outputFile, martyrdomCode);
                 }
                 #endif
 
