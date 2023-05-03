@@ -49,12 +49,11 @@ void printHelpPage(char* programName) {
     printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscated\n");
     printf(" -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
-    printf(" -i \t\t- enables information logs\n");
     printf(" -d \t\t- enables debug logs\n");
 }
 
 void printExplanationMessage(char* programName) {
-    printf("Usage: %s -o outputFile [-d | -i] inputFile\n", programName);
+    printf("Usage: %s -o outputFile inputFile\n", programName);
 }
 
 int main(int argc, char* argv[]) {
@@ -77,7 +76,6 @@ int main(int argc, char* argv[]) {
             {"output",  required_argument, 0, 'o'},
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
-            {"info",    no_argument,       0, 'i'},
             {"fno-martyrdom",    no_argument,&martyrdom, false},
             {"fcompile-mode",    required_argument,0, 'c'},
             { 0, 0, 0, 0 }
@@ -86,7 +84,7 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
-    while ((opt = getopt_long_only(argc, argv, "o:hO::digSv", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long_only(argc, argv, "o:hO::dgSv", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printHelpPage(argv[0]);
@@ -118,9 +116,6 @@ int main(int argc, char* argv[]) {
                 break;
             case 'd':
                 compileState.logLevel = debug;
-                break;
-            case 'i':
-                compileState.logLevel = info;
                 break;
             case 'o':
                 outputFileString = optarg;
