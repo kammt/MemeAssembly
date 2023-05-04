@@ -358,6 +358,19 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "1: xor rax, rax\n\tjmp 1b"
         },
         {
+            .pattern = "Houston, we have a problem",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "xor rsp, rsp"
+        },
+        {
+            .pattern = "it's dangerous to go alone, take {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16},
+            .analysisFunction = NULL,
+            .translationPattern = "rdrand {0}"
+        },
+        {
             .pattern = "we need air support",
             .usedParameters = 0,
             .analysisFunction = NULL,

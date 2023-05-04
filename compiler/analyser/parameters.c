@@ -30,7 +30,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_ESCAPE_SEQUENCES 10
 
 //Used to pseudo-random generation when using bully mode
-extern size_t computedIndex;
+extern uint64_t computedIndex;
 extern char* functionNames[];
 extern unsigned numFunctionNames;
 
@@ -439,7 +439,9 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         printDebugMessage(compileState->logLevel, "No checks succeeded, invalid parameter!", 0);
         if(compileState->compileMode != bully) {
             printError(inputFileName, parsedCommand->lineNum, compileState, "invalid parameter provided: \"%s\"", 1, parameter);
-            printParameterUsageNote(allowedTypes);
+            if(compileState->compileMode != obfuscated) {
+                printParameterUsageNote(allowedTypes);
+            }
             parsedCommand->paramTypes[parameterNum] = 0;
         } else {
             /* To make this work, we need to replace this parameter with something that works
@@ -476,7 +478,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                         exit(EXIT_FAILURE);
                     }
-                    sprintf(newParam, "%lu", computedIndex % 128);
+                    sprintf(newParam, "%u", (unsigned) computedIndex % 128);
                     break;
                 case PARAM_MONKE_LABEL:
                     newParam = malloc(10);
@@ -546,7 +548,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                         exit(EXIT_FAILURE);
                     }
-                    sprintf(newParam, "%lu", computedIndex % 256);
+                    sprintf(newParam, "%u", (unsigned) computedIndex % 256);
 
                     free(parsedCommand->parameters[decimalIndex]);
                     parsedCommand->parameters[decimalIndex] = newParam;

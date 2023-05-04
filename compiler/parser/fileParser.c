@@ -32,7 +32,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 extern struct command commandList[];
 
 //Used to pseudo-random generation when using bully mode
-size_t computedIndex = 69;
+uint64_t computedIndex = 69;
 
 /**
  * Removes the \n from a string if it is present at the end of the string
