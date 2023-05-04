@@ -79,7 +79,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
     }
 
     //Our function definition is also a command, hence there are functionEndIndex - functionStartAtIndex + 1 commands
-    function.numberOfCommands = (functionEndIndex - functionStartAtIndex) + 1;
+    function.numberOfCommands = (functionEndIndex != 0) ? (functionEndIndex - functionStartAtIndex) + 1 : 1;
     return function;
 }
 
