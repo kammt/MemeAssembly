@@ -40,7 +40,6 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
 
     //Define the structs
     struct function function;
-    function.name = functionStart.parameters[0];
     function.definedInLine = (size_t) functionStart.lineNum;
     function.definedInFile = inputFileName;
 
@@ -165,7 +164,6 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             //Set the function-struct accordingly
             functions[functionArrayIndex].definedInFile = fileStruct->fileName;
             functions[functionArrayIndex].numberOfCommands = numCommands;
-            functions[functionArrayIndex].name = funcName;
             functions[functionArrayIndex].commands = commands;
 
             //Increase the index

@@ -55,7 +55,7 @@ bool mainFunctionExists(struct compileState* compileState) {
                 #else
                     "main";
                 #endif
-            if (strcmp(compileState->files[fileNum].functions[funcNum].name, mainFunctionName) == 0) {
+            if (strcmp(compileState->files[fileNum].functions[funcNum].commands[0].parameters[0], mainFunctionName) == 0) {
                 return true;
             }
         }

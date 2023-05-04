@@ -237,7 +237,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
             //Only write if the function definition is to be translated
             if(compileState->files[i].functions[j].commands[0].translate) {
                 //Write the function name with the prefix ".global" to the file
-                fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].name);
+                fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].commands[0].parameters[0]);
             }
         }
     }
@@ -312,6 +312,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
         size_t line = 0;
         for(size_t j = 0; j < currentFile.functionCount; j++) {
             struct function currentFunction = currentFile.functions[j];
+            char* functionName = currentFunction.commands[0].parameters[0];
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
                 #ifndef WINDOWS
@@ -322,7 +323,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         "main";
                 #endif
 
-                if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
+                if (compileState->martyrdom && k == 1 && strcmp(functionName, mainFuncName) == 0) {
                     fprintf(outputFile, "%s", martyrdomCode);
                 }
                 #endif
@@ -336,13 +337,13 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
                 //If it should be translated, translate it
                 if (currentCommand.translate) {
-                    translateToAssembly(compileState, currentFunction.name, currentCommand, i,
+                    translateToAssembly(compileState, functionName, currentCommand, i,
                                         (k == currentFunction.numberOfCommands - 1), outputFile);
                 }
 
                 //Insert STABS function-info
                 if (compileState->useStabs) {
-                    stabs_writeFunctionInfo(outputFile, currentFunction.name);
+                    stabs_writeFunctionInfo(outputFile, functionName);
                 }
                 line++;
             }
