@@ -318,7 +318,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "confused stonks",
             .usedParameters = 0,
             .analysisFunction = &setConfusedStonksJumpLabel,
-            .translationPattern = "jmp .LConfusedStonks_{F}:"
+            .translationPattern = "jmp .LConfusedStonks_{F}"
         },
         {
             .pattern = "perfectly balanced as all things should be",
