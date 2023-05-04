@@ -66,7 +66,7 @@ struct file {
 typedef enum { noob, bully, obfuscated } compileMode;
 typedef enum { executable, assemblyFile, objectFile } outputMode;
 typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateMode;
-typedef enum { none, o_1, o_2, o_3, o_s, o42069 } optimisationLevel;
+typedef enum { none, o_1 = -1, o_2 = -2, o_3 = -3, o_s, o69420 = 69420} optimisationLevel;
 typedef enum { normal, info, debug } logLevel;
 
 struct compileState {

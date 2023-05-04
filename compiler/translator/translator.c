@@ -134,7 +134,7 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
  * @param outputFile the file where the translation should be written to
  */
 void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
-    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o42069) {
+    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o69420) {
         printDebugMessage(compileState->logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
     }
@@ -209,7 +209,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     } else if (compileState->optimisationLevel == o_3) {
         //Save and restore xmm0 on the stack using movups
         fprintf(outputFile, "\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n");
-    } else if(compileState->optimisationLevel == o42069) {
+    } else if(compileState->optimisationLevel == o69420) {
         //If we get here, then this was a function declaration. Insert a ret-statement and exit
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
     }
@@ -294,6 +294,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
      * We do that check now. If no main function exists, the first function in the file becomes the main function
      */
     if(compileState->compileMode == bully && compileState->outputMode == executable && !mainFunctionExists(compileState)) {
+        fprintf(outputFile, "\n.global main\n\t");
         fprintf(outputFile, "\nmain:\n\t");
         fprintf(outputFile, "%s", martyrdomCode);
     }
@@ -346,7 +347,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
-    if(compileState->optimisationLevel != o42069) {
+    if(compileState->optimisationLevel != o69420) {
         #ifdef WINDOWS
         //Using Windows API
         fprintf(outputFile,

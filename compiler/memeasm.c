@@ -100,18 +100,23 @@ int main(int argc, char* argv[]) {
                 if(!optarg) {
                     compileState.outputMode = objectFile;
                 } else {
-                    char* endptr;
-                    errno = 0;
-                    long res = strtol(optarg, &endptr, 10);
-                    if (errno) {
-                        perror("Invalid optimisation level specified");
-                        return 1;
-                    } else if(endptr == optarg || *endptr != '\0' || (res != 69420 && res != -1 && res != -2 && res != -3)) {
-                        fprintf(stderr, "Invalid optimisation level specified: %s\n", optarg);
-                        return 1;
-                    }
+                    if(strcmp(optarg, "-s") == 0) {
+                        compileState.optimisationLevel = o_s;
+                    } else {
+                        char *endptr;
+                        errno = 0;
+                        long res = strtol(optarg, &endptr, 10);
+                        if (errno) {
+                            perror("Invalid optimisation level specified");
+                            return 1;
+                        } else if (endptr == optarg || *endptr != '\0' ||
+                                   (res != 69420 && res != -1 && res != -2 && res != -3)) {
+                            fprintf(stderr, "Invalid optimisation level specified: %s\n", optarg);
+                            return 1;
+                        }
 
-                    compileState.optimisationLevel = res;
+                        compileState.optimisationLevel = res;
+                    }
                 }
                 break;
             case 'd':
@@ -215,7 +220,7 @@ int main(int argc, char* argv[]) {
         } else if (optimisationLevel == -4) {
             compileState.optimisationLevel = o_s;
         } else if (optimisationLevel == 69420) {
-            compileState.optimisationLevel = o42069;
+            compileState.optimisationLevel = o69420;
         }
 
         compile(compileState, outputFileString);
