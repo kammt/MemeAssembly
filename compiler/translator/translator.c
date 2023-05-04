@@ -234,8 +234,11 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     //Define all functions as global
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         for(size_t j = 0; j < compileState->files[i].functionCount; j++) {
-            //Write the function name with the prefix ".global" to the file
-            fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].name);
+            //Only write if the function definition is to be translated
+            if(compileState->files[i].functions[j].commands[0].translate) {
+                //Write the function name with the prefix ".global" to the file
+                fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].name);
+            }
         }
     }
 
