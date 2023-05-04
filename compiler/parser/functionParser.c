@@ -128,7 +128,6 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
         //If we're in bully mode and there were orphaned commands, then they range from startIndex to commandArrayIndex - 1
         //Inject a fake function with those commands
         if(compileState->compileMode == bully && orphanedCommands) {
-            printf("Creating fake function\n");
             char* funcName = functionNames[commandArrayIndex % (sizeof(functionNames) / sizeof(char*))];
 
             //We create two extra commands (function definition and return)
