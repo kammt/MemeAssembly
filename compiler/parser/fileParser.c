@@ -312,12 +312,19 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         computedIndex = ((computedIndex * lineNum) % 420) * inputFileName[0];
 
         parsedCommand.opcode = computedIndex % (NUMBER_OF_COMMANDS - 1);
-        parsedCommand.parameters[0] = strdup(randomParams[computedIndex % randomParamCount]);
-        parsedCommand.parameters[1] = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
-
-        if(!parsedCommand.parameters[0] || !parsedCommand.parameters[1]) {
-            fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-            exit(EXIT_FAILURE);
+        if(commandList[parsedCommand.opcode].usedParameters > 0) {
+            parsedCommand.parameters[0] = strdup(randomParams[computedIndex % randomParamCount]);
+            if(!parsedCommand.parameters[0]) {
+                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                exit(EXIT_FAILURE);
+            }
+        }
+        if (commandList[parsedCommand.opcode].usedParameters > 1) {
+            parsedCommand.parameters[1] = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
+            if(!parsedCommand.parameters[1]) {
+                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
+                exit(EXIT_FAILURE);
+            }
         }
     } else {
         parsedCommand.opcode = INVALID_COMMAND_OPCODE;
