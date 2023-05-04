@@ -35,9 +35,9 @@ void analyseCommands(struct compileState* compileState) {
 
             //Traverse all commands
             for(unsigned k = 0; k < function.numberOfCommands; k++) {
-                struct parsedCommand parsedCommand = function.commands[k];
+                struct parsedCommand* parsedCommand = &function.commands[k];
                 //Analyse parameters
-                checkParameters(&function.commands[k], compileState->files[i].fileName, compileState);
+                checkParameters(parsedCommand, compileState->files[i].fileName, compileState);
 
                 //Add to command's linkedList
                 //Create Linked List item
@@ -50,13 +50,13 @@ void analyseCommands(struct compileState* compileState) {
                 //Fill struct
                 commandLinkedListItem->next = NULL;
                 commandLinkedListItem->definedInFile = i;
-                commandLinkedListItem->command = &function.commands[k];
+                commandLinkedListItem->command = parsedCommand;
 
                 //If there is no linked list yet, make this the first item
                 //If there are items, add it to the end of the list
-                struct commandLinkedList* lastItem = commandLinkedList[parsedCommand.opcode];
+                struct commandLinkedList* lastItem = commandLinkedList[parsedCommand->opcode];
                 if(lastItem == NULL) {
-                    commandLinkedList[parsedCommand.opcode] = commandLinkedListItem;
+                    commandLinkedList[parsedCommand->opcode] = commandLinkedListItem;
                 } else {
                     while (lastItem->next != NULL) {
                         lastItem = lastItem->next;
