@@ -135,6 +135,7 @@ size_t getLinesOfCode(FILE *inputFile) {
             loc++;
         }
     }
+    CHECK_ALLOC(line);
 
     rewind(inputFile);
     free(line);
