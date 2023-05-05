@@ -92,7 +92,9 @@ struct compileState {
 #define PARAM_CHAR 32
 #define PARAM_MONKE_LABEL 64
 #define PARAM_FUNC_NAME 128
+//Helper macros for register parameter macros
 #define PARAM_ISREG(param) (param <= PARAM_REG8 && param > 0)
+#define PARAM_REG (PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8)
 
 // Command types
 #define COMMAND_TYPE_MOV 1
