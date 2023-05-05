@@ -188,7 +188,8 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                     }
                 }
             } else {
-                fprintf(stderr, RED "Internal compiler error: " RESET "Invalid translation format specifier '%c' for opcode %u\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new", formatSpecifier, parsedCommand.opcode);
+                printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", 2, formatSpecifier, parsedCommand.opcode);
+                exit(EXIT_FAILURE);
             }
 
             //move our pointer along by three characters instead of one, as we just parsed three characters

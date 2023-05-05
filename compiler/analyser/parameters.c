@@ -498,7 +498,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                     newParam = strdup(functionNames[computedIndex % numFunctionNames]);
                     break;
                 default:
-                    fprintf(stderr, RED "Internal compiler error: " RESET "Random parameter generation unsupported for paramType %u\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new\n", chosenParameter);
+                    printInternalCompilerError("Random parameter generation unsupported for paramType %u", 1, chosenParameter);
                     exit(EXIT_FAILURE);
             }
             if(parsedCommand->isPointer == parameterNum + 1) {
