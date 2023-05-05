@@ -220,5 +220,6 @@ void printInternalCompilerError(char* message, bool report, unsigned varArgNum, 
     fprintf(stderr, RED "Internal compiler error: " RESET);
     //Now print the custom message with variable args
     vfprintf(stderr, message, vaList);
-    if(report) fprintf(stderr, "\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new");
+    fprintf(stderr, "\n");
+    if(report) fprintf(stderr, "Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
 }
