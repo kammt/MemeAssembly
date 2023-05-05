@@ -180,10 +180,7 @@ int isInArray(char* parameter, char **array, int arraySize) {
 void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
     char *modifiedParameter = malloc(5);
-    if(modifiedParameter == NULL) {
-        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-        exit(EXIT_FAILURE);
-    }
+    CHECK_ALLOC(modifiedParameter);
 
     //Get the index that the escape sequence is in
     int i = 0;
@@ -210,10 +207,7 @@ void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCom
 void translateCharacter(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
     char *modifiedParameter = malloc(4);
-    if(modifiedParameter == NULL) {
-        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-        exit(EXIT_FAILURE);
-    }
+    CHECK_ALLOC(modifiedParameter);
 
     //Set the value to the provided character, surrounded by ''
     modifiedParameter[0] = '\'';
@@ -474,19 +468,13 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 case PARAM_DECIMAL:
                 case PARAM_CHAR:
                     newParam = malloc(10);
-                    if(!newParam) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(newParam);
                     sprintf(newParam, "%u", (unsigned) computedIndex % 128);
                     break;
                 case PARAM_MONKE_LABEL:
                     newParam = malloc(10);
                     int j = 0;
-                    if(!newParam) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(newParam);
                     unsigned length = computedIndex % 7 + 2;
                     for(unsigned i = 0; i < length; i++) {
                         newParam[j++] = (computedIndex % 2 == 0) ? 'u' : 'a';
@@ -498,17 +486,14 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                     newParam = strdup(functionNames[computedIndex % numFunctionNames]);
                     break;
                 default:
-                    printInternalCompilerError("Random parameter generation unsupported for paramType %u", 1, chosenParameter);
+                    printInternalCompilerError("Random parameter generation unsupported for paramType %u", true, 1, chosenParameter);
                     exit(EXIT_FAILURE);
             }
             if(parsedCommand->isPointer == parameterNum + 1) {
                 parsedCommand->isPointer = 0;
             }
 
-            if(!newParam) {
-                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                exit(EXIT_FAILURE);
-            }
+            CHECK_ALLOC(newParam);
             //Free the old parameter
             free(parameter);
             //Set the new parameter
@@ -544,10 +529,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 } else {
                     //We replace the number with something that is guaranteed to fit into all registers
                     char* newParam = malloc(10);
-                    if(!newParam) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(newParam);
                     sprintf(newParam, "%u", (unsigned) computedIndex % 256);
 
                     free(parsedCommand->parameters[decimalIndex]);
@@ -584,10 +566,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                     //We just replace this register with one of the correct size
                     free(parsedCommand->parameters[i]);
                     parsedCommand->parameters[i] = getRandomRegister(currentReg);
-                    if(!parsedCommand->parameters[i]) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(parsedCommand->parameters[i]);
 
                     parsedCommand->paramTypes[i] = currentReg;
                 }

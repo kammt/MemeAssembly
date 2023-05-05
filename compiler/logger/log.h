@@ -46,6 +46,11 @@ void printStatusMessage(logLevel logLevel, char* message);
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...);
 void printNote(char* message, unsigned varArgNum, ...);
 
-void printInternalCompilerError(char* message, unsigned varArgNum, ...);
+void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...);
 
+#define CHECK_ALLOC(ptr)                                                           \
+  if (!ptr) {                                                                      \
+    printInternalCompilerError("Ran out of memory during compilation", false, 0);  \
+    exit(EXIT_FAILURE);                                                            \
+  }
 #endif

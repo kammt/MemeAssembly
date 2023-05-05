@@ -210,10 +210,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
 
                     //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
                     char *variable = malloc(parameterLength + 2);
-                    if (variable == NULL) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(variable);
 
                     #ifdef MACOS
                     if (i == 0 || i == 4) {
@@ -314,17 +311,11 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         parsedCommand.opcode = computedIndex % (NUMBER_OF_COMMANDS - 1);
         if(commandList[parsedCommand.opcode].usedParameters > 0) {
             parsedCommand.parameters[0] = strdup(randomParams[computedIndex % randomParamCount]);
-            if(!parsedCommand.parameters[0]) {
-                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                exit(EXIT_FAILURE);
-            }
+            CHECK_ALLOC(parsedCommand.parameters[0]);
         }
         if (commandList[parsedCommand.opcode].usedParameters > 1) {
             parsedCommand.parameters[1] = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
-            if(!parsedCommand.parameters[1]) {
-                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                exit(EXIT_FAILURE);
-            }
+            CHECK_ALLOC(parsedCommand.parameters[1]);
         }
     } else {
         parsedCommand.opcode = INVALID_COMMAND_OPCODE;
@@ -360,10 +351,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
     }
 
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), loc);
-    if(commands == NULL) {
-        fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
-        exit(EXIT_FAILURE);
-    }
+    CHECK_ALLOC(commands);
     printDebugMessage( compileState->logLevel, "Struct array was created successfully", 0);
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array

@@ -188,7 +188,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                     }
                 }
             } else {
-                printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", 2, formatSpecifier, parsedCommand.opcode);
+                printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", true, 2, formatSpecifier, parsedCommand.opcode);
                 exit(EXIT_FAILURE);
             }
 

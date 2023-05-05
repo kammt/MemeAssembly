@@ -171,10 +171,7 @@ int main(int argc, char* argv[]) {
 
         //Now allocate fileCount file structs on the heap
         struct file* fileStructs = calloc(fileCount, sizeof(struct file));
-        if(fileStructs == NULL) {
-            fprintf(stderr, "Critical Error: Memory allocation for file parsing failed");
-            exit(EXIT_FAILURE);
-        }
+        CHECK_ALLOC(fileStructs);
 
         //Open each file one by one and parse it into a "struct file"
         for(int i = optind; i < argc; i++) {

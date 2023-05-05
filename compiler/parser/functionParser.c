@@ -95,10 +95,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
     //Now we create our array of functions
     int functionArrayIndex = 0;
     struct function *functions = calloc(sizeof(struct function), functionDefinitions);
-    if(functions == NULL) {
-        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-        exit(EXIT_FAILURE);
-    }
+    CHECK_ALLOC(functions);
 
     //We now traverse the commands array again, this time parsing the functions
     size_t commandArrayIndex = 0; //At which command we currently are
@@ -134,10 +131,8 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             struct parsedCommand *commands = calloc(numCommands, sizeof(struct parsedCommand));
             //There is one more function, so resize our functions array
             functions = reallocarray(functions, ++functionDefinitions, sizeof(struct function));
-            if (!functions || !commands) {
-                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                exit(EXIT_FAILURE);
-            }
+            CHECK_ALLOC(functions);
+            CHECK_ALLOC(commands);
 
             //Copy over the commands
             //The first one is a function definition
