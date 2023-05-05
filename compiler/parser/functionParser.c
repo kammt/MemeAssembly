@@ -133,12 +133,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             size_t numCommands = commandArrayIndex - startIndex + 2;
             struct parsedCommand *commands = calloc(numCommands, sizeof(struct parsedCommand));
             //There is one more function, so resize our functions array
-            size_t functionsArraySize = 0;
-            if (__builtin_umull_overflow(++functionDefinitions, sizeof(struct function), &functionsArraySize)) {
-                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                exit(EXIT_FAILURE);
-            }
-            functions = realloc(functions, functionsArraySize);
+            functions = reallocarray(functions, ++functionDefinitions, sizeof(struct function));
             if (!functions || !commands) {
                 fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                 exit(EXIT_FAILURE);
