@@ -48,9 +48,9 @@ void printNote(char* message, unsigned varArgNum, ...);
 
 void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...);
 
-#define CHECK_ALLOC(ptr)                                                           \
-  if (!ptr) {                                                                      \
-    printInternalCompilerError("Ran out of memory during compilation", false, 0);  \
-    exit(EXIT_FAILURE);                                                            \
+#define CHECK_ALLOC(ptr) \
+  if (!ptr) { \
+    printInternalCompilerError("%s:%u: Ran out of memory during compilation", false, 2, __FILE__, __LINE__);  \
+    exit(EXIT_FAILURE); \
   }
 #endif
