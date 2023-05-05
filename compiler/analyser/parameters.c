@@ -246,7 +246,7 @@ void printParameterUsageNote(uint8_t allowedParams) {
     allowedParamsString[strlen(allowedParamsString) - 2] = '\0';
 
     //Print it
-    printNote("the following parameter types are allowed: %s", 1, allowedParamsString);
+    printNote("the following parameter types are allowed: %s", true, 1, allowedParamsString);
 }
 
 /**

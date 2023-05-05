@@ -128,10 +128,10 @@ int main(int argc, char* argv[]) {
             case 'g':
                 #ifdef WINDOWS
                 //If we use Windows, STABS does not work - output a warning, but don't do anything
-                fprintf(stderr, YEL"Info: -g is not supported under Windows, ignoring..\n"RESET);
+                printNote("-g cannot be used on Windows-systems, this option will be ignored.", false, 0);
                 #elif defined(MACOS)
 		        //If we use MacOS, STABS does not work - output a warning, but don't do anything
-                fprintf(stderr, YEL"Info: -g is not supported under MacOS, ignoring..\n"RESET);
+                printNote("-g cannot be used on MacOS-systems, this option will be ignored.", false, 0);
 		        #else
                 compileState.useStabs = true;
                 #endif
@@ -155,6 +155,10 @@ int main(int argc, char* argv[]) {
         }
     }
     compileState.martyrdom = martyrdom;
+    if(compileState.useStabs && compileState.compileMode == bully) {
+        printNote("-g cannot be used in bully mode, this option will be ignored.", false, 0);
+        compileState.useStabs = false;
+    }
 
     if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");

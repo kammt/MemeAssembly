@@ -189,16 +189,18 @@ void printError(char* inputFileName, unsigned lineNum, struct compileState* comp
 /**
  * Prints a note. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
  * @param message the message (with printf-like formatting)
+ * @param indent whether the entire message should be indented
  * @param varArgNum How many variable arguments were passed (important!)
  * @param ... variable arguments
  */
-void printNote(char* message, unsigned varArgNum, ...) {
+void printNote(char* message, bool indent, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
 
     //First, only print the file name and line
-    printf("\t" MAG "note: " RESET);
+    if(indent) printf("\t");
+    printf(MAG "note: " RESET);
     //Now print the custom message with variable args
     vprintf(message, vaList);
     printf("\n");
