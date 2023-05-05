@@ -207,17 +207,18 @@ void printNote(char* message, unsigned varArgNum, ...) {
 /**
  * Prints an internal compiler error, after which the compiler terminates
  * @param message the message (with printf-like formatting)
+ * @param report whether to print a message telling the user to report this error
  * @param varArgNum How many variable arguments were passed (important!)
  * @param ... variable arguments
  */
-void printInternalCompilerError(char* message, unsigned varArgNum, ...) {
+void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
 
     //First, only print the file name and line
-    printf(RED "Internal compiler error: " RESET);
+    fprintf(stderr, RED "Internal compiler error: " RESET);
     //Now print the custom message with variable args
-    vprintf(message, vaList);
-    printf("\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new");
+    vfprintf(stderr, message, vaList);
+    if(report) fprintf(stderr, "\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new");
 }
