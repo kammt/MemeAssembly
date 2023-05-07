@@ -45,6 +45,7 @@ uninstall:
 
 # Compiles an executable and stores it in DESTDIR
 install: all
+	mkdir -p $(DESTDIR)$(bindir)
 	$(INSTALL_PROGRAM) memeasm $(DESTDIR)$(bindir)/memeasm
 
 # For building a windows executable under Linux
