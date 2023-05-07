@@ -17,7 +17,10 @@ CFLAGS+=-std=gnu17 -D $(PLATFORM_MACRO) -O2
 CFLAGS_DEBUG+=-O0 -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 
 # Destination directory for make install
-DESTDIR=/usr/local/bin
+bindir=/usr/local/bin
+
+INSTALL=install
+INSTALL_PROGRAM=$(INSTALL)
 
 # Files to compile
 FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/fileParser.c compiler/parser/functionParser.c compiler/analyser/analysisHelper.c compiler/analyser/parameters.c compiler/analyser/functions.c compiler/analyser/jumpMarkers.c compiler/analyser/comparisons.c compiler/analyser/randomCommands.c compiler/analyser/analyser.c compiler/translator/translator.c
@@ -41,9 +44,8 @@ uninstall:
 	$(RM) $(DESTDIR)/memeasm
 
 # Compiles an executable and stores it in DESTDIR
-install:
-	mkdir -p $(DESTDIR)
-	$(CC) -o $(DESTDIR)/memeasm $(FILES) $(CFLAGS)
+install: all
+	$(INSTALL_PROGRAM) memeasm $(DESTDIR)$(bindir)/memeasm
 
 # For building a windows executable under Linux
 windows:
