@@ -25,7 +25,7 @@ jobs:
         run: sed -i 's/VERSION_STRING/${GITHUB_REF:11}/g' PKGBUILD
         
       - name: Replace VERSION_STRING in PKGBUILD file with parameter
-        if: ${{ github.event_name == 'workflow_dispath' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' PKGBUILD
         
       - name: Replace PKGREL in PKGBUILD file with parameter
@@ -33,7 +33,7 @@ jobs:
         run: sed -i 's/PKGREL/1/g' PKGBUILD  
         
       - name: Replace PKGREL in PKGBUILD file with parameter
-        if: ${{ github.event_name == 'workflow_dispath' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: sed -i 's/PKGREL/${{ github.event.inputs.pkgrel }}/g' PKGBUILD  
         
       - name: Replace 256SUM in PKGBUILD file with parameter
