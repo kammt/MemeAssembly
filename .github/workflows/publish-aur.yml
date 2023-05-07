@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Repository Tag (e.g. v1.6)'     
+        description: 'Repository Tag (without v, e.g. 1.6)'     
         required: true
   
 
@@ -17,21 +17,28 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
       
-      - name: Set GITHUB_REF correctly if manually run
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: export GITHUB_REF=${{ github.event.inputs.version }}
-      
       - name: Replace VERSION_STRING in PKGBUILD file with parameter
-        run: sed -i 's/VERSION_STRING/${GITHUB_REF:1}/g' PKGBUILD
+        if: ${{ github.event_name == 'release' }}
+        run: sed -i 's/VERSION_STRING/${GITHUB_REF:11}/g' PKGBUILD
+        
+      - name: Replace VERSION_STRING in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'workflow_dispath' }}
+        run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' PKGBUILD
         
       - name: Replace PKGREL in PKGBUILD file with parameter
         run: sed -i 's/PKGREL/1/g' PKGBUILD  
         
       - name: Replace 256SUM in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'release' }}
         run: |
-          sudo apt-get install wget
-          wget https://github.com/${{ github.repository }}/archive/refs/tags/$GITHUB_REF.tar.gz
+          wget https://github.com/${{ github.repository }}/archive/$GITHUB_REF.tar.gz
           sed -i 's/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
+          
+      - name: Replace 256SUM in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          wget https://github.com/${{ github.repository }}/archive/refs/tags/v${{ github.event.inputs.version }}.tar.gz
+          sed -i 's/256SUM/$(sha256sum v${{ github.event.inputs.version }}.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
 
       - name: Output PKGBUILD for debugging purposes
         run: cat PKGBUILD
