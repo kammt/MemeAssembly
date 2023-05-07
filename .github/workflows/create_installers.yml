@@ -37,13 +37,13 @@ jobs:
           cd ..    
           
       - name: Archive debian installer
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: debian-installer
           path: memeassembly_${{ github.event.inputs.version }}_amd64.deb
           
       - name: Archive rpm installer
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: rpm-installer
           path: memeassembly-${{ github.event.inputs.version }}.x86_64.rpm
@@ -52,7 +52,7 @@ jobs:
         run: make windows
 
       - name: Upload Windows executable
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: memeasm.exe
           path: memeasm.exe
