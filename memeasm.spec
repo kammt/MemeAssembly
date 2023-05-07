@@ -30,7 +30,7 @@ Learn more at https://kammt.github.io/MemeAssembly.
 
 %files
 %license LICENSE
-
+/usr/local/bin/memeasm
 
 
 %changelog
