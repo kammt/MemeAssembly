@@ -20,6 +20,7 @@ Learn more at https://kammt.github.io/MemeAssembly.
 
 
 %build
+%global debug_package %{nil}
 %make_build
 
 
