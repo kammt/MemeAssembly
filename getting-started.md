@@ -35,7 +35,7 @@ See [Manual Installation (Linux)](getting-started?id=manual-installation-linux)
 Download the latest installer file (*.deb) [here](https://github.com/kammt/MemeAssembly/releases/latest)
 
 #### RPM-based distributions (Fedora, OpenSUSE, Red Hat etc.)
-Download the latest installer file (*.rpm) [here](https://github.com/kammt/MemeAssembly/releases/latest)
+Download the latest installer file (*.rpm) [here](https://github.com/kammt/MemeAssembly/releases/latest) or install it from COPR: (`sudo dnf copr enable kammt/memeasm && sudo dnf install memeasm`).
 
 #### Arch-based Distributions (Arch Linux, Manjaro etc.)
 1. If not already done, install a package manager that is able to access the AUR. [Yay](https://github.com/Jguer/yay) is recommended.
