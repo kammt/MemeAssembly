@@ -1,6 +1,6 @@
 Name:           memeasm
-Version:        0.0.0
-Release:        0%{?dist}
+Version:        1.6
+Release:        1%{?dist}
 Summary:        A Meme-based programming language
 
 License:        GPLv3
@@ -34,3 +34,6 @@ Learn more at https://kammt.github.io/MemeAssembly.
 
 
 %changelog
+* Sun May 07 2023 tobias <tobias.kamm@pm.me> 1.6-1
+- new package built with tito
+
