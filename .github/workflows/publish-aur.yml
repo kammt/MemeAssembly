@@ -8,6 +8,9 @@ on:
       version:
         description: 'Repository Tag (without v, e.g. 1.6)'     
         required: true
+      pkgrel:
+        required: true
+        default: "1"
   
 
 jobs:
@@ -26,19 +29,25 @@ jobs:
         run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' PKGBUILD
         
       - name: Replace PKGREL in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'release' }}
         run: sed -i 's/PKGREL/1/g' PKGBUILD  
+        
+      - name: Replace PKGREL in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'workflow_dispath' }}
+        run: sed -i 's/PKGREL/${{ github.event.inputs.pkgrel }}/g' PKGBUILD  
         
       - name: Replace 256SUM in PKGBUILD file with parameter
         if: ${{ github.event_name == 'release' }}
         run: |
           wget https://github.com/${{ github.repository }}/archive/$GITHUB_REF.tar.gz
-          sed -i 's/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
+          export CHECKSUM=
+          sed -i "s/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g" PKGBUILD  
           
       - name: Replace 256SUM in PKGBUILD file with parameter
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           wget https://github.com/${{ github.repository }}/archive/refs/tags/v${{ github.event.inputs.version }}.tar.gz
-          sed -i 's/256SUM/$(sha256sum v${{ github.event.inputs.version }}.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
+          sed -i "s/256SUM/$(sha256sum v${{ github.event.inputs.version }}.tar.gz | cut -d " " -f 1)/g" PKGBUILD  
 
       - name: Output PKGBUILD for debugging purposes
         run: cat PKGBUILD
