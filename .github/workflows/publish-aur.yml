@@ -21,7 +21,7 @@ jobs:
       - name: Replace 256SUM in PKGBUILD file with parameter
         run: |
           sudo apt-get install wget
-          wget https://github.com/kammt/MemeAssembly/archive/refs/tags/$GITHUB_REF.tar.gz
+          wget https://github.com/${{ github.repository }}/archive/refs/tags/$GITHUB_REF.tar.gz
           sed -i 's/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
 
       - name: Output PKGBUILD for debugging purposes
