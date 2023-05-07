@@ -18,6 +18,36 @@ Jumps to a random line of code that is decided at compilation time.
 ### Description
 Restore balance to your code by randomly deleting half the commands at compile-time. When using this command multiple times, half the lines are deleted for every instance of this command.
 
+## Assertion
+### Definition
+`it's over 9000 [register]`
+### Description
+Checks if the value of the specified register is larger than 9000. If not, a General Protection Fault is generated.
+
+## Remove Frame Pointer(TM)
+### Definition
+`refuses to elaborate and leaves`
+### Description
+Removes MemeASM-style frame pointers from the stack. Note that this is translated to `mov rbp, rsp; pop rsp`.
+
+## Create a code barrier
+### Definition
+`you shall not pass!`
+### Description
+This command triggers an endless loop when reached.
+
+## Destabilise your program
+### Definition
+`Houston, we have a problem`
+### Description
+Oh yes you do have a problem. This command sets the stack pointer to zero. Good luck with fixing that.
+
+## Random bullshit go!
+### Definition
+`it's dangerous to go alone, take [register]`
+### Description
+Fills the specified register with a random value generated at runtime. Note that 8-Bit registers cannot be used as parameters.
+
 ## Do nothing
 ### Definition
 `oh no! anyway`

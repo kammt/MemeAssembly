@@ -1,3 +1,48 @@
+## v1.6
+After some 69 eternities of silence in this repo, I am happy to announce that this project is not dead yet!
+If you were looking for a myriad of helpful new features, you'll be disappointed (Then again, you are probably already disappointed by this programming language). If you were looking for a myriad of "helpful" new features, read on:
+
+New features:
+- Coding in MemeAssembly is cool, I know - but didn't you wish that it would be just a bit more challenging? Well look no further! This release implements **two new compilation modes**. You are already familiar with the standard compilation mode, "noob mode". Let me introduce you to:
+  - **Obfuscated Mode**: Every error message is replaced with something else. It might be an actual error the compiler would print, it might be buzzword bingo, it might even be a `sudo` error message. What will you get?
+  - **Bully mode**: This is where it gets fun. In bully mode, all compiler errors are silenced. Instead, the program is modified by the compiler to fix the error. This could include replacing parameters, removing code, adding new code or just replacing the broken command with a randomly generated one. Isn't this beautiful?
+Now by random, I don't mean truly random. Every change done in bully mode by the compiler is either pre-defined or dependent on the input file (e.g. file name, the ASCII codes of a faulty line of code). This means that broken code in bully mode will _always_ compile to the same "fixed" code. This creates a sort of "meta programming language". You can now create bullshit code which normally does not compile, but has a defined behavior* in bully mode (#74, #70)
+- New command: `you shall not pass!`, which causes an endless loop if reached (561d698e14f983e6217f66b58ddda27ddd14f712)
+- New command: `it's dangerous to go alone, take [register]`, which loads a random value into the specified register (29a3ed965a69d954cea40b285435511eda430148)
+- New command: `it's over 9000 [register]`, which crashes your program if the value in the specified register is not greater than 9000 (c7f48491f1839ec99b164b16681d704153bce574)
+- New command: `Houston, we have a problem`, which zeroes the stack pointer. Yeah, good luck with that. (eb6af670ddd2c86618b282878535e93843251d45, thanks @RobinMarchart for the idea!)
+- Frame Pointers are a cool thing, but they need some innovation. This is why I'm here to introduce you to MemeAssembly's new Frame Pointer support (patent pending)! This includes a new command: `refuses to elaborate and leaves` (4e3da6c3f26a8017f4ed04b3bf530e22238f9539), which differs from a "normal" `leave`, as it translates to `mov rbp, rsp; pop rsp`. (Thanks @aengelke for this.. innovative idea!)
+
+Improvements:
+- memeasm is now available on [Fedora COPR](https://copr.fedorainfracloud.org/coprs/kammt/memeasm/)! 
+- The compiler now only checks function calls if an executable is created. This means that apart from that, you can now call external functions (4b371a2bccbe0cf31ac2f65413c49ff8bea747f2)
+- The linker warning "missing .note.GNU-stack section implies executable stack" has been fixed by using `-z execstack` during compilation, making the stack explicitly executable (a8fdc04337ba05203b58507c40adcd688b0a3bb0)
+- New code example: A brainfuck interpreter in MemeASM! (3f66b09533a73594479420a9410768cc06686767)
+- Some error messages were improved (e.g. 1dae63b88d5badd967a368a46011d8eca7c11d64, 4f8fa7a88acc38afa5238064f9f201f79c273f89)
+
+Bug fixes:
+- negative numbers could not be used in `who would win?`-comparisons (#73, reported by @0li5Drr)
+- the compiler did not check if a provided decimal number was too large for the register used (#71)
+- The option parsing for optimisation options was broken, which made it impossible to use `-O-s` (d0f31aea4b3b867cf7f7361756ddb98adafa3eb0, thanks @xarantolus!)
+- `confused stonks` was broken (46b8127b6c45d52417ab8ce6b8d8f3f38250daa5)
+
+*regarding defined behavior, I'd recommend consulting the MemeAssembly Standard for more details.
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.6)
+
+
+## v1.5.1
+I'd love to say that this release is “the biggest ever, packed with millions of new features”! But no, that's not the case. Firstly because that would make me sound like I'm the speaker at an Apple conference, and secondly, this release only fixes some bugs. Sorry about that.
+
+Here's an overview:
+- the print-command was broken, as the correct output (stdout) was not set by the command (#72, thanks @xarantolus!)
+- It was possible to combine registers of different sizes, which does not work in x86_64 (6ec3d2cc46ddeaba23aed2dcaac39887295f5765 and 4ba9f5ead7e38c7f4c147efaf107afd18158103c)
+- Files with \r\n File endings are now supported as well (looking at you, Windows) (7b81afd25916852cc6e5c265b5df0e830642a0c2)
+- the `monke` command didn't check if the labels used were actually valid (0953ab48a6ff1313ae584556103a5d9a9c026da7)
+
+[View on GitHub](https://github.com/kammt/MemeAssembly/tree/v1.5.1)
+
+
 ## v1.5
 Okay so before we start: Can we all just take a moment to appreciate that the PR to merge these changes into main was PR #69? (NICE :tada:)
 

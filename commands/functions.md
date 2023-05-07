@@ -14,7 +14,7 @@ Defines a function. Function names must follow the naming convention of labels d
 ### Definition
 `[function name]: whomst has summoned the almighty one`
 ### Description
-Calls a function. Until now, one can only call functions that were defined within a MemeASM-file (i.e. you can't call a C-function from MemeASM until now as no "extern"-like keyword exists)
+Calls a function. This can also be an external function, as long as you are not creating an executable. In that case, the called function must also be defined in your MemeASM code.
 
 ## Exit a function
 ### Definition
