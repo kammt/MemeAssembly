@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm
+ Copyright © 2021-2023 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
  * @param compileState the current compile state
  */
 void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
-    printDebugMessage(compileState -> logLevel, "Starting analysis for \"who would win?\" command", 0);
+    printDebugMessage(compileState->logLevel, "Starting analysis for \"who would win?\" command", 0);
 
     //First check: No comparison jump labels were defined twice
     checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 1, "comparison jump marker");
@@ -47,7 +47,7 @@ void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, un
  * @param compileState the current compile state
  */
 void analyseTheyreTheSamePictureCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
-    printDebugMessage(compileState -> logLevel, "Starting analysis for \"corporate needs you to find the difference...\" command", 0);
+    printDebugMessage(compileState->logLevel, "Starting analysis for \"corporate needs you to find the difference...\" command", 0);
 
     //Check 1: Was the equality label defined twice in the same file?
     checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 0, "\"they're the same picture\"");

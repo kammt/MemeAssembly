@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm
+ Copyright © 2021-2023 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define NUMBER_OF_COMMANDS 41
+#define NUMBER_OF_COMMANDS 46
 #define MAX_PARAMETER_COUNT 2
 
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
@@ -47,7 +47,6 @@ struct parsedCommand {
 };
 
 struct function {
-    char* name;
     char* definedInFile;
     size_t definedInLine;
     size_t numberOfCommands;
@@ -63,13 +62,15 @@ struct file {
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
-typedef enum { executable, assemblyFile, objectFile } compileMode;
+typedef enum { noob, bully, obfuscated } compileMode;
+typedef enum { executable, assemblyFile, objectFile } outputMode;
 typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateMode;
-typedef enum { none, o_1, o_2, o_3, o_s, o42069 } optimisationLevel;
+typedef enum { none, o_1 = -1, o_2 = -2, o_3 = -3, o_s, o69420 = 69420} optimisationLevel;
 typedef enum { normal, info, debug } logLevel;
 
 struct compileState {
     compileMode compileMode;
+    outputMode outputMode;
     uint32_t fileCount;
     struct file* files;
 
@@ -82,14 +83,24 @@ struct compileState {
     logLevel logLevel;
 };
 
-#define REG64 1
-#define REG32 2
-#define REG16 4
-#define REG8 8
-#define DECIMAL 16
-#define CHAR 32
-#define MONKE_LABEL 64
-#define FUNC_NAME 128
+// Parameter types
+#define PARAM_REG64 1
+#define PARAM_REG32 2
+#define PARAM_REG16 4
+#define PARAM_REG8 8
+#define PARAM_DECIMAL 16
+#define PARAM_CHAR 32
+#define PARAM_MONKE_LABEL 64
+#define PARAM_FUNC_NAME 128
+//Helper macros for register parameter macros
+#define PARAM_ISREG(param) (param <= PARAM_REG8 && param > 0)
+#define PARAM_REG (PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8)
+
+// Command types
+#define COMMAND_TYPE_MOV 1
+#define COMMAND_TYPE_FUNC_RETURN 2
+#define COMMAND_TYPE_FUNC_DEF 3
+#define COMMAND_TYPE_FUNC_CALL 4
 
 struct command {
     char *pattern;
@@ -107,6 +118,13 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
+    /*
+     * The command type contains a special value that can be used to identify the type of command
+     * without specifying the index of the command. Some examples:
+     *  - return statements
+     *  - mov-command
+     */
+    uint8_t commandType;
     void (*analysisFunction)(struct commandLinkedList**, unsigned, struct compileState*); //commandLinkedList-list, opcode (index), compileState
 
     //TODO replace with char* translationPatterns[6];
