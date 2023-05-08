@@ -1,7 +1,7 @@
 #
 # check https://nfpm.goreleaser.com/configuration for detailed usage
 #
-name: "memeassembly"
+name: "memeasm"
 arch: "amd64"
 platform: "linux"
 version: VERSION_STRING
