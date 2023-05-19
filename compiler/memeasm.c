@@ -51,7 +51,6 @@ void printHelpPage(char* programName) {
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -d \t\t- enables debug logs\n");
     printf(" -gccargs \t- A string of custom arguments that should be passed to gcc\n");
-    printf(" -gcc \t- Path to custom gcc executable\n");
 }
 
 void printExplanationMessage(char* programName) {
