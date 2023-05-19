@@ -35,6 +35,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 extern const char* const versionString;
 extern const struct command commandList[];
+extern uint64_t computedIndex;
 
 /**
  * Creates the first STABS entry in which the origin file is stored
