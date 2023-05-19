@@ -50,7 +50,7 @@ void printHelpPage(char* programName) {
     printf(" -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -d \t\t- enables debug logs\n");
-    printf(" -gccargs \t- A string of custom arguments that should be passed to gcc\n");
+    printf(" -gcc-args \t- A string of custom arguments that should be passed to gcc. The first argument must be the path to gcc. To function properly, it should contain \"-x assembler -\" and the output file must be set\n");
 }
 
 void printExplanationMessage(char* programName) {
