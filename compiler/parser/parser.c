@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm
+ Copyright © 2021-2023 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,9 +23,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* compileState) {
     struct commandsArray commandsArray;
-    parseCommands(inputFile, fileStruct -> fileName, compileState, &commandsArray);
+    parseCommands(inputFile, fileStruct->fileName, compileState, &commandsArray);
 
     parseFunctions(fileStruct, commandsArray, compileState);
-    fileStruct -> loc = commandsArray.size;
-    fileStruct -> parsedCommands = commandsArray.arrayPointer;
+    fileStruct->loc = commandsArray.size;
+    fileStruct->parsedCommands = commandsArray.arrayPointer;
 }

@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm
+ Copyright © 2021-2023 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -30,6 +30,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 extern struct command commandList[];
+
+//Used to pseudo-random generation when using bully mode
+uint64_t computedIndex = 69;
 
 /**
  * Removes the \n from a string if it is present at the end of the string
@@ -104,7 +107,8 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
 
     //On Windows, file endings are done using \r\n. This means that there will be a \r at the end of every string, breaking the entire compiler
     //To fix this, check if the string ends with \r\n. If so, replace it with \n
-    if(*(result - 2) == '\r') {
+    //However, we first need to check that we are not reading out of bounds
+    if(((uintptr_t) result - 2 >= (uintptr_t) *lineptr) && *(result - 2) == '\r') {
         *(result - 2) = '\n';
         result--;
     }
@@ -131,6 +135,7 @@ size_t getLinesOfCode(FILE *inputFile) {
             loc++;
         }
     }
+    CHECK_ALLOC(line);
 
     rewind(inputFile);
     free(line);
@@ -188,7 +193,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
 
         //Enter the comparison loop
         while (commandToken != NULL && lineToken != NULL) {
-            printDebugMessage(compileState -> logLevel, "\tcomparing with %s", 1, commandToken);
+            printDebugMessage(compileState->logLevel, "\tcomparing with %s", 1, commandToken);
 
             if(strstr(commandToken, "{p}") != NULL) {
                 //First check that everything before and after the {p} matches
@@ -206,10 +211,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
 
                     //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
                     char *variable = malloc(parameterLength + 2);
-                    if (variable == NULL) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(variable);
 
                     #ifdef MACOS
                     if (i == 0 || i == 4) {
@@ -233,7 +235,8 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
                         printDebugMessage(compileState->logLevel,
                                           "\t\t\t'do you know de wey' was found, interpreting as pointer", 0);
                         //If another parameter is already marked as a variable, print an error
-                        if (parsedCommand.isPointer != 0) {
+                        //This error is skipped when bully mode is on
+                        if (parsedCommand.isPointer != 0 && compileState->compileMode != bully) {
                             printError(inputFileName, lineNum, compileState,
                                        "Only one parameter is allowed to be a pointer", 0);
                         }
@@ -243,13 +246,13 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
                     }
                 } else {
                     //Characters before and after parameter do not match
-                    printDebugMessage( compileState -> logLevel, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command", 0);
+                    printDebugMessage( compileState->logLevel, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command", 0);
                     freeAllocatedMemory(parsedCommand, numberOfParameters);
                     break;
                 }
             } else if(strcmp(commandToken, lineToken) != 0) {
                 //If both tokens do not match, try the next command
-                printDebugMessage( compileState -> logLevel, "\t\tMatching failed, attempting to match next command", 0);
+                printDebugMessage( compileState->logLevel, "\t\tMatching failed, attempting to match next command", 0);
                 freeAllocatedMemory(parsedCommand, numberOfParameters);
                 break;
             }
@@ -272,12 +275,12 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
             parsedCommand.opcode = (uint8_t) i;
             return parsedCommand;
         } else if(lineToken == NULL) {
-            printDebugMessage(compileState -> logLevel, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", 0);
+            printDebugMessage(compileState->logLevel, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", 0);
             freeAllocatedMemory(parsedCommand, numberOfParameters);
             continue;
             //If the current token is 'or' and the rest of the string is only 'draw 25', then set the opcode as "or draw 25" and return
         } else if(strcmp(lineToken, orDraw25Start) == 0 && strlen(savePtrLine) == strlen(orDraw25End) && strncmp(orDraw25End, savePtrLine, strlen(orDraw25End)) == 0) {
-            printDebugMessage(compileState -> logLevel, "\t\t'or draw 25' was found, replacing opcode", 0);
+            printDebugMessage(compileState->logLevel, "\t\t'or draw 25' was found, replacing opcode", 0);
             //Before we replace the opcode though, we need to free memory that was allocated for parameters
             for(int j = 0; j < commandList[i].usedParameters; j++) {
                 free(parsedCommand.parameters[j]);
@@ -288,10 +291,39 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         }
     }
 
-    parsedCommand.opcode = INVALID_COMMAND_OPCODE;
-    printError(inputFileName, lineNum, compileState, "Invalid command: \"%s\"", 1, line);
-    //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
-    //We don't exit immediately because we want to print every error possible
+    if(compileState->compileMode == bully) {
+        /*
+         * In bully mode, we replace this non-working command with a valid one
+         * But we want to make it deterministic, with a lot of possible commands,
+         * so we take the sum of ascii characters in this line, and use this value
+         * to create the random command
+         *
+         * The variable "computedIndex" is global, meaning that the value
+         * is dependent on the previous illegal commands - *perfection*
+         */
+        const char* randomParams[] = {"rax", "rcx", "rbx", "r8", "r9", "r10", "r12", "rsp", "rbp", "ax", "al", "r8b", "r9d", "r14b", "99", "1238", "12", "420", "987654321", "8", "9", "69", "8268", "2", "_", "a", "b", "d", "f", "F", "sigreturn", "uaauuaa", "uau", "uu", "main", "gets", "srand", "mprotect", "au", "uwu", "space"};
+        unsigned randomParamCount = sizeof randomParams / sizeof(char*);
+
+        for(size_t i = 0; i < strlen(line); i++) {
+            computedIndex += line[i];
+        }
+        computedIndex = ((computedIndex * lineNum) % 420) * inputFileName[0];
+
+        parsedCommand.opcode = computedIndex % (NUMBER_OF_COMMANDS - 1);
+        if(commandList[parsedCommand.opcode].usedParameters > 0) {
+            parsedCommand.parameters[0] = strdup(randomParams[computedIndex % randomParamCount]);
+            CHECK_ALLOC(parsedCommand.parameters[0]);
+        }
+        if (commandList[parsedCommand.opcode].usedParameters > 1) {
+            parsedCommand.parameters[1] = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
+            CHECK_ALLOC(parsedCommand.parameters[1]);
+        }
+    } else {
+        parsedCommand.opcode = INVALID_COMMAND_OPCODE;
+        printError(inputFileName, lineNum, compileState, "Invalid command: \"%s\"", 1, line);
+        //Any error will increase the "compilationErrors" variable in log.c, meaning that we can safely return something that doesn't make sense
+        //We don't exit immediately because we want to print every error possible
+    }
     return parsedCommand;
 }
 
@@ -307,10 +339,12 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
 
     //First, we create an array of command structs
     size_t loc = getLinesOfCode(inputFile);
-    printDebugMessage(compileState -> logLevel, "The number of lines are %lu", 1, loc);
+    printDebugMessage(compileState->logLevel, "The number of lines are %lu", 1, loc);
 
     if(loc == 0) {
-        printError(inputFileName, 0, compileState, "file does not contain any commands", 0);
+        if(compileState->compileMode != bully) {
+            printError(inputFileName, 0, compileState, "file does not contain any commands", 0);
+        }
 
         commandsArray->arrayPointer = NULL;
         commandsArray->size = 0;
@@ -318,11 +352,8 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
     }
 
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), loc);
-    if(commands == NULL) {
-        fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
-        exit(EXIT_FAILURE);
-    }
-    printDebugMessage( compileState -> logLevel, "Struct array was created successfully", 0);
+    CHECK_ALLOC(commands);
+    printDebugMessage( compileState->logLevel, "Struct array was created successfully", 0);
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array
     int i = 0; //The number of structs in the array
@@ -334,7 +365,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
         if(isLineOfInterest(line, lineLength) == 1) {
             //Remove \n from the end of the line
             removeLineBreaksAndTabs(line);
-            printDebugMessage( compileState -> logLevel, "Parsing line: %s", 1, line);
+            printDebugMessage( compileState->logLevel, "Parsing line: %s", 1, line);
             //Parse the command and add the returned struct into the array
             *(commands + i) = parseLine(inputFileName, lineNumber, line, compileState);
             //Increase our number of structs in the array
@@ -343,8 +374,8 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
         lineNumber++;
     }
 
-    commandsArray -> size = loc;
-    commandsArray -> arrayPointer = commands;
+    commandsArray->size = loc;
+    commandsArray->arrayPointer = commands;
 
     free(line);
 }

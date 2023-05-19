@@ -1,0 +1,232 @@
+What the hell happened here? This is a brainfuck interpreter written in MemeASM
+What the hell happened here? Usage: Provide a string of BF-Code as a single argument to this program
+What the hell happened here? Some notes:
+What the hell happened here?  - The cell "band" is 10.000 Bytes large. However, there is again no error handling for a pointer moving out of bounds.
+What the hell happened here?    meaning that you could theoretically modify stuff like the return address etc. - basically anything on the stack
+What the hell happened here?  - Also, I know that not supplying any argument will segfault because I don't check argc
+
+I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
+    What the hell happened here? rdi is a string-pointer
+    rdi is brilliant, but I like rsi
+    What the hell happened here? Get argv[1]
+    rdi units are ready, with 8 more well on the way
+    rdi is brilliant, but I like rdi do you know de wey
+
+    What the hell happened here? Frame Pointer - because I'm fancy I guess
+    stonks rbp
+    rbp is brilliant, but I like rsp
+
+    What the hell happened here? Reserve 10000B on the stack
+    parry 10000 you filthy casual rsp
+    What the hell happened here? rdx will be the pointer to this "execution band"
+    rdx is brilliant, but I like rsp
+    sneak 100 rax
+    sneak 100 r8b
+    monke uuuuuuuuauuuuuauauaa
+        who would win? rax or 10000
+        return to monke aaaaaaaaaaauaaaaaaaaaaaauu
+        rax wins
+        10000 wins
+        rdx do you know de wey is brilliant, but I like r8b
+        upvote rdx
+        upvote rax
+    return to monke uuuuuuuuauuuuuauauaa
+    monke aaaaaaaaaaauaaaaaaaaaaaauu
+    rdx is brilliant, but I like rsp
+
+    What the hell happened here?
+
+    What the hell happened here? Now we do something with the bf code
+    stonks r12
+    stonks r13
+    stonks r14
+    stonks r15
+    stonks rbx
+
+    What the hell happened here? rdi will point to our current instruction
+
+    monke uauauauauaaaa
+        al is brilliant, but I like rdi do you know de wey
+        What the hell happened here? End of String?
+        corporate needs you to find the difference between al and 0
+        What the hell happened here? Now we do a switch-case construct to differentiate between commands
+        who would win? al or +
+        r8b is brilliant, but I like rdx do you know de wey
+        upvote r8b
+        rdx do you know de wey is brilliant, but I like r8b
+        upvote rdi
+        return to monke aaaaaaaauauauaaa
+
+            + wins
+            al wins
+            r8b is brilliant, but I like al
+
+            who would win? r8b or -
+            What the hell happened here? This is a minus
+            r8b is brilliant, but I like rdx do you know de wey
+            downvote r8b
+            rdx do you know de wey is brilliant, but I like r8b
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            - wins
+            r8b wins
+            r9b is brilliant, but I like r8b
+
+            who would win? r9b or >
+            What the hell happened here? This is a >
+            upvote rdx
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            > wins
+            r9b wins
+            r10b is brilliant, but I like r9b
+
+            who would win? r10b or <
+            downvote rdx
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            r10b wins
+            < wins
+            r11b is brilliant, but I like r10b
+
+            who would win? r11b or ,
+            What the hell happened here? This is a ,
+            let me in. LET ME IIIIIIIIN r8b
+            rdx do you know de wey is brilliant, but I like r8b
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            r11b wins
+            , wins
+            r12b is brilliant, but I like r11b
+
+            who would win? r12b or .
+            What the hell happened here? This is a .
+            r8b is brilliant, but I like rdx do you know de wey
+            what can I say except r8b
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            r12b wins
+            . wins
+            r13b is brilliant, but I like r12b
+
+            who would win? r13b or [
+            What the hell happened here? This is a [
+            What the hell happened here? Jump if zero
+            sneak 100 r9
+            r9b is brilliant, but I like rdx do you know de wey
+            who would win? r9 or 0
+            What the hell happened here? Find matching ]
+            r8 is brilliant, but I like 1
+            upgrade
+                upvote rdi
+                sneak 100 r10
+                r10b is brilliant, but I like rdi do you know de wey
+                upvote r10
+                who would win? r10 or 92
+                What the hell happened here? Is another [
+                upvote r8
+            fuck go back
+
+            r10 wins
+            92 wins
+            r11 is brilliant, but I like r10
+
+            who would win? r11 or 94
+            What the hell happened here? Is a ]
+            What the hell happened here? Is r8 1?
+            What the hell happened here? If so, we found the matching bracket
+            who would win? r8 or 1
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            r8 wins
+            1 wins
+            downvote r8
+            r11 wins
+            94 wins
+        fuck go back
+
+        r9 wins
+        0 wins
+        What the hell happened here? Don't jump
+        upvote rdi
+        return to monke aaaaaaaauauauaaa
+
+        r13b wins
+        [ wins
+        r14b is brilliant, but I like r13b
+
+        What the hell happened here? Handling for ]
+        who would win? r14b or ]
+        What the hell happened here? Should we even jump?
+        sneak 100 r12
+        r12b is brilliant, but I like rdx do you know de wey
+        sneak 100 r13
+        who would win? r12 or r13
+        What the hell happened here? Value is zero, don't jump
+        upvote rdi
+        return to monke aaaaaaaauauauaaa
+        r13 wins
+        r12 wins
+        What the hell happened here? We need to jump - find the matching [
+        rbx is brilliant, but I like 1
+        banana
+            downvote rdi
+            sneak 100 r9
+            r9b is brilliant, but I like rdi do you know de wey
+
+            downvote r9
+            who would win? r9w or 90
+            What the hell happened here? This is a [
+            upvote rbx
+            What the hell happened here? Is rbx now 2? If so, we have found the matching bracket. If no, subtract two and continue
+            who would win? rbx or 2
+            upvote rdi
+            return to monke aaaaaaaauauauaaa
+
+            2 wins
+            rbx wins
+            downvote rbx
+            downvote rbx
+            where banana
+
+            r9w wins
+            90 wins
+            upvote r9
+            upvote r9
+            upvote r9
+            r11w is brilliant, but I like r9w
+            who would win? r11w or 95
+            What the hell happened here? Is another ]
+            upvote rbx
+
+            r11w wins
+            95 wins
+        where banana
+    return to monke aaaaaaaauauauaaa
+
+    What the hell happened here? some other character - ignore it
+    r14b wins
+    ] wins
+    upvote rdi
+
+    monke aaaaaaaauauauaaa
+
+return to monke uauauauauaaaa
+they're the same picture
+What the hell happened here? Clean up the stack and stuff
+
+not stonks rbx
+not stonks r15
+not stonks r14
+not stonks r13
+not stonks r12
+rsp is brilliant, but I like rbp
+not stonks rbp
+what can I say except \n
+I see this as an absolute win

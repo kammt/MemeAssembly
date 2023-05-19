@@ -1,2 +1,2 @@
 #!/bin/bash
-sudo make DESTDIR=$(dirname $(which memeasm)) uninstall
+sudo make uninstall

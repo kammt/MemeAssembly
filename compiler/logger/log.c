@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm and contributors
+ Copyright © 2021-2023 Tobias Kamm and contributors
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,9 +19,48 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "log.h"
 #include <stdarg.h>
+#include <string.h>
 
-const char* const version_string = "v1.5";
-const char* const platform_suffix = "rasptest";
+const char* const versionString = "v1.6";
+const char* const platformSuffix = "rasptest";
+
+const char* const randomErrorMessages[] = {
+        //sudo
+        "you are not in the sudoers file. This incident will be reported.",
+        "you are not allowed to run sudo. This incident will be reported.",
+        //erno - cause why not?
+        "ENOSPC: No space left on device",
+        "ENOENT: No such file or directory",
+        //glibc
+        "double free or corruption (top)",
+        "corrupted top size",
+        "double free or corruption (!prev)",
+        "free: invalid pointer",
+        //gcc
+        "implicit declaration of function `gets'",
+        "invalid type argument of `unary *'",
+        "passing arg 2 of `strcpy' makes pointer from integer without a cast",
+        "syntax error before '}' token",
+        "ld returned exit 1 status",
+        "no match for ‘operator==’ in ‘__first.__gnu_cxx::__normal_iterator::operator* [with _Iterator = std::vector*, _Container = std::vector >, __gnu_cxx::__normal_iterator::reference = std::vector&]() == __val’",
+        "error: cannot bind rvalue ‘(short unsigned int)((const char*)\"\")’ to ‘short unsigned int&’",
+        "no match for 'operator<<' (operand types are 'std::ostream' {aka 'std::basic_ostream<char>'} and 'std::array<int, 1>')",
+        "invalid conversion from `int' to `std::_Rb_tree_node<std::pair<const int, double> >*'",
+        //ld
+        "relocation truncated to fit: R_X86_64_PC32 against symbol `main'",
+        "(.ARM.exidx.text._ZNSt8_Rb_treeIiSt4pairIKiSt10shared_ptrIN4SWGL7ContextEEESt10_Select1stIS6_ESt4lessIiESaIS6_EE13_Rb_tree_implISA_Lb1EED2Ev[_ZNSt8_Rb_treeIiSt4pairIKiSt10shared_ptrIN4SWGL7ContextEEESt10_Select1stIS6_ESt4lessIiESaIS6_EE13_Rb_tree_implISA_Lb1EED5Ev]+0x0): relocation truncated to fit: R_ARM_PREL31 against `.text._ZNSt8_Rb_treeIiSt4pairIKiSt10shared_ptrIN4SWGL7ContextEEESt10_Select1stIS6_ESt4lessIiESaIS6_EE13_Rb_tree_implISA_Lb1EED2Ev'",
+        "error adding symbols: DSO missing from command line",
+        "undefined reference to `main'",
+        //Cobol
+        "programmer is impolite",
+        "programmer is excessively polite",
+        //actual MemeASM errors
+        "a decimal number cannot be a pointer",
+        "a function name cannot be a pointer",
+        "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits",
+        "function does not return",
+        "an executable cannot be created if no main function exists"
+};
 
 /**
  * Prints an ASCII-Art title and version information.
@@ -36,7 +75,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " BLU "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", version_string, platform_suffix);
+    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", versionString, platformSuffix);
 }
 
 /**
@@ -90,12 +129,6 @@ void printNiceASCII() {
     printf(" |_| \\_|_|\\___\\___|\n\n");
 }
 
-void printStatusMessage(logLevel logLevel, char* message) {
-    if(logLevel == debug || logLevel == info) {
-        printf(YEL "%s \n" RESET, message);
-    }
-}
-
 /**
  * Prints a debug message. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
  */
@@ -119,33 +152,69 @@ void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...
  * @param ... variable arguments
  */
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...) {
-    compileState -> compilerErrors++;
+    compileState->compilerErrors++;
 
+    //First, only print the file name and line
+    printf("%s:%u: " RED "error: " RESET, inputFileName, lineNum);
+
+    if(compileState->compileMode != obfuscated) {
+        //Initialise va_list to pass it on to vprintf
+        va_list vaList;
+        va_start(vaList, varArgNum);
+        //Now print the custom message with variable args
+        vprintf(message, vaList);
+        printf("\n");
+    } else {
+        //Obfuscated mode: print a random error message instead
+        uint64_t computedIndex = lineNum;
+        for(size_t i = 0; i < strlen(inputFileName); i++) {
+            computedIndex += inputFileName[i];
+        }
+        for(size_t i = 0; i < strlen(message); i++) {
+            computedIndex += message[i];
+        }
+        computedIndex += varArgNum;
+
+        printf("%s\n", randomErrorMessages[computedIndex % (sizeof(randomErrorMessages) / sizeof(char*))]);
+    }
+}
+
+/**
+ * Prints a note. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
+ * @param message the message (with printf-like formatting)
+ * @param indent whether the entire message should be indented
+ * @param varArgNum How many variable arguments were passed (important!)
+ * @param ... variable arguments
+ */
+void printNote(char* message, bool indent, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
 
     //First, only print the file name and line
-    printf("%s:%u: " RED "error: " RESET, inputFileName, lineNum);
+    if(indent) printf("\t");
+    printf(MAG "note: " RESET);
     //Now print the custom message with variable args
     vprintf(message, vaList);
     printf("\n");
 }
 
 /**
- * Prints a note. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
+ * Prints an internal compiler error, after which the compiler terminates
  * @param message the message (with printf-like formatting)
+ * @param report whether to print a message telling the user to report this error
  * @param varArgNum How many variable arguments were passed (important!)
  * @param ... variable arguments
  */
-void printNote(char* message, unsigned varArgNum, ...) {
+void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
 
     //First, only print the file name and line
-    printf("\t" MAG "note: " RESET);
+    fprintf(stderr, RED "Internal compiler error: " RESET);
     //Now print the custom message with variable args
-    vprintf(message, vaList);
-    printf("\n");
+    vfprintf(stderr, message, vaList);
+    fprintf(stderr, "\n");
+    if(report) fprintf(stderr, "Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
 }

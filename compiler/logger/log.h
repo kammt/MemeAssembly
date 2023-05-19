@@ -1,7 +1,7 @@
 /*
 This file is part of the MemeAssembly compiler.
 
- Copyright © 2021-2022 Tobias Kamm
+ Copyright © 2021-2023 Tobias Kamm
 
 MemeAssembly is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -44,6 +44,13 @@ void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...
 void printStatusMessage(logLevel logLevel, char* message);
 
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...);
-void printNote(char* message, unsigned varArgNum, ...);
+void printNote(char* message, bool indent, unsigned varArgNum, ...);
 
+void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...);
+
+#define CHECK_ALLOC(ptr) \
+  if (!ptr) { \
+    printInternalCompilerError("%s:%u: Ran out of memory during compilation", false, 2, __FILE__, __LINE__);  \
+    exit(EXIT_FAILURE); \
+  }
 #endif
