@@ -214,30 +214,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fprintf(outputFile, "\n\n.text\n\t");
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
-    #ifndef WINDOWS
-    fprintf(outputFile, "killParent:\n"
-                        #ifdef LINUX
-                        "    mov rax, 110\n"
-                        #else
-                        "    mov rax, 0x2000027\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, rax\n"
-                        "    mov rsi, 9\n"
-                        #ifdef LINUX
-                        "    mov rax, 62\n"
-                        #else
-                        "    mov rax, 0x2000025\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, 0\n"
-                        "    mov rax, 60\n"
-                        "    syscall\n"
-                        "    ret\n\n");
-
-    #endif
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         struct file currentFile = compileState->files[i];
