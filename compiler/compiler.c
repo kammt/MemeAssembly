@@ -29,6 +29,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "translator/translator.h"
 #include "logger/log.h"
 
+
+
 const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
@@ -279,7 +281,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "what can I say except {p}",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8 | PARAM_CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
                                   "test rsp, 0xF\n\t"
@@ -294,7 +296,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8},
             .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
@@ -373,7 +375,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "we need air support",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisFunction = &checkIOCommands,
             .translationPattern = "syscall"
         },
 

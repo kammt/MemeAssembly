@@ -85,3 +85,17 @@ void analyseCommands(struct compileState* compileState) {
         }
     }
 }
+
+/**
+ * If -fno-io is used, this function prints an error message for every I/O command. If not, this does nothing
+ * @param commandLinkedList a list of all occurrences of all commands. Index i contains a linked list of all commands that have opcode i
+ * @param opcode the opcode
+ * @param compileState the current compile state
+ */
+void checkIOCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
+    for(struct commandLinkedList* command = commandLinkedList[opcode]; command != NULL; command = command->next) {
+        if (!compileState->allowIoCommands) {
+            printError(compileState->files[command->definedInFile].fileName, command->command->lineNum, compileState, "I/O commands cannot be used when compiling with -fno-io", 0);
+        }
+    }
+}

@@ -30,5 +30,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "randomCommands.h"
 
 void analyseCommands(struct compileState* compileState);
+void checkIOCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 
 #endif
