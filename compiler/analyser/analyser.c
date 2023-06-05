@@ -95,7 +95,12 @@ void analyseCommands(struct compileState* compileState) {
 void checkIOCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState) {
     for(struct commandLinkedList* command = commandLinkedList[opcode]; command != NULL; command = command->next) {
         if (!compileState->allowIoCommands) {
-            printError(compileState->files[command->definedInFile].fileName, command->command->lineNum, compileState, "I/O commands cannot be used when compiling with -fno-io", 0);
+            if(compileState->compileMode != bully) {
+                printError(compileState->files[command->definedInFile].fileName, command->command->lineNum,
+                           compileState, "I/O commands cannot be used when compiling with -fno-io", 0);
+            } else {
+                command->command->translate = false;
+            }
         }
     }
 }
