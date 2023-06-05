@@ -268,28 +268,29 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
     #ifndef WINDOWS
-    fprintf(outputFile, "killParent:\n"
-                        #ifdef LINUX
-                        "    mov rax, 110\n"
-                        #else
-                        "    mov rax, 0x2000027\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, rax\n"
-                        "    mov rsi, 9\n"
-                        #ifdef LINUX
-                        "    mov rax, 62\n"
-                        #else
-                        "    mov rax, 0x2000025\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, 0\n"
-                        "    mov rax, 60\n"
-                        "    syscall\n"
-                        "    ret\n\n");
-
+    if(compileState->allowIoCommands) {
+        fprintf(outputFile, "killParent:\n"
+                            #ifdef LINUX
+                            "    mov rax, 110\n"
+                            #else
+                            "    mov rax, 0x2000027\n"
+                            #endif
+                            "    syscall\n"
+                            "\n"
+                            "    mov rdi, rax\n"
+                            "    mov rsi, 9\n"
+                            #ifdef LINUX
+                            "    mov rax, 62\n"
+                            #else
+                            "    mov rax, 0x2000025\n"
+                            #endif
+                            "    syscall\n"
+                            "\n"
+                            "    mov rdi, 0\n"
+                            "    mov rax, 60\n"
+                            "    syscall\n"
+                            "    ret\n\n");
+    }
     #endif
 
     /*
@@ -324,7 +325,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         "main";
                 #endif
 
-                if (compileState->martyrdom && k == 1 && strcmp(functionName, mainFuncName) == 0) {
+                if (compileState->martyrdom && compileState->allowIoCommands && k == 1 && strcmp(functionName, mainFuncName) == 0) {
                     fprintf(outputFile, "%s", martyrdomCode);
                 }
                 #endif
@@ -352,7 +353,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
-    if(compileState->optimisationLevel != o69420) {
+    if(compileState->optimisationLevel != o69420 && compileState->allowIoCommands) {
         #ifdef WINDOWS
         //Using Windows API
         fprintf(outputFile,
