@@ -75,6 +75,7 @@ struct compileState {
     struct file* files;
 
     bool useStabs;
+    bool allowIoCommands;
     bool martyrdom;
     translateMode translateMode;
     optimisationLevel optimisationLevel;

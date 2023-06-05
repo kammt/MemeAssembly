@@ -47,6 +47,7 @@ void printHelpPage(char* programName) {
     printf(" -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf(" -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
     printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscated\n");
+    printf(" -fno-io - Forbid all I/O commands, such as \"what can I say except\" and syscalls\n");
     printf(" -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -d \t\t- enables debug logs\n");
@@ -63,6 +64,7 @@ int main(int argc, char* argv[]) {
         .translateMode = intSISD,
         .outputMode = executable,
         .useStabs = false,
+        .allowIoCommands = true,
         .compilerErrors = 0,
         .logLevel = normal
     };
@@ -72,11 +74,13 @@ int main(int argc, char* argv[]) {
 
     int optimisationLevel = 0;
     int martyrdom = true;
+    int allowIoCommands = true;
     const struct option long_options[] = {
             {"output",  required_argument, 0, 'o'},
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
             {"fno-martyrdom",    no_argument,&martyrdom, false},
+            {"fno-io",    no_argument, &allowIoCommands, false},
             {"fcompile-mode",    required_argument,0, 'c'},
             { 0, 0, 0, 0 }
     };
@@ -155,6 +159,7 @@ int main(int argc, char* argv[]) {
         }
     }
     compileState.martyrdom = martyrdom;
+    compileState.allowIoCommands = allowIoCommands;
     if(compileState.useStabs && compileState.compileMode == bully) {
         printNote("-g cannot be used in bully mode, this option will be ignored.", false, 0);
         compileState.useStabs = false;
