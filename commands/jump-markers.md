@@ -53,4 +53,4 @@ they're the same picture
 ### Description
 Compares the two given parameters and jumps to `they're the same picture` if they are equal
 
-!> This comparison can only be used once in a MemeASM file!
+!> `they're the same picture` can only be defined once in a MemeASM file!
