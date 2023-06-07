@@ -41,7 +41,7 @@ clean:
 
 # Removes "memeasm" from DESTDIR
 uninstall: 
-	$(RM) $(DESTDIR)/memeasm
+	$(RM) $(DESTDIR)$(bindir)/memeasm
 
 # Compiles an executable and stores it in DESTDIR
 install: all
