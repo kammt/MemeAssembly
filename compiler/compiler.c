@@ -84,6 +84,34 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "pop {0}"
         },
+        {
+            .pattern = "knock knock, who's there? {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL},
+            .analysisFunction = NULL,
+            .translationPattern = "mov rax, [rip + {0}]"
+        },
+        {
+            .pattern = "why don't you come on in, {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL},
+            .analysisFunction = NULL,
+            .translationPattern = "mov [rip + {0}], rax"
+        },
+        {
+            .pattern = "big brain time {p} {p}",
+            .usedParameters = 2,
+            .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL},
+            .analysisFunction = NULL,
+            .translationPattern = "mov [rip + {0}], {1}"
+        },
+        {
+            .pattern = "execute order 66 {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL},
+            .analysisFunction = NULL,
+            .translationPattern = "mov rax, 66\n\tmov [rip + {0}], rax"
+        },
 
         ///Logical Operations
         {
@@ -117,6 +145,20 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "mov {0}, {1}"
         },
+        {
+            .pattern = "I don't feel so good",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "xor rax, rax\n\txor rbx, rbx\n\txor rcx, rcx\n\txor rdx, rdx\n\txor rsi, rsi\n\txor rdi, rdi\n\txor rbp, rbp\n\txor rsp, rsp\n\txor r8, r8\n\txor r9, r9\n\txor r10, r10\n\txor r11, r11\n\txor r12, r12\n\txor r13, r13\n\txor r14, r14\n\txor r15, r15"
+        },
+        {
+            .pattern = "just a little switcheroo {p} {p}",
+            .usedParameters = 2,
+            .allowedParamTypes = {PARAM_REG, PARAM_REG},
+            .analysisFunction = NULL,
+            .translationPattern = "xor {0}, {1}\nxor {1}, {0}\nxor {0}, {1}"
+        },
+
 
         ///Arithmetic operations
         {
@@ -274,6 +316,12 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = ".LSamePicture_{F}:"
         },
+        {
+                .pattern = "deja vu",
+                .usedParameters = 0,
+                .analysisFunction = NULL,
+                .translationPattern = "jmp main"
+        },
 
         ///IO-Operations
         {
@@ -376,6 +424,47 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .analysisFunction = NULL,
             .translationPattern = "syscall"
         },
+        {
+            .pattern = "why are we still here, just to suffer",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "mov eax, 0\n\tidiv eax"
+        },
+        {
+            .pattern = "you're in the wrong neighbourhood {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16},
+            .analysisFunction = NULL,
+            .translationPattern = "rdrand {0}\n\tjmp {0}"
+        },
+        {
+            .pattern = "stop, you violated the law",
+            .usedParameters = 0,
+            .analysisFunction = NULL,
+            .translationPattern = "hlt"
+        },
+        {
+            .pattern = "into the multiverse {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16},
+            .analysisFunction = NULL,
+            .translationPattern = "mov ecx, {0}\nmultiverse:\nadd ecx, ecx\nsub ecx, 2\ncmp ecx, 0\njnz multiverse\ninc ecx\ndec ecx\nmov {0}, ecx\npushad\npopad\nmov eax, 2\ndiv eax"
+        },
+        {
+            .pattern = "you're invited to suffer {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16},
+            .analysisFunction = NULL,
+            .translationPattern = "mov eax, {0}\nsuffer:\ncmp eax, 666\nje end_suffer\nadd eax, 1\njmp suffer\nend_suffer:\npush eax\npop eax\nxor eax, eax\ninc eax\nadd eax, 2\ndec eax\ndec eax\nmov {0}, eax"
+        },
+        {
+            .pattern = "hollup, let him cook {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16},
+            .analysisFunction = NULL,
+            .translationPattern = "mov eax, 0\nmov ebx, 0\nmov ecx, 0\ncook:\ninc eax\ninc ebx\ninc ecx\nmov edx, eax\ncmp edx, {0}\njne cook\n"
+        },
+
 
         ///Debug commands
         {
@@ -383,6 +472,13 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 0,
             .analysisFunction = NULL,
             .translationPattern = "int3"
+        },
+        {
+            .pattern = "I'm feeling lucky {p}",
+            .usedParameters = 1,
+            .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL},
+            .analysisFunction = NULL,
+            .translationPattern = "int {0}"
         },
         //Insert commands above this one
         {
