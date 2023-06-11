@@ -49,7 +49,12 @@ Adds/Subtracts 1 from the specified destination register
 Calculates [register] = [register] ^ [value/register]
 
 ## Examples
-#### 1. Shift rax to the right by 6 bits
+#### 1. Add the value at address eax to ebx
+```
+ebx units are ready, with eax do you know de wey more well on the way
+```
+
+#### 2. Shift rax to the right by 6 bits
 ```
 they had us in the first half, not gonna lie rax
 they had us in the first half, not gonna lie rax
@@ -59,7 +64,7 @@ they had us in the first half, not gonna lie rax
 they had us in the first half, not gonna lie rax
 ```
 
-#### 2. Repeatedly print the alphabet by saving and restoring rax
+#### 3. Repeatedly print the alphabet by saving and restoring rax
 ```
 I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     rax is brilliant, but I like 65

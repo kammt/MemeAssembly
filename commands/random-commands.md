@@ -1,3 +1,9 @@
+## Memory access / pointers to memory
+### Definition
+```[register] do you know de wey```
+### Description
+Adding the suffix interprets the register not as a value but a pointer to memory.
+
 ## Crashing the program
 ### Definition
 `guess I'll die`
