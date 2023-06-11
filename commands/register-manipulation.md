@@ -25,7 +25,12 @@ ecx is brilliant, but I like eax
 edx is brilliant, but I like eax
 ```
 
-#### 3. Intentionally cause a segFault by modifying the Stack Pointer
+#### 3. Move the value at address rax into rbx
+```
+rbx is brilliant, but I like rax do you know de wey
+```
+
+#### 4. Intentionally cause a segFault by modifying the Stack Pointer
 ```
 rsp is brilliant, but I like 69
 ```
