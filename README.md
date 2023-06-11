@@ -118,6 +118,7 @@ So, you reckon you've got the moxie to add a new command, eh? Brilliant! Here's 
 
 3. **Fingers Crossed:** Done everything by the book? Now cross your fingers, touch wood, and maybe toss a coin into the wishing well. You've played your hand, now it's time to let the code fairies sprinkle their magic!
 
+*Note: The pull requests should be made to the `develop` branch and not to the `main` branch. Failure to do so results in a bonk from the devs.*
 
 ### Current Contributors:
 ![GitHub Contributors Image](https://contrib.rocks/image?repo=kammt/MemeAssembly)
