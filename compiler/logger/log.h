@@ -40,6 +40,8 @@ void printThanosASCII(size_t deletedLines);
 
 void printNiceASCII();
 
+void printBongASCII();
+
 void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...);
 void printStatusMessage(logLevel logLevel, char* message);
 
