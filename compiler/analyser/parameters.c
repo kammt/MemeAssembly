@@ -309,8 +309,10 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         parsedCommand->isPointer = 0;
                     }
                 }
-                if(number == 69 || number == 420) {
+                if(number == 69) {
                     printNiceASCII();
+                } else if(number == 420) {
+                    printBongASCII();
                 }
                 parsedCommand->paramTypes[parameterNum] = PARAM_DECIMAL;
                 continue;

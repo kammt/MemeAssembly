@@ -123,7 +123,7 @@ void printThanosASCII(size_t deletedLines) {
 }
 
 /**
- * Called when a decimal parameter with value 420 or 69 is encountered. It prints a "Nice" ASCII art
+ * Called when a decimal parameter with value 69 is encountered. It prints a "Nice" ASCII art
  */
 void printNiceASCII() {
     printf("\n");
@@ -134,6 +134,23 @@ void printNiceASCII() {
     printf("\x1B[38;5;198m" " | . ` | |/ __/ _ \\\n");
     printf("\x1B[38;5;199m" " | |\\  | | (_|  __/\n");
     printf("\x1B[38;5;199m" " |_| \\_|_|\\___\\___|\n\n" RESET);
+}
+
+/**
+ * Called when a decimal parameter with value 420 is encountered. It prints a "Bong" ASCII art
+ */
+void printBongASCII() {
+    printf("\n");
+    printf("\n");
+    printf("\x1B[38;5;197m" "    .===. (  \n");
+    printf("\x1B[38;5;197m" "    |   |  ) \n");
+    printf("\x1B[38;5;198m" "    |   | (  \n");
+    printf("\x1B[38;5;198m" "    |   | )  \n");
+    printf("\x1B[38;5;199m" "    |   \\*/ \n");
+    printf("\x1B[38;5;199m" "  ,'    //.  \n");
+    printf("\x1B[38;5;199m" " :~~~~~//~~; \n");
+    printf("\x1B[38;5;199m" "   `.  // .' \n");
+    printf("\x1B[38;5;199m" " sc`-------' \n\n" RESET);
 }
 
 /**
