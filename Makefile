@@ -31,8 +31,8 @@ FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/pars
 all:
 	$(CC) -o memeasm $(FILES) $(CFLAGS)
 
-wasm: wasm/memeasm.js
-wasm/memeasm.js:
+wasm: memeasm.js
+memeasm.js:
 	docker run --rm -v $(shell pwd):/src -u $(shell id -u):$(shell id -g) \
 		emscripten/emsdk emcc -o $@ -s WASM=1 -s INVOKE_RUN=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORTED_RUNTIME_METHODS="['FS', 'callMain', 'cwrap']" -s 'EXPORT_NAME="runMemeAssemblyCompiler"' $(FILES) $(CFLAGS)
 
@@ -42,10 +42,10 @@ debug:
 
 # Remove the compiled executable from this directory
 clean:
-	$(RM) memeasm wasm/memeasm.{js,wasm}
+	$(RM) memeasm memeasm.{js,wasm}
 
 # Removes "memeasm" from DESTDIR
-uninstall: 
+uninstall:
 	$(RM) $(DESTDIR)$(bindir)/memeasm
 
 # Compiles an executable and stores it in DESTDIR
