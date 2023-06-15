@@ -25,22 +25,27 @@ INSTALL_PROGRAM=$(INSTALL)
 # Files to compile
 FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/fileParser.c compiler/parser/functionParser.c compiler/analyser/analysisHelper.c compiler/analyser/parameters.c compiler/analyser/functions.c compiler/analyser/jumpMarkers.c compiler/analyser/comparisons.c compiler/analyser/randomCommands.c compiler/analyser/analyser.c compiler/translator/translator.c
 
-.PHONY: all clean debug uninstall install windows
+.PHONY: all clean debug uninstall install windows wasm memeasm.js
 
 # Standard compilation
 all:
 	$(CC) -o memeasm $(FILES) $(CFLAGS)
+
+wasm: memeasm.js
+memeasm.js:
+	docker run --rm -v $(shell pwd):/src -u $(shell id -u):$(shell id -g) \
+		emscripten/emsdk emcc -o $@ -s WASM=1 -s INVOKE_RUN=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORTED_RUNTIME_METHODS="['FS', 'callMain', 'cwrap']" -s 'EXPORT_NAME="runMemeAssemblyCompiler"' $(FILES) $(CFLAGS)
 
 # Compilation with debugging-flags
 debug:
 	$(CC) -o memeasm $(FILES) $(CFLAGS) $(CFLAGS_DEBUG)
 
 # Remove the compiled executable from this directory
-clean: 
-	$(RM) memeasm
+clean:
+	$(RM) memeasm memeasm.{js,wasm}
 
 # Removes "memeasm" from DESTDIR
-uninstall: 
+uninstall:
 	$(RM) $(DESTDIR)$(bindir)/memeasm
 
 # Compiles an executable and stores it in DESTDIR

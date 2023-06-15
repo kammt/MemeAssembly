@@ -88,6 +88,10 @@ int main(int argc, char* argv[]) {
     int opt;
     int option_index = 0;
 
+    // On normal systems one wouldn't have to reset optind, but the WebAssembly version
+    // requires global variables to be reset; else option parsing wouldn't work when calling main again
+    optind = 1;
+
     while ((opt = getopt_long_only(argc, argv, "o:hO::dgSv", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':

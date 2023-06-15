@@ -1,6 +1,8 @@
 #Executable
 ./memeasm
 memeasm.exe
+memeasm.js
+memeasm.wasm
 
 #Temporary files for local testing
 tmp.asm
