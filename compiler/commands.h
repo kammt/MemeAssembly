@@ -47,7 +47,6 @@ struct parsedCommand {
 };
 
 struct function {
-    char* name;
     char* definedInFile;
     size_t definedInLine;
     size_t numberOfCommands;
@@ -66,7 +65,7 @@ struct file {
 typedef enum { noob, bully, obfuscated } compileMode;
 typedef enum { executable, assemblyFile, objectFile } outputMode;
 typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateMode;
-typedef enum { none, o_1, o_2, o_3, o_s, o42069 } optimisationLevel;
+typedef enum { none, o_1 = -1, o_2 = -2, o_3 = -3, o_s, o69420 = 69420} optimisationLevel;
 typedef enum { normal, info, debug } logLevel;
 
 struct compileState {
@@ -76,6 +75,7 @@ struct compileState {
     struct file* files;
 
     bool useStabs;
+    bool allowIoCommands;
     bool martyrdom;
     translateMode translateMode;
     optimisationLevel optimisationLevel;
@@ -93,7 +93,9 @@ struct compileState {
 #define PARAM_CHAR 32
 #define PARAM_MONKE_LABEL 64
 #define PARAM_FUNC_NAME 128
+//Helper macros for register parameter macros
 #define PARAM_ISREG(param) (param <= PARAM_REG8 && param > 0)
+#define PARAM_REG (PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8)
 
 // Command types
 #define COMMAND_TYPE_MOV 1

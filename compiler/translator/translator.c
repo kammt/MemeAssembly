@@ -134,7 +134,7 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
  * @param outputFile the file where the translation should be written to
  */
 void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
-    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o42069) {
+    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o69420) {
         printDebugMessage(compileState->logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
     }
@@ -188,7 +188,8 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                     }
                 }
             } else {
-                fprintf(stderr, RED "Internal compiler error: " RESET "Invalid translation format specifier '%c' for opcode %u\nPlease report this error at https://github.com/kammt/MemeAssembly/issues/new", formatSpecifier, parsedCommand.opcode);
+                printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", true, 2, formatSpecifier, parsedCommand.opcode);
+                exit(EXIT_FAILURE);
             }
 
             //move our pointer along by three characters instead of one, as we just parsed three characters
@@ -209,7 +210,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     } else if (compileState->optimisationLevel == o_3) {
         //Save and restore xmm0 on the stack using movups
         fprintf(outputFile, "\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n");
-    } else if(compileState->optimisationLevel == o42069) {
+    } else if(compileState->optimisationLevel == o69420) {
         //If we get here, then this was a function declaration. Insert a ret-statement and exit
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
     }
@@ -234,8 +235,11 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     //Define all functions as global
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         for(size_t j = 0; j < compileState->files[i].functionCount; j++) {
-            //Write the function name with the prefix ".global" to the file
-            fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].name);
+            //Only write if the function definition is to be translated
+            if(compileState->files[i].functions[j].commands[0].translate) {
+                //Write the function name with the prefix ".global" to the file
+                fprintf(outputFile, ".global %s\n", compileState->files[i].functions[j].commands[0].parameters[0]);
+            }
         }
     }
 
@@ -264,28 +268,29 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
     #ifndef WINDOWS
-    fprintf(outputFile, "killParent:\n"
-                        #ifdef LINUX
-                        "    mov rax, 110\n"
-                        #else
-                        "    mov rax, 0x2000027\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, rax\n"
-                        "    mov rsi, 9\n"
-                        #ifdef LINUX
-                        "    mov rax, 62\n"
-                        #else
-                        "    mov rax, 0x2000025\n"
-                        #endif
-                        "    syscall\n"
-                        "\n"
-                        "    mov rdi, 0\n"
-                        "    mov rax, 60\n"
-                        "    syscall\n"
-                        "    ret\n\n");
-
+    if(compileState->allowIoCommands) {
+        fprintf(outputFile, "killParent:\n"
+                            #ifdef LINUX
+                            "    mov rax, 110\n"
+                            #else
+                            "    mov rax, 0x2000027\n"
+                            #endif
+                            "    syscall\n"
+                            "\n"
+                            "    mov rdi, rax\n"
+                            "    mov rsi, 9\n"
+                            #ifdef LINUX
+                            "    mov rax, 62\n"
+                            #else
+                            "    mov rax, 0x2000025\n"
+                            #endif
+                            "    syscall\n"
+                            "\n"
+                            "    mov rdi, 0\n"
+                            "    mov rax, 60\n"
+                            "    syscall\n"
+                            "    ret\n\n");
+    }
     #endif
 
     /*
@@ -294,6 +299,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
      * We do that check now. If no main function exists, the first function in the file becomes the main function
      */
     if(compileState->compileMode == bully && compileState->outputMode == executable && !mainFunctionExists(compileState)) {
+        fprintf(outputFile, "\n.global main\n\t");
         fprintf(outputFile, "\nmain:\n\t");
         fprintf(outputFile, "%s", martyrdomCode);
     }
@@ -308,6 +314,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
         size_t line = 0;
         for(size_t j = 0; j < currentFile.functionCount; j++) {
             struct function currentFunction = currentFile.functions[j];
+            char* functionName = currentFunction.commands[0].parameters[0];
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
                 #ifndef WINDOWS
@@ -318,7 +325,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                         "main";
                 #endif
 
-                if (compileState->martyrdom && k == 1 && strcmp(currentFunction.name, mainFuncName) == 0) {
+                if (compileState->martyrdom && compileState->allowIoCommands && k == 1 && strcmp(functionName, mainFuncName) == 0) {
                     fprintf(outputFile, "%s", martyrdomCode);
                 }
                 #endif
@@ -332,13 +339,13 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
                 //If it should be translated, translate it
                 if (currentCommand.translate) {
-                    translateToAssembly(compileState, currentFunction.name, currentCommand, i,
+                    translateToAssembly(compileState, functionName, currentCommand, i,
                                         (k == currentFunction.numberOfCommands - 1), outputFile);
                 }
 
                 //Insert STABS function-info
                 if (compileState->useStabs) {
-                    stabs_writeFunctionInfo(outputFile, currentFunction.name);
+                    stabs_writeFunctionInfo(outputFile, functionName);
                 }
                 line++;
             }
@@ -346,7 +353,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
-    if(compileState->optimisationLevel != o42069) {
+    if(compileState->optimisationLevel != o69420 && compileState->allowIoCommands) {
         #ifdef WINDOWS
         //Using Windows API
         fprintf(outputFile,

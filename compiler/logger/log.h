@@ -40,10 +40,19 @@ void printThanosASCII(size_t deletedLines);
 
 void printNiceASCII();
 
+void printBongASCII();
+
 void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...);
 void printStatusMessage(logLevel logLevel, char* message);
 
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...);
-void printNote(char* message, unsigned varArgNum, ...);
+void printNote(char* message, bool indent, unsigned varArgNum, ...);
 
+void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...);
+
+#define CHECK_ALLOC(ptr) \
+  if (!ptr) { \
+    printInternalCompilerError("%s:%u: Ran out of memory during compilation", false, 2, __FILE__, __LINE__);  \
+    exit(EXIT_FAILURE); \
+  }
 #endif

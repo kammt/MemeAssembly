@@ -46,7 +46,7 @@ void checkDuplicateDefinition(struct commandLinkedList* commandLinkedList, struc
             if((!oncePerFile || duplicateItem->definedInFile == listItem->definedInFile) &&
              (parametersToCheck < 1 || strcmp( command->parameters[0], duplicateItem->command->parameters[0]) == 0) &&
              (parametersToCheck != 2 || strcmp( command->parameters[1], duplicateItem->command->parameters[1]) == 0)) {
-                if(compileState->compileMode == bully) {
+                if(compileState->compileMode != bully) {
                     printError(compileState->files[duplicateItem->definedInFile].fileName, duplicateItem->command->lineNum, compileState,
                                "%s defined twice (already defined in %s:%lu)", 2, itemName, compileState->files[listItem->definedInFile].fileName, command->lineNum);
                 } else {

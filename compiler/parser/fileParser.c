@@ -135,6 +135,7 @@ size_t getLinesOfCode(FILE *inputFile) {
             loc++;
         }
     }
+    CHECK_ALLOC(line);
 
     rewind(inputFile);
     free(line);
@@ -210,10 +211,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
 
                     //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
                     char *variable = malloc(parameterLength + 2);
-                    if (variable == NULL) {
-                        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                        exit(EXIT_FAILURE);
-                    }
+                    CHECK_ALLOC(variable);
 
                     #ifdef MACOS
                     if (i == 0 || i == 4) {
@@ -303,7 +301,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
          * The variable "computedIndex" is global, meaning that the value
          * is dependent on the previous illegal commands - *perfection*
          */
-        const char* randomParams[] = {"rax", "rcx", "rbx", "r8", "r9", "r10", "r12", "rsp", "rbp", "ax", "al", "r8b", "r9d", "r14b", "99", "1238", "12", "420", "987654321", "8", "9", "69", "8268", "2", "_", "a", "b", "d", "f", "F", "sigreturn", "uaauuaa", "uau", "uu", "main", "gets", "srand", "mprotect", "au", "\\n", "space"};
+        const char* randomParams[] = {"rax", "rcx", "rbx", "r8", "r9", "r10", "r12", "rsp", "rbp", "ax", "al", "r8b", "r9d", "r14b", "99", "1238", "12", "420", "987654321", "8", "9", "69", "8268", "2", "_", "a", "b", "d", "f", "F", "sigreturn", "uaauuaa", "uau", "uu", "main", "gets", "srand", "mprotect", "au", "uwu", "space"};
         unsigned randomParamCount = sizeof randomParams / sizeof(char*);
 
         for(size_t i = 0; i < strlen(line); i++) {
@@ -312,12 +310,13 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         computedIndex = ((computedIndex * lineNum) % 420) * inputFileName[0];
 
         parsedCommand.opcode = computedIndex % (NUMBER_OF_COMMANDS - 1);
-        parsedCommand.parameters[0] = strdup(randomParams[computedIndex % randomParamCount]);
-        parsedCommand.parameters[1] = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
-
-        if(!parsedCommand.parameters[0] || !parsedCommand.parameters[1]) {
-            fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-            exit(EXIT_FAILURE);
+        if(commandList[parsedCommand.opcode].usedParameters > 0) {
+            parsedCommand.parameters[0] = strdup(randomParams[computedIndex % randomParamCount]);
+            CHECK_ALLOC(parsedCommand.parameters[0]);
+        }
+        if (commandList[parsedCommand.opcode].usedParameters > 1) {
+            parsedCommand.parameters[1] = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
+            CHECK_ALLOC(parsedCommand.parameters[1]);
         }
     } else {
         parsedCommand.opcode = INVALID_COMMAND_OPCODE;
@@ -353,10 +352,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
     }
 
     struct parsedCommand *commands = calloc(sizeof(struct parsedCommand), loc);
-    if(commands == NULL) {
-        fprintf(stderr, "Critical Error: Memory allocation for command parsing failed");
-        exit(EXIT_FAILURE);
-    }
+    CHECK_ALLOC(commands);
     printDebugMessage( compileState->logLevel, "Struct array was created successfully", 0);
 
     //Iterate through the file again, this time parsing each line of interest and adding it to our command struct array

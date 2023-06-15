@@ -1,18 +1,8 @@
 name: Publish to AUR
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version String'     
-        required: true
-      pkgrel:
-        description: pkgrel
-        required: true
-        default: "1"
-      sha256sum:
-        description: sha256 Checksum of .tar.gz file
-        required: true
+  release:
+    types: [published]
 
 jobs:
   aur-publish:
@@ -23,19 +13,22 @@ jobs:
       - uses: actions/checkout@v2
       
       - name: Replace VERSION_STRING in PKGBUILD file with parameter
-        run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' PKGBUILD
+        run: sed -i 's/VERSION_STRING/${GITHUB_REF:1}/g' PKGBUILD
         
       - name: Replace PKGREL in PKGBUILD file with parameter
-        run: sed -i 's/PKGREL/${{ github.event.inputs.pkgrel }}/g' PKGBUILD  
+        run: sed -i 's/PKGREL/1/g' PKGBUILD  
         
       - name: Replace 256SUM in PKGBUILD file with parameter
-        run: sed -i 's/256SUM/${{ github.event.inputs.sha256sum }}/g' PKGBUILD  
+        run: |
+          sudo apt-get install wget
+          wget https://github.com/kammt/MemeAssembly/archive/refs/tags/$GITHUB_REF.tar.gz
+          sed -i 's/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
 
       - name: Output PKGBUILD for debugging purposes
         run: cat PKGBUILD
 
       - name: Publish AUR package with modified PKGBUILD
-        uses: KSXGitHub/github-actions-deploy-aur@v2.2.5
+        uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
         with:
           pkgname: memeassembly
           pkgbuild: ./PKGBUILD

@@ -47,6 +47,7 @@ void printHelpPage(char* programName) {
     printf(" -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf(" -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
     printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscated\n");
+    printf(" -fno-io - Forbid all I/O commands, such as \"what can I say except\" and syscalls\n");
     printf(" -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -d \t\t- enables debug logs\n");
@@ -63,6 +64,7 @@ int main(int argc, char* argv[]) {
         .translateMode = intSISD,
         .outputMode = executable,
         .useStabs = false,
+        .allowIoCommands = true,
         .compilerErrors = 0,
         .logLevel = normal
     };
@@ -72,11 +74,13 @@ int main(int argc, char* argv[]) {
 
     int optimisationLevel = 0;
     int martyrdom = true;
+    int allowIoCommands = true;
     const struct option long_options[] = {
             {"output",  required_argument, 0, 'o'},
             {"help",    no_argument,       0, 'h'},
             {"debug",   no_argument,       0, 'd'},
             {"fno-martyrdom",    no_argument,&martyrdom, false},
+            {"fno-io",    no_argument, &allowIoCommands, false},
             {"fcompile-mode",    required_argument,0, 'c'},
             { 0, 0, 0, 0 }
     };
@@ -104,18 +108,23 @@ int main(int argc, char* argv[]) {
                 if(!optarg) {
                     compileState.outputMode = objectFile;
                 } else {
-                    char* endptr;
-                    errno = 0;
-                    long res = strtol(optarg, &endptr, 10);
-                    if (errno) {
-                        perror("Invalid optimisation level specified");
-                        return 1;
-                    } else if(endptr == optarg || *endptr != '\0' || (res != 69420 && res != -1 && res != -2 && res != -3)) {
-                        fprintf(stderr, "Invalid optimisation level specified: %s\n", optarg);
-                        return 1;
-                    }
+                    if(strcmp(optarg, "-s") == 0) {
+                        compileState.optimisationLevel = o_s;
+                    } else {
+                        char *endptr;
+                        errno = 0;
+                        long res = strtol(optarg, &endptr, 10);
+                        if (errno) {
+                            perror("Invalid optimisation level specified");
+                            return 1;
+                        } else if (endptr == optarg || *endptr != '\0' ||
+                                   (res != 69420 && res != -1 && res != -2 && res != -3)) {
+                            fprintf(stderr, "Invalid optimisation level specified: %s\n", optarg);
+                            return 1;
+                        }
 
-                    compileState.optimisationLevel = res;
+                        compileState.optimisationLevel = res;
+                    }
                 }
                 break;
             case 'd':
@@ -127,10 +136,10 @@ int main(int argc, char* argv[]) {
             case 'g':
                 #ifdef WINDOWS
                 //If we use Windows, STABS does not work - output a warning, but don't do anything
-                fprintf(stderr, YEL"Info: -g is not supported under Windows, ignoring..\n"RESET);
+                printNote("-g cannot be used on Windows-systems, this option will be ignored.", false, 0);
                 #elif defined(MACOS)
 		        //If we use MacOS, STABS does not work - output a warning, but don't do anything
-                fprintf(stderr, YEL"Info: -g is not supported under MacOS, ignoring..\n"RESET);
+                printNote("-g cannot be used on MacOS-systems, this option will be ignored.", false, 0);
 		        #else
                 compileState.useStabs = true;
                 #endif
@@ -154,6 +163,11 @@ int main(int argc, char* argv[]) {
         }
     }
     compileState.martyrdom = martyrdom;
+    compileState.allowIoCommands = allowIoCommands;
+    if(compileState.useStabs && compileState.compileMode == bully) {
+        printNote("-g cannot be used in bully mode, this option will be ignored.", false, 0);
+        compileState.useStabs = false;
+    }
 
     if(outputFileString == NULL) {
         fprintf(stderr, "Error: No output file specified\n");
@@ -170,10 +184,7 @@ int main(int argc, char* argv[]) {
 
         //Now allocate fileCount file structs on the heap
         struct file* fileStructs = calloc(fileCount, sizeof(struct file));
-        if(fileStructs == NULL) {
-            fprintf(stderr, "Critical Error: Memory allocation for file parsing failed");
-            exit(EXIT_FAILURE);
-        }
+        CHECK_ALLOC(fileStructs);
 
         //Open each file one by one and parse it into a "struct file"
         for(int i = optind; i < argc; i++) {
@@ -219,7 +230,7 @@ int main(int argc, char* argv[]) {
         } else if (optimisationLevel == -4) {
             compileState.optimisationLevel = o_s;
         } else if (optimisationLevel == 69420) {
-            compileState.optimisationLevel = o42069;
+            compileState.optimisationLevel = o69420;
         }
 
         compile(compileState, outputFileString);

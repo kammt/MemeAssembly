@@ -29,6 +29,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "translator/translator.h"
 #include "logger/log.h"
 
+
+
 const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
@@ -90,14 +92,14 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "bitconneeeeeeect {p} {p}",
             .usedParameters = 2,
             .analysisFunction = NULL,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
+            .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .translationPattern = "and {0}, {1}"
         },
         {
             .pattern = "{p} \\s",
             .usedParameters = 1,
             .analysisFunction = NULL,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .translationPattern = "not {0}"
         },
 
@@ -105,7 +107,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "sneak 100 {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "xor {0}, {0}"
         },
@@ -113,7 +115,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "{p} is brilliant, but I like {p}",
             .commandType = COMMAND_TYPE_MOV,
             .usedParameters = 2,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
+            .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "mov {0}, {1}"
         },
@@ -122,42 +124,42 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "upvote {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "add {0}, 1"
         },
         {
             .pattern = "downvote {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "sub {0}, 1"
         },
         {
             .pattern = "parry {p} you filthy casual {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "sub {1}, {0}"
         },
         {
             .pattern = "{p} units are ready, with {p} more well on the way",
             .usedParameters = 2,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
+            .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = "add {0}, {1}"
         },
         {
             .pattern = "upgrades, people. Upgrades {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "shl {0}, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "shr {0}, 1"
         },
@@ -250,21 +252,21 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "who would win? {p} or {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
+            .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = &analyseWhoWouldWinCommands,
             .translationPattern = "cmp {0}, {1}\n\tjg .L{0}Wins_{F}\n\tjl .L{1}Wins_{F}"
         },
         {
             .pattern = "{p} wins",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
+            .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = NULL,
             .translationPattern = ".L{0}Wins_{F}:"
         },
         {
             .pattern = "corporate needs you to find the difference between {p} and {p}",
             .usedParameters = 2,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8, PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 | PARAM_DECIMAL | PARAM_CHAR},
+            .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .analysisFunction = &analyseTheyreTheSamePictureCommands,
             .translationPattern = "cmp {0}, {1}\n\tje .LSamePicture_{F}"
         },
@@ -279,7 +281,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "what can I say except {p}",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8 | PARAM_CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
                                   "test rsp, 0xF\n\t"
@@ -294,7 +296,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
-            .analysisFunction = NULL,
+            .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8},
             .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
@@ -318,7 +320,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "confused stonks",
             .usedParameters = 0,
             .analysisFunction = &setConfusedStonksJumpLabel,
-            .translationPattern = "jmp .LConfusedStonks_{F}:"
+            .translationPattern = "jmp .LConfusedStonks_{F}"
         },
         {
             .pattern = "perfectly balanced as all things should be",
@@ -341,7 +343,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "it's over 9000 {p}",
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8},
+            .allowedParamTypes = {PARAM_REG},
             .analysisFunction = NULL,
             .translationPattern = "cmp {0}, 9000\n\tjg 1f\n\thlt\n\t1:"
         },
@@ -373,7 +375,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "we need air support",
             .usedParameters = 0,
-            .analysisFunction = NULL,
+            .analysisFunction = &checkIOCommands,
             .translationPattern = "syscall"
         },
 

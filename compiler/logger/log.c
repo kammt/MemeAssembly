@@ -123,7 +123,7 @@ void printThanosASCII(size_t deletedLines) {
 }
 
 /**
- * Called when a decimal parameter with value 420 or 69 is encountered. It prints a "Nice" ASCII art
+ * Called when a decimal parameter with value 69 is encountered. It prints a "Nice" ASCII art
  */
 void printNiceASCII() {
     printf("\n");
@@ -134,6 +134,23 @@ void printNiceASCII() {
     printf("\x1B[38;5;198m" " | . ` | |/ __/ _ \\\n");
     printf("\x1B[38;5;199m" " | |\\  | | (_|  __/\n");
     printf("\x1B[38;5;199m" " |_| \\_|_|\\___\\___|\n\n" RESET);
+}
+
+/**
+ * Called when a decimal parameter with value 420 is encountered. It prints a "Bong" ASCII art
+ */
+void printBongASCII() {
+    printf("\n");
+    printf("\n");
+    printf("\x1B[38;5;197m" "    .===. (  \n");
+    printf("\x1B[38;5;197m" "    |   |  ) \n");
+    printf("\x1B[38;5;198m" "    |   | (  \n");
+    printf("\x1B[38;5;198m" "    |   | )  \n");
+    printf("\x1B[38;5;199m" "    |   \\*/ \n");
+    printf("\x1B[38;5;199m" "  ,'    //.  \n");
+    printf("\x1B[38;5;199m" " :~~~~~//~~; \n");
+    printf("\x1B[38;5;199m" "   `.  // .' \n");
+    printf("\x1B[38;5;199m" " sc`-------' \n\n" RESET);
 }
 
 /**
@@ -189,17 +206,39 @@ void printError(char* inputFileName, unsigned lineNum, struct compileState* comp
 /**
  * Prints a note. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
  * @param message the message (with printf-like formatting)
+ * @param indent whether the entire message should be indented
  * @param varArgNum How many variable arguments were passed (important!)
  * @param ... variable arguments
  */
-void printNote(char* message, unsigned varArgNum, ...) {
+void printNote(char* message, bool indent, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
 
     //First, only print the file name and line
-    printf("\t" MAG "note: " RESET);
+    if(indent) printf("\t");
+    printf(MAG "note: " RESET);
     //Now print the custom message with variable args
     vprintf(message, vaList);
     printf("\n");
+}
+
+/**
+ * Prints an internal compiler error, after which the compiler terminates
+ * @param message the message (with printf-like formatting)
+ * @param report whether to print a message telling the user to report this error
+ * @param varArgNum How many variable arguments were passed (important!)
+ * @param ... variable arguments
+ */
+void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...) {
+    //Initialise va_list to pass it on to vprintf
+    va_list vaList;
+    va_start(vaList, varArgNum);
+
+    //First, only print the file name and line
+    fprintf(stderr, RED "Internal compiler error: " RESET);
+    //Now print the custom message with variable args
+    vfprintf(stderr, message, vaList);
+    fprintf(stderr, "\n");
+    if(report) fprintf(stderr, "Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
 }

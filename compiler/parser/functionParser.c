@@ -40,7 +40,6 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
 
     //Define the structs
     struct function function;
-    function.name = functionStart.parameters[0];
     function.definedInLine = (size_t) functionStart.lineNum;
     function.definedInFile = inputFileName;
 
@@ -79,7 +78,7 @@ struct function parseFunction(struct commandsArray commandsArray, char* inputFil
     }
 
     //Our function definition is also a command, hence there are functionEndIndex - functionStartAtIndex + 1 commands
-    function.numberOfCommands = (functionEndIndex - functionStartAtIndex) + 1;
+    function.numberOfCommands = (functionEndIndex != 0) ? (functionEndIndex - functionStartAtIndex) + 1 : 1;
     return function;
 }
 
@@ -96,10 +95,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
     //Now we create our array of functions
     int functionArrayIndex = 0;
     struct function *functions = calloc(sizeof(struct function), functionDefinitions);
-    if(functions == NULL) {
-        fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-        exit(EXIT_FAILURE);
-    }
+    CHECK_ALLOC(functions);
 
     //We now traverse the commands array again, this time parsing the functions
     size_t commandArrayIndex = 0; //At which command we currently are
@@ -128,23 +124,21 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
         //If we're in bully mode and there were orphaned commands, then they range from startIndex to commandArrayIndex - 1
         //Inject a fake function with those commands
         if(compileState->compileMode == bully && orphanedCommands) {
-            printf("Creating fake function\n");
             char* funcName = functionNames[commandArrayIndex % (sizeof(functionNames) / sizeof(char*))];
 
             //We create two extra commands (function definition and return)
             size_t numCommands = commandArrayIndex - startIndex + 2;
             struct parsedCommand *commands = calloc(numCommands, sizeof(struct parsedCommand));
             //There is one more function, so resize our functions array
+            //We cannot use reallocarray(), since it does not exist on MacOS/Windows :(
             size_t functionsArraySize = 0;
             if (__builtin_umull_overflow(++functionDefinitions, sizeof(struct function), &functionsArraySize)) {
                 fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
                 exit(EXIT_FAILURE);
             }
             functions = realloc(functions, functionsArraySize);
-            if (!functions || !commands) {
-                fprintf(stderr, "Critical error: Memory allocation for command parameter failed!");
-                exit(EXIT_FAILURE);
-            }
+            CHECK_ALLOC(functions);
+            CHECK_ALLOC(commands);
 
             //Copy over the commands
             //The first one is a function definition
@@ -166,7 +160,6 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             //Set the function-struct accordingly
             functions[functionArrayIndex].definedInFile = fileStruct->fileName;
             functions[functionArrayIndex].numberOfCommands = numCommands;
-            functions[functionArrayIndex].name = funcName;
             functions[functionArrayIndex].commands = commands;
 
             //Increase the index
