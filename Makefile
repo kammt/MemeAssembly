@@ -25,7 +25,7 @@ INSTALL_PROGRAM=$(INSTALL)
 # Files to compile
 FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/fileParser.c compiler/parser/functionParser.c compiler/analyser/analysisHelper.c compiler/analyser/parameters.c compiler/analyser/functions.c compiler/analyser/jumpMarkers.c compiler/analyser/comparisons.c compiler/analyser/randomCommands.c compiler/analyser/analyser.c compiler/translator/translator.c
 
-.PHONY: all clean debug uninstall install windows wasm wasm/memeasm.js
+.PHONY: all clean debug uninstall install windows wasm memeasm.js
 
 # Standard compilation
 all:
