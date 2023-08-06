@@ -168,7 +168,7 @@ __attribute((hot)) char* getNextToken(char* const str, char** savePtr, char dest
     }
     //In any case, savePtr now points to the start of the word to be written
     unsigned charsWritten = 0;
-    while(**savePtr != ' ' && **savePtr != '\0' && charsWritten <= 60) {
+    while(**savePtr != ' ' && **savePtr != '\0' && charsWritten < 60) {
         dest[charsWritten++] = (*(*savePtr)++);
     }
 
