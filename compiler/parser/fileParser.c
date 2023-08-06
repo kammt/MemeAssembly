@@ -206,7 +206,7 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
  * @param compileState the current compile state
  * @return
  */
-struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, struct compileState* compileState) {
+__attribute((hot)) struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, struct compileState* compileState) {
     struct parsedCommand parsedCommand;
     parsedCommand.lineNum = lineNum; //Set the line number
     parsedCommand.translate = 1;
