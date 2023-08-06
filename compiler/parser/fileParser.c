@@ -24,11 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../logger/log.h"
 
-#ifdef WINDOWS
-/* strtok_r does not exist on Windows and instead is strtok_s. Use a preprocessor directive to replace all occurrences */
-# define strtok_r strtok_s
-#endif
-
 extern struct command commandList[];
 
 //Used to pseudo-random generation when using bully mode
@@ -143,6 +138,56 @@ size_t getLinesOfCode(FILE *inputFile) {
 }
 
 /**
+ * Reads the next token (aka. word) and writes it into dest. If the token is longer than 60 chars, then
+ * only the first 60 characters are written, followed by three dots.
+ * This is due to the fact that valid parameters are in no case longer than that, meaning that this optimisation will
+ * not change the compilation behavior of valid MemeASM programs.
+ * No SIMD optimisation are implemented here, since the words and parameters in MemeASM commands are usually very short.
+ *
+ * @param str the original string - must not be modified by this function. After the first call, str may be NULL
+ * @param savePtr must be NULL at first call. Saves where we currently are. Will usually point to the last space character that was consumed.
+ * @param dest the word will be written into here
+ * @return the address to dest if valid, NULL if there are no more tokens to read
+ */
+__attribute((hot)) char* getNextToken(char* const str, char** savePtr, char dest[static 64]) {
+    //The string is read for the first time. Ignore trailing spaces and tabs
+    if(*savePtr == NULL) {
+        *savePtr = str;
+        while(**savePtr == ' ' || **savePtr == '\t') {
+            (*savePtr)++;
+        }
+    } else { //This is a second, third, ... call to this function. The next char must be space or \0
+        if(**savePtr == '\0') {
+            return NULL;
+        } else if(**savePtr == ' ') {
+            //Move savePtr along by one char, so that it points to the new word
+            (*savePtr)++;
+        } else {
+            printInternalCompilerError("getNextToken: Unexpected position of savePtr at successive call (got %c)", true, 1, **savePtr);
+        }
+    }
+    //In any case, savePtr now points to the start of the word to be written
+    unsigned charsWritten = 0;
+    while(**savePtr != ' ' && **savePtr != '\0' && charsWritten <= 60) {
+        dest[charsWritten++] = (*(*savePtr)++);
+    }
+
+    //If we stopped at 60 characters, write ... and move the pointer until the end of the word
+    if(charsWritten == 60 && **savePtr != ' ' && **savePtr != '\0') {
+        dest[charsWritten++] = '.';
+        dest[charsWritten++] = '.';
+        dest[charsWritten++] = '.';
+
+        while(**savePtr != ' ' && **savePtr != '\0') {
+            (*savePtr)++;
+        }
+    }
+    dest[charsWritten++] = '\0';
+
+    return dest;
+}
+
+/**
  * Frees the memory of variables after they are not needed anymore
  * @param parsedCommand the parsedCommand struct
  * @param numberOfParameters how many variables are currently in use (allocated)
@@ -166,33 +211,26 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
     parsedCommand.lineNum = lineNum; //Set the line number
     parsedCommand.translate = 1;
 
-    //Temporarily save the line on the stack to be able to restore when a comparison failed
-    char lineCpy[strlen(line) + 1];
-    strcpy(lineCpy, line);
-
-    //Define save pointers for strtok_r
-    char *savePtrLine;
-    char *savePtrPattern;
+    //Define save pointers and dest arrays for getNextToken()
+    char* savePtrLine;
+    char destLine[64];
+    char* savePtrPattern;
+    char destPattern[64];
 
     //Iterate through all possible commands
     for(int i = 0; i < NUMBER_OF_COMMANDS - 2; i++) {
-        strcpy(lineCpy, line);
         savePtrLine = NULL;
         savePtrPattern = NULL;
 
-        //Copy the current command pattern out of read-only memory
-        char commandString[strlen(commandList[i].pattern) + 1];
-        strcpy(commandString, commandList[i].pattern);
-
-        //Tokenize both strings. Tabs at the beginning are allowed and should be ignored, hence they are a delimiter
-        char *commandToken = strtok_r(commandString, " \t", &savePtrPattern);
-        char *lineToken = strtok_r(lineCpy, " \t", &savePtrLine);
+        //Tokenize both strings
+        char* commandToken = getNextToken(commandList[i].pattern, &savePtrPattern, destPattern);
+        char* lineToken = getNextToken(line, &savePtrLine, destLine);
 
         int numberOfParameters = 0;
         parsedCommand.isPointer = 0;
 
         //Enter the comparison loop
-        while (commandToken != NULL && lineToken != NULL) {
+        while(commandToken != NULL && lineToken != NULL) {
             printDebugMessage(compileState->logLevel, "\tcomparing with %s", 1, commandToken);
 
             if(strstr(commandToken, "{p}") != NULL) {
@@ -241,7 +279,7 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
                                        "Only one parameter is allowed to be a pointer", 0);
                         }
                         parsedCommand.isPointer = (uint8_t) numberOfParameters;
-                        //Move the save pointer so that "do you know de wey" is not tokenized by strtok_r
+                        //Move the save pointer so that "do you know de wey" is not tokenized
                         savePtrLine += strlen(pointerSuffix);
                     }
                 } else {
@@ -258,8 +296,8 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
             }
 
             //Tokenize both strings again. This time, only spaces are allowed
-            commandToken = strtok_r(NULL, " ", &savePtrPattern);
-            lineToken = strtok_r(NULL, " ", &savePtrLine);
+            commandToken = getNextToken(NULL, &savePtrPattern, destPattern);
+            lineToken = getNextToken(NULL, &savePtrLine, destLine);
         }
 
         if(commandToken != NULL && lineToken != NULL) {
