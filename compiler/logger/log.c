@@ -58,8 +58,8 @@ const char* const randomErrorMessages[] = {
         "(.ARM.exidx.text._ZNSt8_Rb_treeIiSt4pairIKiSt10shared_ptrIN4SWGL7ContextEEESt10_Select1stIS6_ESt4lessIiESaIS6_EE13_Rb_tree_implISA_Lb1EED2Ev[_ZNSt8_Rb_treeIiSt4pairIKiSt10shared_ptrIN4SWGL7ContextEEESt10_Select1stIS6_ESt4lessIiESaIS6_EE13_Rb_tree_implISA_Lb1EED5Ev]+0x0): relocation truncated to fit: R_ARM_PREL31 against `.text._ZNSt8_Rb_treeIiSt4pairIKiSt10shared_ptrIN4SWGL7ContextEEESt10_Select1stIS6_ESt4lessIiESaIS6_EE13_Rb_tree_implISA_Lb1EED2Ev'",
         "error adding symbols: DSO missing from command line",
         "undefined reference to `main'",
-        //Cobol
-        "programmer is impolite",
+        //INTERCAL
+        "programmer is insufficiently polite",
         "programmer is excessively polite",
         //actual MemeASM errors
         "a decimal number cannot be a pointer",
