@@ -37,8 +37,6 @@ extern unsigned numFunctionNames;
 //Parameters as strings
 const char* const paramNames[] = {"64 bit Register", "32 bit Register", "16 bit Register", "8 bit Register", "decimal number", "character", "monke jump marker name", "function name"};
 
-extern struct command commandList[];
-
 char *registers_64_bit[NUMBER_OF_64_BIT_REGISTERS] = {
         "rax",
         "rbx",

@@ -20,8 +20,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "analyser.h"
 #include "../logger/log.h"
 
-extern struct command commandList[NUMBER_OF_COMMANDS];
-
 void analyseCommands(struct compileState* compileState) {
     struct commandLinkedList* commandLinkedList[NUMBER_OF_COMMANDS] = {NULL};
 

@@ -28,8 +28,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_COMMANDS 46
 #define MAX_PARAMETER_COUNT 2
 
-extern const struct command commandList[];
-
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
 #define INVALID_COMMAND_OPCODE NUMBER_OF_COMMANDS - 1;
 
@@ -135,6 +133,7 @@ struct command {
     //TODO replace with char* translationPatterns[6];
     char* translationPattern;
 };
+extern const struct command commandList[];
 
 #define commentStart "What the hell happened here?"
 #define multiLineCommentStart "Why, why?"
