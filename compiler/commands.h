@@ -28,6 +28,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define NUMBER_OF_COMMANDS 46
 #define MAX_PARAMETER_COUNT 2
 
+extern const struct command commandList[];
+
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
 #define INVALID_COMMAND_OPCODE NUMBER_OF_COMMANDS - 1;
 
@@ -102,6 +104,10 @@ struct compileState {
 #define COMMAND_TYPE_FUNC_RETURN 2
 #define COMMAND_TYPE_FUNC_DEF 3
 #define COMMAND_TYPE_FUNC_CALL 4
+#define CMD_ISFUNCDEF(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_DEF)
+#define CMD_ISFUNCCALL(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_CALL)
+#define CMD_ISRET(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_RETURN)
+#define CMD_ISMOV(opcode) (commandList[opcode].commandType == COMMAND_TYPE_MOV)
 
 struct command {
     char *pattern;
