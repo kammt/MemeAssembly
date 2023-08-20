@@ -49,8 +49,6 @@ struct parsedCommand {
 };
 
 struct function {
-    char* definedInFile;
-    size_t definedInLine;
     size_t numberOfCommands;
     struct parsedCommand* commands;
 };
