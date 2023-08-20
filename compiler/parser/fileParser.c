@@ -24,8 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../logger/log.h"
 
-extern struct command commandList[];
-
 //Used to pseudo-random generation when using bully mode
 uint64_t computedIndex = 69;
 
@@ -49,7 +47,7 @@ int isLineOfInterest(const char* line, ssize_t lineLength) {
 
 /**
  * A basic implementation of a getline-function.
- * Reads a full line and stores it in lineptr. If lineptr is NULL, it will be initialised and n will be set accordingly. When too little is allocated, 128 more Bytes will be added
+ * Reads a full line and stores it in lineptr. If lineptr is NULL, it will be initialised and n will be set accordingly. When too little is allocated, 1000 more Bytes will be added
  * @param lineptr a pointer to the current storage for lines. May be NULL
  * @param n must be the size of lineptr and will be updated by this function
  * @param stream from where to read
@@ -80,7 +78,7 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
         bytesRead++;
         result++;
         if(bytesRead == (ssize_t) *n) {
-            *n += 128;
+            *n += 1000;
             *lineptr = realloc(*lineptr, *n);
             result = *lineptr + bytesRead;
 
