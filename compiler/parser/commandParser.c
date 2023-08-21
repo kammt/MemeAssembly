@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "fileParser.h"
+#include "commandParser.h"
 #include "parser.h"
 #include <stdio.h>
 #include <string.h>
