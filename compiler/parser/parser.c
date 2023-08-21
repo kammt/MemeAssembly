@@ -19,7 +19,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "parser.h"
 #include "../commands.h"
-#include "fileParser.h"
+#include "commandParser.h"
 #include "../logger/log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,6 +93,20 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                         printError(fileStruct->fileName, lineNumber, compileState,
                                    "Expected a return statement, but got a new function definition", 0);
                     } else {
+                        //In bully mode, we will make this function return
+                        //To do that, move our function definition over by one, and insert a ret-statement
+                        if(commandCount + 1 == commandsArraySize - 1) {
+                            //Alloc 500 more
+                            commandsArraySize += 500;
+                            parsedCommands = realloc(parsedCommands, commandsArraySize);
+                            CHECK_ALLOC(parsedCommands);
+                        }
+
+                        //Move the function definition
+                        *(parsedCommands + commandCount + 1) = *(parsedCommands + commandCount);
+                        //Create a return statement in its original place
+                        (parsedCommands + commandCount)->opcode = OPCODE_RET;
+                        commandCount++;
                         goto parseFunctionDef;
                     }
                 } else {
@@ -119,8 +133,44 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                 functionCount++;
             } else if(!currentFunction) {
                 //We currently don't parse a function, but found a command that is not a function definition => error
-                //TODO bully mode
-                printError(fileStruct->fileName, lineNumber, compileState, "command does not belong to any function", 0);
+                if(compileState->compileMode != bully) {
+                    printError(fileStruct->fileName, lineNumber, compileState,
+                               "command does not belong to any function", 0);
+                } else {
+                    //We're in bully mode. In that case, all commands will now be part of a "fake" function that we create
+                    //Start by creating our new function
+                    //Do we have enough space for our new function?
+                    if(functionCount == functionsArraySize - 1) {
+                        //Add 10
+                        functionCount += 10;
+                        functions = realloc(functions, functionCount);
+                        CHECK_ALLOC(functions);
+                    }
+
+                    //Alright. To have a working function, there needs to be a function definition command in front of this one.
+                    //So we first check if we have enough space for another command. Then, we move this command to the
+                    //next index, and create a function definition in the previous one
+                    if(commandCount + 1 == commandsArraySize - 1) {
+                        //Alloc 500 more
+                        commandsArraySize += 500;
+                        parsedCommands = realloc(parsedCommands, commandsArraySize);
+                        CHECK_ALLOC(parsedCommands);
+                    }
+
+                    //Move our orphaned command
+                    *(parsedCommands + commandCount + 1) = *(parsedCommands + commandCount);
+                    //Create a function definition in its original place
+                    (parsedCommands + commandCount)->opcode = OPCODE_FUNCDEF;
+                    //Choose a random function name from the ones we defined
+                    (parsedCommands + commandCount)->parameters[0] = strdup(functionNames[numCommands % (sizeof(functionNames) / sizeof(char*))]);
+                    CHECK_ALLOC((parsedCommands + commandCount)->parameters[0]);
+
+                    //Now, to the fake function struct
+                    currentFunction = &functions[functionCount];
+                    currentFunction->commands = parsedCommands + commandCount; //This points to our fake function definition, as we did not return commandCount until now
+
+                    commandCount++; //Update commandCount, as we just inserted an extra command
+                }
             }
             //Increase our number of commands in the array
             commandCount++;
@@ -130,12 +180,31 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
     //We're done reading the file - if we're still parsing a function, then that is an error, as that function did not return
     if(currentFunction) {
         //To make sure we don't brick anything coming after this, finish the function struct
-        functions[functionCount].numberOfCommands = numCommands;
-        numCommands = 0;
+        currentFunction->numberOfCommands = numCommands;
         functionCount++;
 
         if(compileState->compileMode != bully) {
             printError(fileStruct->fileName, lineNumber, compileState,"function does not return", 0);
+        } else {
+            //In bully mode, we will make this function return
+            //To do that, move our function definition over by one, and insert a ret-statement
+            //Note that commandCount was already increased, so it points to the next "unallocated" slot in our array
+            if(commandCount == commandsArraySize - 1) {
+                //Alloc 500 more
+                commandsArraySize += 500;
+                parsedCommands = realloc(parsedCommands, commandsArraySize);
+                CHECK_ALLOC(parsedCommands);
+            }
+
+            //Move the function definition
+            *(parsedCommands + commandCount) = *(parsedCommands + commandCount - 1);
+            //Create a return statement in its original place
+            (parsedCommands + commandCount - 1)->opcode = OPCODE_RET;
+            commandCount++;
+
+            //Now, finish the function struct
+            currentFunction->numberOfCommands++; //We need to include the added return here
+            //We don't care about the other variables (such as currentFunction), since we will return now
         }
     }
 
