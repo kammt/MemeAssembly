@@ -100,30 +100,6 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
     return bytesRead;
 }
 
-/**
- * Counts the lines of code in a memeasm file. A line counts as a line of code if:
- *  - it does not start with "What the hell happened here?" (a comment)
- *  - it is not empty
- * @param inputFile the input file
- * @return the number of lines of code in the file
- */
-size_t getLinesOfCode(FILE *inputFile) {
-    size_t loc = 0;
-    char* line = NULL;
-    size_t len;
-    ssize_t lineLength;
-
-    while((lineLength = getLine(&line, &len, inputFile)) != -1) {
-        if(isLineOfInterest(line, lineLength) == 1) {
-            loc++;
-        }
-    }
-    CHECK_ALLOC(line);
-
-    rewind(inputFile);
-    free(line);
-    return loc;
-}
 
 /**
  * Reads the next token (aka. word) and writes it into dest. If the token is longer than 60 chars, then
