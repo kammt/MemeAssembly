@@ -100,6 +100,8 @@ struct compileState {
 #define COMMAND_TYPE_FUNC_RETURN 2
 #define COMMAND_TYPE_FUNC_DEF 3
 #define COMMAND_TYPE_FUNC_CALL 4
+#define OPCODE_FUNCDEF 0
+#define OPCODE_RET 1
 #define CMD_ISFUNCDEF(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_DEF)
 #define CMD_ISFUNCCALL(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_CALL)
 #define CMD_ISRET(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_RETURN)
