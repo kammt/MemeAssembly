@@ -164,6 +164,8 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
 
 /**
  * Parses a provided line of code and attempts to match it to a command. Fills a provided struct parsedCommand
+ * This is an LL(0)-parser that brute-forces all possible paths. As MemeASM is LL(1), the next
+ * optimisation step would be to implement a 1-lookahead.
  * @param inputFileName the origin file. Required for error printing
  * @param line the line as a string
  * @param lineNum the line number in the origin file. Required for error printing
