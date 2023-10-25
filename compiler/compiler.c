@@ -66,7 +66,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "{p}: whomst has summoned the almighty one",
             .commandType = COMMAND_TYPE_FUNC_CALL,
             .usedParameters = 1,
-            .allowedParamTypes = {PARAM_FUNC_NAME},
+            .allowedParamTypes = {PARAM_FUNC_NAME, PARAM_REG64},
             .analysisFunction = &analyseCall,
             .translationPattern = "call {0}"
         },
