@@ -3,26 +3,51 @@ name: Publish to AUR
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Repository Tag (without v, e.g. 1.6)'     
+        required: true
+      pkgrel:
+        required: true
+        default: "1"
+  
 
 jobs:
   aur-publish:
     runs-on: ubuntu-latest
-
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       
       - name: Replace VERSION_STRING in PKGBUILD file with parameter
-        run: sed -i 's/VERSION_STRING/${GITHUB_REF:1}/g' PKGBUILD
+        if: ${{ github.event_name == 'release' }}
+        run: sed -i 's/VERSION_STRING/${GITHUB_REF:11}/g' PKGBUILD
+        
+      - name: Replace VERSION_STRING in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: sed -i 's/VERSION_STRING/${{ github.event.inputs.version }}/g' PKGBUILD
         
       - name: Replace PKGREL in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'release' }}
         run: sed -i 's/PKGREL/1/g' PKGBUILD  
         
+      - name: Replace PKGREL in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: sed -i 's/PKGREL/${{ github.event.inputs.pkgrel }}/g' PKGBUILD  
+        
       - name: Replace 256SUM in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'release' }}
         run: |
-          sudo apt-get install wget
-          wget https://github.com/kammt/MemeAssembly/archive/refs/tags/$GITHUB_REF.tar.gz
-          sed -i 's/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g' PKGBUILD  
+          wget https://github.com/${{ github.repository }}/archive/$GITHUB_REF.tar.gz
+          export CHECKSUM=
+          sed -i "s/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g" PKGBUILD  
+          
+      - name: Replace 256SUM in PKGBUILD file with parameter
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          wget https://github.com/${{ github.repository }}/archive/refs/tags/v${{ github.event.inputs.version }}.tar.gz
+          sed -i "s/256SUM/$(sha256sum v${{ github.event.inputs.version }}.tar.gz | cut -d " " -f 1)/g" PKGBUILD  
 
       - name: Output PKGBUILD for debugging purposes
         run: cat PKGBUILD

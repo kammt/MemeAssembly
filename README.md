@@ -107,6 +107,19 @@ To do so, insert this code block into your ReadMe file: \
 ## Contributing
 Contributions to this repository are welcome! Especially ideas for new (and hopefully idiotic) commands. To add a new command, either create an issue with the tag "new-command" or add it yourself and create a pull-request.
 
+### How to add new commands? 
+This Is No Kinder Spiel, Old Bean!
+
+So, you reckon you've got the moxie to add a new command, eh? Brilliant! Here's the plan:
+
+1. **Command Crafting:** First, pop over to `compiler/compiler.c` and have a butcher's at the `commandList` array. Once you've spotted it, add your brand spanking new command to the squad.
+
+2. **The Count-Up:** Now that your new command is showing its colours, you'll need to keep the books straight. Duck into `compiler/commands.h` and notch up the `NUMBER_OF_COMMANDS` by the number of new commands you've added. Keeping tally matters!
+
+3. **Fingers Crossed:** Done everything by the book? Now cross your fingers, touch wood, and maybe toss a coin into the wishing well. You've played your hand, now it's time to let the code fairies sprinkle their magic!
+
+*Note: The pull requests should be made to the `develop` branch and not to the `main` branch. Failure to do so results in a bonk from the devs.*
+
 ### Current Contributors:
 ![GitHub Contributors Image](https://contrib.rocks/image?repo=kammt/MemeAssembly)
 

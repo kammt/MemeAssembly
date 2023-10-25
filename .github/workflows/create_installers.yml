@@ -13,10 +13,7 @@ jobs:
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-
-      - name: Install mingw-w64
-        run: sudo apt-get install mingw-w64
+      - uses: actions/checkout@v3
       
       - name: Install nfpm
         run: |
@@ -37,22 +34,13 @@ jobs:
           cd ..    
           
       - name: Archive debian installer
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: debian-installer
-          path: memeassembly_${{ github.event.inputs.version }}_amd64.deb
+          name: memeasm_${{ github.event.inputs.version }}_amd64.deb
+          path: memeasm_${{ github.event.inputs.version }}_amd64.deb
           
       - name: Archive rpm installer
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
-          name: rpm-installer
-          path: memeassembly-${{ github.event.inputs.version }}.x86_64.rpm
-
-      - name: Compile for Windows
-        run: make windows
-
-      - name: Upload Windows executable
-        uses: actions/upload-artifact@v2
-        with:
-          name: memeasm.exe
-          path: memeasm.exe
+          name: memeasm-${{ github.event.inputs.version }}.x86_64.rpm
+          path: memeasm-${{ github.event.inputs.version }}.x86_64.rpm

@@ -13,5 +13,5 @@ sha256sums=('256SUM')
 package() {
   cd "MemeAssembly-$pkgver"
 
-  make DESTDIR="$pkgdir/usr/local/bin" install
+  make DESTDIR="$pkgdir" install
 }
