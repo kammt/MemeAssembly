@@ -2,22 +2,7 @@
 ### Definition
 ```what can I say except [ASCII-character/8-bit register]```
 ### Description
-Prints the given character to stdout. The given parameter can either be a letter itself, an ASCII-value in decimal form or an 8-bit register (e.g. al) containing an ASCII-value. Numbers from 0-9 are interpreted as characters and not as ASCII-values. \
-All [common escape sequences](https://en.wikipedia.org/wiki/Escape_sequences_in_C#Table_of_escape_sequences) are also supported and can be used without any issues. Here is an overview:
-
-Escape Sequence  | Usage
-------------- | -------------
-```\n``` | New line
-```\s``` / ```space``` | Space
-```\b``` | Backspace
-```\t``` | Horizontal Tab
-```\v``` | Vertical Tab
-```\f``` | Formfeed Page Break
-```\"``` | Double quotation mark
-```\?``` | Question mark
-```\\``` | Backslash
-
-?> Printing Unicode-Characters directly is not possible. However, using [this program](https://play.golang.org/p/TojzlTMIcJe), you can get the sequence of commands needed to print your character.
+Prints the given character to stdout. The given parameter can either be a letter itself, an ASCII-value in decimal form or an 8-bit register (e.g. al) containing an ASCII-value.
 
 ## Reading from stdin
 ### Definition
