@@ -73,7 +73,7 @@ The `p` in MemeAssembly stands for performance, so MemeAssembly naturally includ
 If multiple optimisation options are specified, only the last option is taken into account. This means that you *cannot* combine e.g. `-O-3` and `-O-s` to create a fat and slow binary.
 
 ### Martyrdom
-An alternative title for this section would be "Why does my shell close when I Ctr+C a MemeASM program?".
+An alternative title for this section would be "Why does my shell close when I Ctrl+C a MemeASM program?".
 Well, this is because of [Martyrdom](https://knowyourmeme.com/memes/martyrdom-drop-a-live-grenade-when-killed). By default, MemeASM programs drop a live grenade when killed. This means that before executing your own code, a signal handler is created for SIGINT, in which SIGKILL is sent to the parent process. If you don't want this to happen, remember to compile your program with `-fno-martyrdom`.
 
 ?> Protip: It'd be beneficial for your system if `init` is not the parent process of a MemeAssembly program. Just saying.
@@ -83,7 +83,7 @@ MemeAssembly has three compilation modes, which you can set with the option `-fc
 1. **Noob mode** (`-fcompile-mode=noob`): This is the default
 2. **Obfuscated Mode** (`-fcompile-mode=obfuscated`): Every error message is replaced with something else. It might be an actual error the compiler would print, it might be buzzword bingo, it might even be a `sudo` error message. What will you get?
 3.  **Bully mode** (`-fcompile-mode=bully`): This is where it gets fun. In bully mode, all compiler errors are silenced. Instead, the program is modified by the compiler to fix the error. This could include replacing parameters, removing code, adding new code or just replacing the broken command with a randomly generated one. Isn't this beautiful? \
-Now by random, I don't mean truly random. Every change done in bully mode by the compiler is either pre-defined or dependent on the input file (e.g. file name, the ASCII codes of a faulty line of code). This means that broken code in bully mode will _always_ compile to the same "fixed" code. This creates a sort of "meta programming language". You can now create bullshit code which normally does not compile, but has a defined behavior<a href="memeassembly-standard">*</a> in bully mode.
+Now by random, I don't mean truly random. Every change done in bully mode by the compiler is either pre-defined or dependent on the input file (e.g. file name, the ASCII codes of a faulty line of code). This means that broken code in bully mode will _always_ compile to the same "fixed" code. This creates a sort of "meta programming language". You can now create bullshit code which normally does not compile, but has a defined behavior<a href="#/memeasm-standard">*</a> in bully mode.
 
 ### Debugging a MemeASM program
 `-g` exists, but is only supported on Linux-systems. And even there, it is kind of broken. If you get it to work, good for you.
