@@ -20,7 +20,8 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #ifndef MEMEASSEMBLY_COMMANDS_H
 #define MEMEASSEMBLY_COMMANDS_H
 
-#include <stdint.h>
+#include "analyser/analyser.h"
+#include <cstdint>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -31,17 +32,12 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define OR_DRAW_25_OPCODE NUMBER_OF_COMMANDS - 2;
 #define INVALID_COMMAND_OPCODE NUMBER_OF_COMMANDS - 1;
 
-struct commandLinkedList {
-    struct parsedCommand* command;
-    unsigned definedInFile;
-    struct commandLinkedList* next;
-};
-
 struct parsedCommand {
     uint8_t opcode;
     char *parameters[MAX_PARAMETER_COUNT];
     uint8_t paramTypes[MAX_PARAMETER_COUNT];
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter, ...
+    size_t fileNum;
     size_t lineNum;
     bool translate; //Default is 1 (true). Is set to false in case this command is selected for deletion by "perfectly balanced as all things should be"
 };
@@ -60,26 +56,27 @@ struct file {
     size_t randomIndex; //A variable necessary for the "confused stonks" command
 };
 
-typedef enum { noob, bully, obfuscated } compileMode;
-typedef enum { executable, assemblyFile, objectFile } outputMode;
-typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateMode;
-typedef enum { none, o_1 = -1, o_2 = -2, o_3 = -3, o_s, o69420 = 69420} optimisationLevel;
-typedef enum { normal, info, debug } logLevel;
+typedef enum { noob, bully, obfuscated } compileModeEnum;
+typedef enum { executable, assemblyFile, objectFile } outputModeEnum;
+typedef enum { intSISD = 0, intSIMD = 1, floatSISD = 2, floatSIMD = 3, doubleSISD = 4, doubleSIMD = 5 } translateModeEnum;
+typedef enum { none, o_1 = -1, o_2 = -2, o_3 = -3, o_s, o69420 = 69420} optimisationLevelEnum;
+typedef enum { normal, info, debug } logLevelEnum;
+typedef enum { noType, mov, functionDefinition, functionCall, functionReturn, labelDefinition, labelUse } commandTypeEnum;
 
 struct compileState {
-    compileMode compileMode;
-    outputMode outputMode;
+    compileModeEnum compileMode;
+    outputModeEnum outputMode;
     uint32_t fileCount;
     struct file* files;
 
     bool useStabs;
     bool allowIoCommands;
     bool martyrdom;
-    translateMode translateMode;
-    optimisationLevel optimisationLevel;
+    translateModeEnum translateMode;
+    optimisationLevelEnum optimisationLevel;
 
     unsigned compilerErrors;
-    logLevel logLevel;
+    logLevelEnum logLevel;
 };
 
 // Parameter types
@@ -96,19 +93,24 @@ struct compileState {
 #define PARAM_REG (PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8)
 
 // Command types
-#define COMMAND_TYPE_MOV 1
-#define COMMAND_TYPE_FUNC_RETURN 2
-#define COMMAND_TYPE_FUNC_DEF 3
-#define COMMAND_TYPE_FUNC_CALL 4
 #define OPCODE_FUNCDEF 0
 #define OPCODE_RET 1
-#define CMD_ISFUNCDEF(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_DEF)
-#define CMD_ISFUNCCALL(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_CALL)
-#define CMD_ISRET(opcode) (commandList[opcode].commandType == COMMAND_TYPE_FUNC_RETURN)
-#define CMD_ISMOV(opcode) (commandList[opcode].commandType == COMMAND_TYPE_MOV)
+#define CMD_ISFUNCDEF(opcode) (commandList[opcode].commandType == functionDefinition)
+#define CMD_ISFUNCCALL(opcode) (commandList[opcode].commandType == functionCall)
+#define CMD_ISRET(opcode) (commandList[opcode].commandType == functionReturn)
+#define CMD_ISMOV(opcode) (commandList[opcode].commandType == mov)
+#define CMD_ISLABELDEF(opcode) (commandList[opcode].commandType == labelDefinition)
+#define CMD_ISLABELUSE(opcode) (commandList[opcode].commandType == labelUse)
 
 struct command {
     char *pattern;
+    /*
+     * The command type contains a special value that can be used to identify the type of command
+     * without specifying the index of the command. Some examples:
+     *  - return statements
+     *  - mov-command
+     */
+    commandTypeEnum commandType;
     uint8_t usedParameters;
     /*
      * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
@@ -123,16 +125,8 @@ struct command {
      *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
-    /*
-     * The command type contains a special value that can be used to identify the type of command
-     * without specifying the index of the command. Some examples:
-     *  - return statements
-     *  - mov-command
-     */
-    uint8_t commandType;
-    void (*analysisFunction)(struct commandLinkedList**, unsigned, struct compileState*); //commandLinkedList-list, opcode (index), compileState
+    Analyser* analyser;
 
-    //TODO replace with char* translationPatterns[6];
     char* translationPattern;
 };
 extern const struct command commandList[];

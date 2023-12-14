@@ -24,50 +24,48 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <stdarg.h>
 
+#include "commands.h"
 #include "parser/parser.h"
 #include "analyser/analyser.h"
 #include "translator/translator.h"
 #include "logger/log.h"
 
-
+FunctionDefAnalyser funcDefAnalyser {};
 
 const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
         {
             .pattern = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}",
-            .commandType = COMMAND_TYPE_FUNC_DEF,
+            .commandType = functionDefinition,
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_FUNC_NAME},
-            .analysisFunction = &analyseFunctions,
+            .analyser = &funcDefAnalyser,
             .translationPattern = "{0}:"
         },
         {
             .pattern = "right back at ya, buckaroo",
-            .commandType = COMMAND_TYPE_FUNC_RETURN,
+            .commandType = functionReturn,
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "ret"
         },
         {
             .pattern = "no, I don't think I will",
-            .commandType = COMMAND_TYPE_FUNC_RETURN,
+            .commandType = functionReturn,
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "mov rax, 1\n\tret"
         },
         {
             .pattern = "I see this as an absolute win",
-            .commandType = COMMAND_TYPE_FUNC_RETURN,
+            .commandType = functionReturn,
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "xor rax, rax\n\tret"
         },
         {
             .pattern = "{p}: whomst has summoned the almighty one",
-            .commandType = COMMAND_TYPE_FUNC_CALL,
+            .commandType = functionCall,
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_FUNC_NAME},
-            .analysisFunction = &analyseCall,
+            .analyser = &funcDefAnalyser,
             .translationPattern = "call {0}"
         },
 
@@ -76,14 +74,12 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "stonks {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = NULL,
             .translationPattern = "push {0}"
         },
         {
             .pattern = "not stonks {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG64},
-            .analysisFunction = NULL,
             .translationPattern = "pop {0}"
         },
 
@@ -91,14 +87,12 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "bitconneeeeeeect {p} {p}",
             .usedParameters = 2,
-            .analysisFunction = NULL,
             .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
             .translationPattern = "and {0}, {1}"
         },
         {
             .pattern = "{p} \\s",
             .usedParameters = 1,
-            .analysisFunction = NULL,
             .allowedParamTypes = {PARAM_REG},
             .translationPattern = "not {0}"
         },
@@ -108,15 +102,13 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "sneak 100 {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "xor {0}, {0}"
         },
         {
             .pattern = "{p} is brilliant, but I like {p}",
-            .commandType = COMMAND_TYPE_MOV,
+            .commandType = mov,
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = NULL,
             .translationPattern = "mov {0}, {1}"
         },
 
@@ -125,56 +117,48 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "upvote {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "add {0}, 1"
         },
         {
             .pattern = "downvote {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "sub {0}, 1"
         },
         {
             .pattern = "parry {p} you filthy casual {p}",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "sub {1}, {0}"
         },
         {
             .pattern = "{p} units are ready, with {p} more well on the way",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = NULL,
             .translationPattern = "add {0}, {1}"
         },
         {
             .pattern = "upgrades, people. Upgrades {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "shl {0}, 1"
         },
         {
             .pattern = "they had us in the first half, not gonna lie {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "shr {0}, 1"
         },
         {
             .pattern = "{p} is getting out of hand, now there are {p} of them",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = NULL,
             .translationPattern = "imul {0}, {1}"
         },
         {
             .pattern = "look at what {p} needs to mimic a fraction of {p}",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64},
-            .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {0}\n\t"
                               "push rdx\n\t"
                               "cqo\n\t"
@@ -191,7 +175,6 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "{p} UNLIMITED POWER {p}",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = NULL,
             .translationPattern = "mov QWORD PTR [rip + .Ltmp64], {1}\n\t"
                               "cmp QWORD PTR [rip + .Ltmp64], 0\n\t"
                               "jne 2f\n\t" //Jump forward to 2 if not zero
@@ -213,67 +196,63 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Jumps and Jump Markers
         {
             .pattern = "upgrade",
+            .commandType = labelDefinition,
             .usedParameters = 0,
-            .analysisFunction = &analyseJumpMarkers,
             .translationPattern = ".LUpgradeMarker_{F}:"
         },
         {
             .pattern = "fuck go back",
+            .commandType = labelUse,
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "jmp .LUpgradeMarker_{F}"
         },
         {
             .pattern = "banana",
+            .commandType = labelDefinition,
             .usedParameters = 0,
-            .analysisFunction = &analyseJumpMarkers,
             .translationPattern = ".LBananaMarker_{F}:"
         },
         {
             .pattern = "where banana",
+            .commandType = labelUse,
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "jmp .LBananaMarker_{F}"
         },
         {
             .pattern = "monke {p}",
+            .commandType = labelDefinition,
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_MONKE_LABEL},
-            .analysisFunction = &analyseMonkeMarkers,
             .translationPattern = ".L{0}:"
         },
         {
             .pattern = "return to monke {p}",
+            .commandType = labelUse,
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_MONKE_LABEL},
-            .analysisFunction = NULL,
             .translationPattern = "jmp .L{0}"
         },
         {
             .pattern = "who would win? {p} or {p}",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = &analyseWhoWouldWinCommands,
             .translationPattern = "cmp {0}, {1}\n\tjg .L{0}Wins_{F}\n\tjl .L{1}Wins_{F}"
         },
         {
             .pattern = "{p} wins",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = NULL,
             .translationPattern = ".L{0}Wins_{F}:"
         },
         {
             .pattern = "corporate needs you to find the difference between {p} and {p}",
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
-            .analysisFunction = &analyseTheyreTheSamePictureCommands,
             .translationPattern = "cmp {0}, {1}\n\tje .LSamePicture_{F}"
         },
         {
             .pattern = "they're the same picture",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = ".LSamePicture_{F}:"
         },
 
@@ -281,7 +260,6 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "what can I say except {p}",
             .usedParameters = 1,
-            .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8 | PARAM_CHAR},
             .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
                                   "test rsp, 0xF\n\t"
@@ -296,7 +274,6 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
-            .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8},
             .translationPattern = "test rsp, 0xF\n\t"
                                   "jz 1f\n\t"
@@ -313,69 +290,58 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "guess I'll die",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "mov rax, [69]"
         },
         {
             .pattern = "confused stonks",
             .usedParameters = 0,
-            .analysisFunction = &setConfusedStonksJumpLabel,
             .translationPattern = "jmp .LConfusedStonks_{F}"
         },
         {
             .pattern = "perfectly balanced as all things should be",
             .usedParameters = 0,
-            .analysisFunction = &chooseLinesToBeDeleted,
             .translationPattern = ""
         },
         {
             .pattern = "wait, that's illegal",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13"
         },
         {
             .pattern = "oh no! anyway",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "nop"
         },
         {
             .pattern = "it's over 9000 {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG},
-            .analysisFunction = NULL,
             .translationPattern = "cmp {0}, 9000\n\tjg 1f\n\thlt\n\t1:"
         },
         {
             .pattern = "refuses to elaborate and leaves",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "mov rbp, rsp\n\tpop rsp"
         },
         {
             .pattern = "you shall not pass!",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "1: xor rax, rax\n\tjmp 1b"
         },
         {
             .pattern = "Houston, we have a problem",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "xor rsp, rsp"
         },
         {
             .pattern = "it's dangerous to go alone, take {p}",
             .usedParameters = 1,
             .allowedParamTypes = {PARAM_REG64 | PARAM_REG32 | PARAM_REG16},
-            .analysisFunction = NULL,
             .translationPattern = "rdrand {0}"
         },
         {
             .pattern = "we need air support",
             .usedParameters = 0,
-            .analysisFunction = &checkIOCommands,
             .translationPattern = "syscall"
         },
 
@@ -383,20 +349,17 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         {
             .pattern = "it's a trap",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "int3"
         },
         //Insert commands above this one
         {
             .pattern = "or draw 25",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "add eax, 25"
         },
         {
             .pattern = "",
             .usedParameters = 0,
-            .analysisFunction = NULL,
             .translationPattern = "0"
         }
 };
@@ -405,13 +368,10 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
 
 /**
  *
- * @param compileState a struct containing all necessary infos. Most notably, it contains the outputMode, optimisation level and all parsed input files
+ * @param compileState a struct containing all necessary infos. Most notably, it contains the outputModeEnum, optimisation level and all parsed input files
  * @param outputFileName the name of the output file
  */
 void compile(struct compileState compileState, char* outputFileName) {
-    ///Analysis
-    analyseCommands(&compileState);
-
     //Analysis done. If any errors occurred until now, print to stderr and exit
     if(compileState.compilerErrors > 0) {
         printErrorASCII();
