@@ -24,10 +24,12 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <errno.h>
 #include <string.h>
 
+#include "commands.h"
 #include "compiler.h"
 #include "parser/parser.h"
 #include "logger/log.h"
-extern const char* const versionString;
+
+const char* const versionString = "v1.6"; //TODO
 
 /**
  * Prints the help page of this command. Launched by using the -h option in the terminal
@@ -60,11 +62,10 @@ void printExplanationMessage(char* programName) {
 int main(int argc, char* argv[]) {
     struct compileState compileState = {
         .compileMode = noob,
-        .optimisationLevel = none,
-        .translateMode = intSISD,
         .outputMode = executable,
         .useStabs = false,
         .allowIoCommands = true,
+        .optimisationLevel = none,
         .compilerErrors = 0,
         .logLevel = normal
     };
@@ -123,7 +124,7 @@ int main(int argc, char* argv[]) {
                             return 1;
                         }
 
-                        compileState.optimisationLevel = res;
+                        compileState.optimisationLevel = static_cast<optimisationLevelEnum>(res);
                     }
                 }
                 break;
@@ -183,8 +184,10 @@ int main(int argc, char* argv[]) {
         uint32_t fileCount = argc - optind;
 
         //Now allocate fileCount file structs on the heap
-        struct file* fileStructs = calloc(fileCount, sizeof(struct file));
+        struct file* fileStructs = static_cast<struct file*>(calloc(fileCount, sizeof(struct file)));
         CHECK_ALLOC(fileStructs);
+        compileState.fileCount = fileCount;
+        compileState.files = fileStructs;
 
         //Open each file one by one and parse it into a "struct file"
         for(int i = optind; i < argc; i++) {
@@ -212,15 +215,27 @@ int main(int argc, char* argv[]) {
 
             //Parse file
             printDebugMessage(compileState.logLevel, "Opening file \"%s\" successful, parsing file...", 1, argv[i]);
-            parseFile(&fileStructs[i - optind], inputFile, &compileState);
+            parseFile(&fileStructs[i - optind], i - optind, inputFile, &compileState);
             printDebugMessage(compileState.logLevel, "File parsing done, closing file...", 0);
             fclose(inputFile);
+
+            //Now, notify all analysers that the a file was parsed
+            for(size_t i = 0; i < NUMBER_OF_COMMANDS; i++) {
+                if(commandList[i].analyser) {
+                    commandList[i].analyser->endOfFile(&compileState);
+                }
+            }
         }
-        compileState.fileCount = fileCount;
-        compileState.files = fileStructs;
+
+        //All files done, notify analysers again
+        for(size_t i = 0; i < NUMBER_OF_COMMANDS; i++) {
+            if(commandList[i].analyser) {
+                commandList[i].analyser->analysisEnd(&compileState);
+            }
+        }
 
         //Convert our optmisationLevel to a value that our struct can work with to make it more readable later on
-        //If optimisationLevel == 0, then leave the value at none (default)
+        //If optimisationLevelEnum == 0, then leave the value at none (default)
         if(optimisationLevel == -1) {
             compileState.optimisationLevel = o_1;
         } else if (optimisationLevel == -2) {

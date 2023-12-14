@@ -25,6 +25,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #ifndef MEMEASSEMBLY_PARSER_H
 #define MEMEASSEMBLY_PARSER_H
 
-void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* compileState);
+void parseFile(struct file* fileStruct, size_t fileNum, FILE* inputFile, struct compileState* compileState);
 
 #endif

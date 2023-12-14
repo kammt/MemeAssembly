@@ -53,9 +53,9 @@ int isLineOfInterest(const char* line, ssize_t lineLength) {
  * @param stream from where to read
  * @return the number of bytes read if successful, -1 on error (e.g. EOF found, malloc/realloc failed)
  */
-ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stream) {
+ssize_t getLine(char** lineptr, size_t* n, FILE* stream) {
     if(*lineptr == NULL) {
-        if(!(*lineptr = malloc(128))) {
+        if(!(*lineptr = static_cast<char*>(malloc(128)))) {
             return -1;
         }
         *n = 128;
@@ -79,7 +79,7 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
         result++;
         if(bytesRead == (ssize_t) *n) {
             *n += 1000;
-            *lineptr = realloc(*lineptr, *n);
+            *lineptr = static_cast<char*>(realloc(*lineptr, *n));
             result = *lineptr + bytesRead;
 
             if(!*lineptr) {
@@ -113,7 +113,7 @@ ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stre
  * @param dest the word will be written into here
  * @return the address to dest if valid, NULL if there are no more tokens to read
  */
-__attribute((hot)) char* getNextToken(char* const str, char** savePtr, char dest[static 64]) {
+__attribute((hot)) char* getNextToken(char* const str, char** savePtr, char dest[64]) {
     //The string is read for the first time. Ignore trailing spaces and tabs
     if(*savePtr == NULL) {
         *savePtr = str;
@@ -166,15 +166,18 @@ void freeAllocatedMemory(struct parsedCommand parsedCommand, int numberOfParamet
  * Parses a provided line of code and attempts to match it to a command. Fills a provided struct parsedCommand
  * This is an LL(0)-parser that brute-forces all possible paths. As MemeASM is LL(1), the next
  * optimisation step would be to implement a 1-lookahead.
- * @param inputFileName the origin file. Required for error printing
+ * @param inputFileNum the origin file. Required for error printing
  * @param line the line as a string
  * @param lineNum the line number in the origin file. Required for error printing
  * @param dest a pointer to the parsedCommand struct to be filled
  * @param compileState the current compile state
  */
-__attribute((hot)) void parseLine(char* inputFileName, size_t lineNum, char* line, struct parsedCommand* dest, struct compileState* compileState) {
+__attribute((hot)) void parseLine(size_t inputFileNum, size_t lineNum, char* line, struct parsedCommand* dest, struct compileState* compileState) {
     dest->lineNum = lineNum; //Set the line number
+    dest->fileNum = inputFileNum;
     dest->translate = 1;
+
+    char* inputFileName = compileState->files[inputFileNum].fileName;
 
     //Define save pointers and dest arrays for getNextToken()
     char* savePtrLine;
@@ -213,7 +216,7 @@ __attribute((hot)) void parseLine(char* inputFileName, size_t lineNum, char* lin
                     size_t parameterLength = strlen(lineToken) - charsBefore - charsAfter;
 
                     //When allocating space for a function name on MacOS, we need an extra _ -prefix, hence +2
-                    char *variable = malloc(parameterLength + 2);
+                    char *variable = static_cast<char*>(malloc(parameterLength + 2));
                     CHECK_ALLOC(variable);
 
                     #ifdef MACOS

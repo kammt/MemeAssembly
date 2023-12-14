@@ -20,6 +20,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "translator.h"
 #include "../logger/log.h"
 #include "../analyser/functions.h"
+#include "../commands.h"
 
 #include <time.h>
 #include <string.h>
@@ -33,8 +34,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #define N_LBRAC 0xc0
 #define N_RBRAC 0xe0
 
-extern const char* const versionString;
-extern const struct command commandList[];
+const char* const versionString = "v1.6"; //TODO
 
 //Used to pseudo-random generation when using bully mode
 extern uint64_t computedIndex;
@@ -134,7 +134,7 @@ void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
  * @param outputFile the file where the translation should be written to
  */
 void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
-    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o69420) {
+    if(!CMD_ISFUNCDEF(parsedCommand.opcode) && compileState->optimisationLevel == o69420) {
         printDebugMessage(compileState->logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
     }
@@ -142,7 +142,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     //If we are supposed to create STABS info, we now need to create labels
     if(compileState->useStabs) {
         //If this is a function declaration, update the current function name
-        if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
+        if(!CMD_ISFUNCDEF(parsedCommand.opcode)) {
             stabs_writeLineLabel(outputFile, parsedCommand);
         }
     }
@@ -150,7 +150,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     struct command command = commandList[parsedCommand.opcode];
     char *translationPattern = command.translationPattern;
 
-    if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
+    if(!CMD_ISFUNCDEF(parsedCommand.opcode)) {
         fprintf(outputFile, "\t");
     }
     for(size_t i = 0; i < strlen(translationPattern); i++) {
@@ -215,7 +215,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
     }
 
-    if(compileState->useStabs && commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
+    if(compileState->useStabs && !CMD_ISFUNCDEF(parsedCommand.opcode)) {
         //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
         if(lastCommand) {
             stabs_writeFunctionEndLabel(outputFile, currentFunctionName);
@@ -293,6 +293,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     }
     #endif
 
+    //TODO check for main function missing in normal mode
     /*
      * If we're in bully mode and an executable is to be generated, we omitted the check
      * if there was a main-function

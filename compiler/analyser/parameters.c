@@ -177,7 +177,7 @@ int isInArray(char* parameter, char **array, int arraySize) {
  */
 void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
-    char *modifiedParameter = malloc(5);
+    char *modifiedParameter = static_cast<char*>(malloc(5));
     CHECK_ALLOC(modifiedParameter);
 
     //Get the index that the escape sequence is in
@@ -204,7 +204,7 @@ void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCom
  */
 void translateCharacter(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
     //Allocate new memory
-    char *modifiedParameter = malloc(4);
+    char *modifiedParameter = static_cast<char*>(malloc(4));
     CHECK_ALLOC(modifiedParameter);
 
     //Set the value to the provided character, surrounded by ''
@@ -467,21 +467,22 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                     break;
                 case PARAM_DECIMAL:
                 case PARAM_CHAR:
-                    newParam = malloc(10);
+                    newParam = static_cast<char*>(malloc(10));
                     CHECK_ALLOC(newParam);
                     sprintf(newParam, "%u", (unsigned) computedIndex % 128);
                     break;
-                case PARAM_MONKE_LABEL:
-                    newParam = malloc(10);
+                case PARAM_MONKE_LABEL: {
+                    newParam = static_cast<char*>(malloc(10));
                     int j = 0;
                     CHECK_ALLOC(newParam);
                     unsigned length = computedIndex % 7 + 2;
-                    for(unsigned i = 0; i < length; i++) {
+                    for (unsigned i = 0; i < length; i++) {
                         newParam[j++] = (computedIndex % 2 == 0) ? 'u' : 'a';
                         computedIndex = computedIndex * 3 / 2;
                     }
                     newParam[length] = 0;
                     break;
+                }
                 case PARAM_FUNC_NAME:
                     newParam = strdup(functionNames[computedIndex % numFunctionNames]);
                     break;
@@ -528,7 +529,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                                3, parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex], regSize);
                 } else {
                     //We replace the number with something that is guaranteed to fit into all registers
-                    char* newParam = malloc(10);
+                    char* newParam = static_cast<char*>(malloc(10));
                     CHECK_ALLOC(newParam);
                     sprintf(newParam, "%u", (unsigned) computedIndex % 256);
 
@@ -536,7 +537,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                     parsedCommand->parameters[decimalIndex] = newParam;
                 }
             //If command is not mov, are the last 33 Bits all 0 or all 1?
-            } else if(commandList[parsedCommand->opcode].commandType != COMMAND_TYPE_MOV && regSize == 64 && !((number & 0xFFFFFFFF80000000) == 0 || (number | 0x7FFFFFFF) == -1)) {
+            } else if(CMD_ISMOV(parsedCommand->opcode) && regSize == 64 && !((number & 0xFFFFFFFF80000000) == 0 || (number | 0x7FFFFFFF) == -1)) {
                 if(compileState->compileMode != bully) {
                     printError(inputFileName, parsedCommand->lineNum, compileState,
                                "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits",0);

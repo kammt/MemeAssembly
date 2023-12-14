@@ -20,6 +20,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #ifndef LOG_H
 #define LOG_H
 
+#include <string>
 #include <stdio.h>  //Printf() function
 #include "../compiler.h"
 
@@ -42,9 +43,10 @@ void printNiceASCII();
 
 void printBongASCII();
 
-void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...);
-void printStatusMessage(logLevel logLevel, char* message);
+void printDebugMessage(logLevelEnum logLevel, char* message, unsigned varArgNum, ...);
+void printStatusMessage(logLevelEnum logLevel, char* message);
 
+void printError(struct parsedCommand* parsedCommand, struct compileState* compileState, std::string errmsg);
 void printError(char* inputFileName, unsigned lineNum, struct compileState* compileState, char* message, unsigned varArgNum, ...);
 void printNote(char* message, bool indent, unsigned varArgNum, ...);
 

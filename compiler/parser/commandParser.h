@@ -22,9 +22,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "parser.h"
 
-void parseLine(char* inputFileName, size_t lineNum, char* line, struct parsedCommand* dest, struct compileState* compileState);
+void parseLine(size_t inputFileNum, size_t lineNum, char* line, struct parsedCommand* dest, struct compileState* compileState);
 size_t getLinesOfCode(FILE *inputFile);
 int isLineOfInterest(const char* line, ssize_t lineLength);
-ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stream);
+ssize_t getLine(char** lineptr, size_t* n, FILE* stream);
 
 #endif

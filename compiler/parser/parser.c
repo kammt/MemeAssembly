@@ -18,6 +18,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "parser.h"
+#include "../analyser/parameters.h"
 #include "../commands.h"
 #include "commandParser.h"
 #include "../logger/log.h"
@@ -30,7 +31,7 @@ char *functionNames[] = {"mprotect", "kill", "signal", "raise", "dump", "atoi",
                          "helloWorld", "snake_case_sucks", "gets", "uwu", "skillIssue"};
 unsigned numFunctionNames = sizeof(functionNames) / sizeof (char*);
 
-void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* compileState) {
+void parseFile(struct file* fileStruct, size_t fileNum, FILE* inputFile, struct compileState* compileState) {
     //Variable declarations for getLine
     char* line = NULL;
     size_t len = 0;
@@ -38,12 +39,12 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
 
     //We'll assume that an average MemeASM file has no more than 500 commands
     size_t commandsArraySize = 500;
-    struct parsedCommand* parsedCommands = calloc(sizeof(struct parsedCommand), commandsArraySize);
+    struct parsedCommand* parsedCommands = static_cast<struct parsedCommand*>(calloc(sizeof(struct parsedCommand), commandsArraySize));
     CHECK_ALLOC(parsedCommands);
 
     //We'll assume that an average MemeASM file has no more than 10 functions
     size_t functionsArraySize = 10;
-    struct function* functions = calloc(sizeof(struct function), functionsArraySize);
+    struct function* functions = static_cast<struct function*>(calloc(sizeof(struct function), functionsArraySize));
     CHECK_ALLOC(functions);
 
     //Iterate through the file, parsing each line of interest and adding it to our command struct array
@@ -61,7 +62,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
             if(commandCount == commandsArraySize - 1) {
                 //Alloc 500 more
                 commandsArraySize += 500;
-                parsedCommands = realloc(parsedCommands, commandsArraySize);
+                parsedCommands = static_cast<struct parsedCommand*>(realloc(parsedCommands, commandsArraySize));
                 CHECK_ALLOC(parsedCommands);
             }
 
@@ -75,13 +76,19 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
             ///Parse this line
             printDebugMessage( compileState->logLevel, "Parsing line: %s", 1, line);
             //Parse the command and add the returned struct into the array
-            parseLine(fileStruct->fileName, lineNumber, line, parsedCommands + commandCount, compileState);
-            struct parsedCommand currentCommand = *(parsedCommands + commandCount);
+            parseLine(fileNum, lineNumber, line, parsedCommands + commandCount, compileState);
+            struct parsedCommand* currentCommand = (parsedCommands + commandCount);
+            checkParameters(parsedCommands + commandCount, fileStruct->fileName, compileState);
+
+            //Trigger analyser
+            if(commandList[currentCommand->opcode].analyser) {
+                commandList[currentCommand->opcode].analyser->commandEncountered(compileState, currentCommand);
+            }
 
             ///function parsing
             //Increase the number of commands in our current function
             numCommands++;
-            if(CMD_ISFUNCDEF(currentCommand.opcode)) {
+            if(CMD_ISFUNCDEF(currentCommand->opcode)) {
                 //There are two cases here: We currently don't parse a function (good), or we do (bad, the prior function did not return)
                 if(currentFunction) {
                     //To make sure we don't brick anything in the following runs, finish the function struct
@@ -98,7 +105,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                         if(commandCount + 1 == commandsArraySize - 1) {
                             //Alloc 500 more
                             commandsArraySize += 500;
-                            parsedCommands = realloc(parsedCommands, commandsArraySize);
+                            parsedCommands = static_cast<struct parsedCommand*>(realloc(parsedCommands, commandsArraySize));
                             CHECK_ALLOC(parsedCommands);
                         }
 
@@ -115,7 +122,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                     if(functionCount == functionsArraySize - 1) {
                         //Add 10
                         functionCount += 10;
-                        functions = realloc(functions, functionCount);
+                        functions = static_cast<struct function*>(realloc(functions, functionCount));
                         CHECK_ALLOC(functions);
                     }
 
@@ -123,7 +130,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                     currentFunction = &functions[functionCount];
                     currentFunction->commands = parsedCommands + commandCount;
                 }
-            } else if(CMD_ISRET(currentCommand.opcode) && currentFunction) {
+            } else if(CMD_ISRET(currentCommand->opcode) && currentFunction) {
                 //We found a return statement. If we currently parse a function, then nice! If not, this is an error condition.
                 //This error is handled further down, as part of a "command is not part of any function" error message
                 //Anyway, set the number of commands, and do some cleanup
@@ -143,7 +150,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                     if(functionCount == functionsArraySize - 1) {
                         //Add 10
                         functionCount += 10;
-                        functions = realloc(functions, functionCount);
+                        functions = static_cast<struct function*>(realloc(functions, functionCount));
                         CHECK_ALLOC(functions);
                     }
 
@@ -153,7 +160,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
                     if(commandCount + 1 == commandsArraySize - 1) {
                         //Alloc 500 more
                         commandsArraySize += 500;
-                        parsedCommands = realloc(parsedCommands, commandsArraySize);
+                        parsedCommands = static_cast<struct parsedCommand*>(realloc(parsedCommands, commandsArraySize));
                         CHECK_ALLOC(parsedCommands);
                     }
 
@@ -192,7 +199,7 @@ void parseFile(struct file* fileStruct, FILE* inputFile, struct compileState* co
             if(commandCount == commandsArraySize - 1) {
                 //Alloc 500 more
                 commandsArraySize += 500;
-                parsedCommands = realloc(parsedCommands, commandsArraySize);
+                parsedCommands = static_cast<struct parsedCommand*>(realloc(parsedCommands, commandsArraySize));
                 CHECK_ALLOC(parsedCommands);
             }
 

@@ -24,6 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include "commands.h"
 
-_Noreturn void compile(struct compileState compileState, char* outputFileName);
+void compile(struct compileState compileState, char* outputFileName);
 
 #endif

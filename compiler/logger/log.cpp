@@ -18,6 +18,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "log.h"
+#include <iostream>
 #include <stdarg.h>
 #include <string.h>
 
@@ -156,7 +157,7 @@ void printBongASCII() {
 /**
  * Prints a debug message. It can be called with a variable number of arguments that will be inserted in the respective places in the format string
  */
-void printDebugMessage(logLevel logLevel, char* message, unsigned varArgNum, ...) {
+void printDebugMessage(logLevelEnum logLevel, char* message, unsigned varArgNum, ...) {
     if(logLevel == debug) {
         va_list vaList;
         va_start(vaList, varArgNum);
@@ -201,6 +202,19 @@ void printError(char* inputFileName, unsigned lineNum, struct compileState* comp
 
         printf("%s\n", randomErrorMessages[computedIndex % (sizeof(randomErrorMessages) / sizeof(char*))]);
     }
+}
+
+void printError(struct parsedCommand* parsedCommand, struct compileState* compileState, std::string errmsg) {
+    compileState->compilerErrors++;
+    std::cout << compileState->files[parsedCommand->fileNum].fileName << ":" << parsedCommand->lineNum << ": " << RED << "error: " << RESET;
+    if(compileState->compileMode != obfuscated) {
+        std::cout << errmsg;
+    } else {
+        //Obfuscated mode: print a random error message instead
+        uint64_t computedIndex = parsedCommand->lineNum * parsedCommand->fileNum;
+        std::cout << randomErrorMessages[computedIndex % (sizeof(randomErrorMessages) / sizeof(char*))];
+    }
+    std::cout << std::endl;
 }
 
 /**
