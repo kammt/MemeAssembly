@@ -1,35 +1,38 @@
-/*
-This file is part of the MemeAssembly compiler.
+#ifndef ANALYZER_H_
+#define ANALYZER_H_
 
- Copyright © 2021-2023 Tobias Kamm
+#include <unordered_set>
+#include <string>
+#include <vector>
 
-MemeAssembly is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+class Analyser {
+public:
+    virtual ~Analyser() = default;
+    virtual void commandEncountered(struct compileState*, struct parsedCommand*) = 0;
+    //These functions may be called multiple times at end of file or analysis
+    virtual void endOfFile(struct compileState*) = 0;
+    virtual void analysisEnd(struct compileState*) = 0;
+};
 
-MemeAssembly is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+class FunctionDefAnalyser : public Analyser {
+public:
+    void commandEncountered(struct compileState*, struct parsedCommand*) override;
+    void analysisEnd(struct compileState*) override;
+    void endOfFile(struct compileState*) override;
+private:
+    std::unordered_set<std::string> functionSet;
+    std::vector<struct parsedCommand*> errorCandidates;
+};
 
-You should have received a copy of the GNU General Public License
-along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
-*/
+//Upgrade, fuck go back; banana, where banana
+class OneLabelJumpAnalyser : public Analyser {
+public:
+    void commandEncountered(struct compileState*, struct parsedCommand*) override;
+    void analysisEnd(struct compileState*) override;
+    void endOfFile(struct compileState*) override;
+private:
+    struct parsedCommand* definition;
+    std::vector<struct parsedCommand*> errorCandidates;
+};
 
-#ifndef MEMEASSEMBLY_ANALYSER_H
-#define MEMEASSEMBLY_ANALYSER_H
-
-#include "../commands.h"
-#include "../compiler.h"
-
-#include "comparisons.h"
-#include "functions.h"
-#include "jumpMarkers.h"
-#include "parameters.h"
-#include "randomCommands.h"
-
-void analyseCommands(struct compileState* compileState);
-void checkIOCommands(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
-
-#endif
+#endif // ANALYZER_H_

@@ -13,7 +13,7 @@ else
 endif
 
 # Compiler Flags
-CFLAGS+=-std=gnu17 -D $(PLATFORM_MACRO) -O2
+CFLAGS+=-std=c++20 -D $(PLATFORM_MACRO) -O2 
 CFLAGS_DEBUG+=-O0 -Wall -Wextra -Wpedantic -Wmisleading-indentation -g
 
 # Destination directory for make install
@@ -23,13 +23,13 @@ INSTALL=install
 INSTALL_PROGRAM=$(INSTALL)
 
 # Files to compile
-FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/commandParser.c compiler/analyser/analysisHelper.c compiler/analyser/parameters.c compiler/analyser/functions.c compiler/analyser/jumpMarkers.c compiler/analyser/comparisons.c compiler/analyser/randomCommands.c compiler/analyser/analyser.c compiler/translator/translator.c
+FILES=compiler/memeasm.c compiler/compiler.cpp compiler/logger/log.cpp compiler/parser/parser.c compiler/parser/commandParser.c compiler/analyser/analyser.cpp compiler/analyser/functions.c compiler/analyser/parameters.c compiler/translator/translator.c
 
 .PHONY: all clean debug uninstall install windows wasm memeasm.js
 
 # Standard compilation
 all:
-	$(CC) -o memeasm $(FILES) $(CFLAGS)
+	g++ -o memeasm $(FILES) $(CFLAGS)
 
 wasm: memeasm.js
 memeasm.js:
@@ -38,7 +38,7 @@ memeasm.js:
 
 # Compilation with debugging-flags
 debug:
-	$(CC) -o memeasm $(FILES) $(CFLAGS) $(CFLAGS_DEBUG)
+	g++ -o memeasm $(FILES) $(CFLAGS) $(CFLAGS_DEBUG)
 
 # Remove the compiled executable from this directory
 clean:
