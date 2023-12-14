@@ -27,10 +27,14 @@ private:
 //Upgrade, fuck go back; banana, where banana
 class OneLabelJumpAnalyser : public Analyser {
 public:
+    OneLabelJumpAnalyser(std::string name) {
+        this->name = name;
+    }
     void commandEncountered(struct compileState*, struct parsedCommand*) override;
     void analysisEnd(struct compileState*) override;
     void endOfFile(struct compileState*) override;
 private:
+    std::string name;
     struct parsedCommand* definition;
     std::vector<struct parsedCommand*> errorCandidates;
 };

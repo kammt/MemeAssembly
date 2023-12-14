@@ -31,6 +31,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include "logger/log.h"
 
 FunctionDefAnalyser funcDefAnalyser {};
+OneLabelJumpAnalyser upgradeAnalyser("upgrade");
+OneLabelJumpAnalyser bananaAnalyser("banana");
+OneLabelJumpAnalyser equalityJumpAnalyser("they're the same picture");
 
 const struct command commandList[NUMBER_OF_COMMANDS] = {
         ///Functions
@@ -198,24 +201,28 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .pattern = "upgrade",
             .commandType = labelDefinition,
             .usedParameters = 0,
+            .analyser = &upgradeAnalyser,
             .translationPattern = ".LUpgradeMarker_{F}:"
         },
         {
             .pattern = "fuck go back",
             .commandType = labelUse,
             .usedParameters = 0,
+            .analyser = &upgradeAnalyser,
             .translationPattern = "jmp .LUpgradeMarker_{F}"
         },
         {
             .pattern = "banana",
             .commandType = labelDefinition,
             .usedParameters = 0,
+            .analyser = &bananaAnalyser,
             .translationPattern = ".LBananaMarker_{F}:"
         },
         {
             .pattern = "where banana",
             .commandType = labelUse,
             .usedParameters = 0,
+            .analyser = &bananaAnalyser,
             .translationPattern = "jmp .LBananaMarker_{F}"
         },
         {
@@ -246,13 +253,17 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
         },
         {
             .pattern = "corporate needs you to find the difference between {p} and {p}",
+            .commandType = labelUse,
             .usedParameters = 2,
             .allowedParamTypes = {PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR},
+            .analyser = &equalityJumpAnalyser,
             .translationPattern = "cmp {0}, {1}\n\tje .LSamePicture_{F}"
         },
         {
             .pattern = "they're the same picture",
+            .commandType = labelDefinition,
             .usedParameters = 0,
+            .analyser = &equalityJumpAnalyser,
             .translationPattern = ".LSamePicture_{F}:"
         },
 

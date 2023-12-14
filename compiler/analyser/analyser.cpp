@@ -37,3 +37,40 @@ void FunctionDefAnalyser::analysisEnd(struct compileState* compileState) {
     }
     errorCandidates.clear();
 }
+
+void OneLabelJumpAnalyser::commandEncountered(struct compileState* compileState, struct parsedCommand* parsedCommand) {
+    if(CMD_ISLABELDEF(parsedCommand->opcode)) {
+        if(definition) {
+            if(compileState->compileMode != bully) {
+                printError(parsedCommand, compileState, std::format("redefinition of \"{}\"-label (already defined in line {})", name, definition->lineNum));
+            } else {
+                parsedCommand->translate = 0;
+            }
+        } else {
+            definition = parsedCommand;
+        }
+    } else if(CMD_ISLABELUSE(parsedCommand->opcode)) {
+        if(!definition) {
+            errorCandidates.emplace_back(parsedCommand);
+        }
+    }
+}
+
+void OneLabelJumpAnalyser::endOfFile(struct compileState* compileState) {
+    if(definition) {
+        errorCandidates.clear();
+    } else {
+        for(struct parsedCommand* errorCandidate : errorCandidates) {
+            if(compileState->compileMode != bully) {
+                printError(errorCandidate, compileState, std::format("jump to undefined \"{}\"-label", name));
+            } else {
+                errorCandidate->translate = 0;
+            }
+        }
+        errorCandidates.clear();
+    }
+}
+
+void OneLabelJumpAnalyser::analysisEnd(struct compileState* compileState) {
+
+}
