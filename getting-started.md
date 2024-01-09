@@ -67,7 +67,7 @@ The `p` in MemeAssembly stands for performance, so MemeAssembly naturally includ
 - `-O-1` - reverse optimisation stage 1: A nop is inserted after every command
 - `-O-2` - reverse optimisation stage 2: A register is moved to and from the stack after every command
 - `-O-3` - reverse optimisation stage 3: A xmm-register is moved to and from the stack using *movups* after every command
-- `-O-s` - reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B, creating a 1.6GB binary
+- `-O-s` - reverse storage optimisation: Intentionally increases the file size by aligning the end of the compiled Assembly-code to 536870912B, creating a 1.6GB binary
 - `-O69420` - maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code
 
 If multiple optimisation options are specified, only the last option is taken into account. This means that you *cannot* combine e.g. `-O-3` and `-O-s` to create a fat and slow binary.
