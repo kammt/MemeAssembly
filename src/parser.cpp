@@ -48,7 +48,8 @@ namespace parser {
             }
 
             std::string_view result = str.substr(0, wordEndIndex);
-            //If we're not at the end of the string, skip the space after our word
+            //Update our reference string_view, so that the returned word is removed
+            //If we're not at the end of the string, skip the space after our word as well
             str = str.substr((str.size() > wordEndIndex) ? wordEndIndex + 1 : wordEndIndex);
             return result;
         }
