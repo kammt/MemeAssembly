@@ -67,7 +67,7 @@ namespace parser {
 
     void parseFile(std::ifstream &input, std::string_view filename) {
         std::string line;
-        for(size_t lineNum = 0; std::getline(input, line); lineNum++) {
+        for(size_t lineNum = 1; std::getline(input, line); lineNum++) {
             std::string_view trimmedLine {trim(line)};
             //Empty line or comment
             if(trimmedLine.size() == 0 || trimmedLine.starts_with("What the hell happened here?")) {
