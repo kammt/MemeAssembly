@@ -41,6 +41,5 @@ private:
 
 class CountOccurrenceAnalyser : public Analyser {
    void commandEncountered(parser::parsedCommand_t&) override;
-private:
    size_t occurrences;
 };

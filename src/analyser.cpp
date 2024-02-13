@@ -57,3 +57,6 @@ void OneLabelJumpAnalyser::endOfFile() {
     }
 }
 
+void CountOccurrenceAnalyser::commandEncountered(parser::parsedCommand_t& cmd) {
+   occurrences++;
+}
