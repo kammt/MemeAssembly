@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "command.h"
+#include "log.h"
 #include "version.h"
 #include "compileOpts.h"
 #include "parser.h"
@@ -29,6 +30,7 @@ int main(int argc, char** argv) {
     while ((opt = getopt_long_only(argc, argv, "o:hO::Sv", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
+                logger::printHelpPage();
                 return 0;
             case 'v':
                 std::cout << MEMEASM_VERSION << std::endl;
@@ -114,6 +116,13 @@ int main(int argc, char** argv) {
             if(command.analyser) {
                 command.analyser->analysisEnd();
             }
+        }
+
+        if(logger::compileErrors > 0) {
+            logger::printErrorASCII();
+            std::cout << "Compilation failed with " << logger::compileErrors << " errors, check your code and try again." << std::endl;
+            std::cout << "Tip: re-run with \"-fcompile-mode=bully\" to silently fix all errors." << std::endl;
+            return 1;
         }
     }
 }

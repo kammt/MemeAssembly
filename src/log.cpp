@@ -1,5 +1,6 @@
 #include "log.h"
 #include "compileOpts.h"
+#include "version.h"
 #include <iostream>
 #include <vector>
 
@@ -63,5 +64,31 @@ namespace logger {
         }
         std::cerr << std::endl;
         compileErrors++;
+    }
+
+    void printHelpPage() {
+        std::cout << BLU "  __  __                                                    " RED " _     _       " << std::endl;
+        std::cout << BLU " |  \\/  |                      " RED" /\\                          | |   | |      " << std::endl;
+        std::cout << BLU " | \\  / | ___ _ __ ___   ___   " RED"/  \\   ___ ___  ___ _ __ ___ | |__ | |_   _ " << std::endl;
+        std::cout << BLU " | |\\/| |/ _ \\ '_ ` _ \\ / _ \\ " RED"/ /\\ \\ / __/ __|/ _ \\ '_ ` _ \\| '_ \\| | | | |" << std::endl;
+        std::cout << BLU " | |  | |  __/ | | | | |  __/" RED"/ ____ \\\\__ \\__ \\  __/ | | | | | |_) | | |_| |" << std::endl;
+        std::cout << BLU " |_|  |_|\\___|_| |_| |_|\\___" RED"/_/    \\_\\___/___/\\___|_| |_| |_|_.__/|_|\\__, |" << std::endl;
+        std::cout << RESET"  A Meme-based programming language.             " RED "                     __/ |" << std::endl;
+        std::cout << "                                                                     |___/ " RESET << std::endl << std::endl;
+        std::cout << "For more information, a list of commands and code examples, please visit https://memeassembly.wtf." << std::endl;
+        std::cout << "This is the MemeAssembly compiler v" << MEMEASM_VERSION << ", created by Tobias Kamm." << std::endl << std::endl;
+        //TODO more help
+    }
+
+    void printErrorASCII() {
+        std::cout << std::endl << std::endl;
+        std::cout << YEL "  __          __   _ _       _   _           _   _       _ _ _                  _ _  " << std::endl;
+        std::cout << " \\ \\        / /  (_| |     | | | |         | | ( )     (_| | |                | | | " << std::endl;
+        std::cout << "  \\ \\  /\\  / __ _ _| |_    | |_| |__   __ _| |_|/ ___   _| | | ___  __ _  __ _| | | " << std::endl;
+        std::cout << "   \\ \\/  \\/ / _` | | __|   | __| '_ \\ / _` | __| / __| | | | |/ _ \\/ _` |/ _` | | | " << std::endl;
+        std::cout << "    \\  /\\  | (_| | | |_ _  | |_| | | | (_| | |_  \\__ \\ | | | |  __| (_| | (_| | |_| " << std::endl;
+        std::cout << "     \\/  \\/ \\__,_|_|\\__( )  \\__|_| |_|\\__,_|\\__| |___/ |_|_|_|\\___|\\__, |\\__,_|_(_) " << std::endl;
+        std::cout << "                       |/                                           __/ |           " << std::endl;
+        std::cout << "                                                                   |___/  " RESET << std::endl;
     }
 }
