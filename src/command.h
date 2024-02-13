@@ -28,3 +28,5 @@ struct command_t {
     //Which parameters are allowed
     std::array<uint8_t, 2> allowedParams;
 };
+
+extern const std::vector<command_t> commandList;
