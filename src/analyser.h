@@ -32,7 +32,6 @@ class OneLabelJumpAnalyser : public Analyser {
 public:
     OneLabelJumpAnalyser(std::string name) : name{name} {}
     void commandEncountered(parser::parsedCommand_t&) override;
-    void analysisEnd() override;
     void endOfFile() override;
 private:
     std::string name;
