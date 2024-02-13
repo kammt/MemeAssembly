@@ -52,6 +52,8 @@ const std::vector<std::string_view> randomErrorMessages = {
 };
 
 namespace logger {
+    size_t compileErrors {0};
+
     void printError(std::string_view filename, size_t line, std::string_view msg) {
         std::cerr << filename << ":" << line << " " RED "error: " RESET;
         if(compileOpts.compileMd != compileMode::obfuscated) {
@@ -60,5 +62,6 @@ namespace logger {
             std::cerr << randomErrorMessages.at(0); //TODO actual randomness
         }
         std::cerr << std::endl;
+        compileErrors++;
     }
 }
