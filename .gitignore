@@ -1,5 +1,5 @@
 #Executable
-./memeasm
+memeasm
 memeasm.exe
 memeasm.js
 memeasm.wasm
@@ -21,3 +21,6 @@ test.S
 
 #compiledb used by clang tooling
 compile_commands.json
+
+#clang build dir
+build
