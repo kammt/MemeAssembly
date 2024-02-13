@@ -61,7 +61,7 @@ namespace parser {
             str = str.substr((str.size() > wordEndIndex) ? wordEndIndex + 1 : wordEndIndex);
             return result;
         }
-    private:
+
         std::string_view str;
     };
 
@@ -82,8 +82,8 @@ namespace parser {
                 WordIterator lineIt(trimmedLine);
                 WordIterator patternIt(command.pattern);
 
-                std::string_view param1 {};
-                std::string_view param2 {};
+                std::array<std::string_view, 2> params;
+                unsigned isPointer = 0;
                 bool error {false};
 
                 while(lineIt.hasNext() && patternIt.hasNext()) {
@@ -92,10 +92,17 @@ namespace parser {
 
                     if(referenceToken == "{}") {
                         //A parameter
-                        if(param1.empty()) {
-                            param1 = lineToken;
-                        } else {
-                            param2 = lineToken;
+                        unsigned paramNum = (params[0].empty()) ? 0 : 1;
+                        params[paramNum] = lineToken;
+                        if(lineIt.str.starts_with("do you know de wey")) {
+                            //This is a pointer!
+                            if(isPointer != 0) {
+                                logger::printError(filename, lineNum, "only one parameter is allowed to be a pointer");
+                            } else {
+                                isPointer = paramNum + 1;
+                                //Move out line iterator forward to skip "do you know de wey"
+                                lineIt.next(); lineIt.next(); lineIt.next(); lineIt.next(); lineIt.next();
+                            }
                         }
                     } else if(referenceToken != lineToken) {
                         error = true;
@@ -120,7 +127,7 @@ namespace parser {
                 logger::printError(filename, lineNum, std::format("undefined command: \"{}\"", trimmedLine));
             } else {
                 std::cout << "Success!\n";
-                //TODO call generateIR() on command_t
+                //TODO call generateIR() on command_t, and use isPointer in some way
             }
         }
     }
