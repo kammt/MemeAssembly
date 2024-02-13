@@ -8,7 +8,11 @@ class IRGroup;
 class Analyser;
 
 enum class commandType {
-    funcDef, ret, normal
+    funcDef,    //This is a function definition
+    ret,        //This returns from a function
+    labelDef,   //This defines a label (NOT a function)
+    labelUse,   //This uses a defined label (NOT a function)
+    normal      //Nothing special about this command
 };
 
 struct command_t {
