@@ -2,10 +2,10 @@
 #include <fstream>
 #include <getopt.h>
 #include <iostream>
-#include <filesystem>
 
 #include "version.h"
 #include "compileOpts.h"
+#include "parser.h"
 
 //Compiler options stored as a global variable
 struct compileOpts compileOpts;
@@ -103,6 +103,7 @@ int main(int argc, char** argv) {
             }
 
             //Start with file parsing
+            parser::parseFile(file);
         }
     }
 }
