@@ -82,7 +82,7 @@ namespace logger {
 
     void printErrorASCII() {
         std::cout << std::endl << std::endl;
-        std::cout << YEL "  __          __   _ _       _   _           _   _       _ _ _                  _ _  " << std::endl;
+        std::cout << YEL " __          __   _ _       _   _           _   _       _ _ _                  _ _  " << std::endl;
         std::cout << " \\ \\        / /  (_| |     | | | |         | | ( )     (_| | |                | | | " << std::endl;
         std::cout << "  \\ \\  /\\  / __ _ _| |_    | |_| |__   __ _| |_|/ ___   _| | | ___  __ _  __ _| | | " << std::endl;
         std::cout << "   \\ \\/  \\/ / _` | | __|   | __| '_ \\ / _` | __| / __| | | | |/ _ \\/ _` |/ _` | | | " << std::endl;

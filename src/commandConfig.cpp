@@ -3,10 +3,10 @@
 #include "analyser.h"
 #include "command.h"
 
-std::shared_ptr<analyser::Analyser> functionAnalyser = std::make_shared<analyser::DefinitionAnalyser>("function");
-std::shared_ptr<analyser::Analyser> monkeAnalyser = std::make_shared<analyser::DefinitionAnalyser>("monke-label");
-std::shared_ptr<analyser::Analyser> upgradeAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("upgrade-marker");
-std::shared_ptr<analyser::Analyser> bananaAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("banana-marker");
+std::shared_ptr<analyser::AnalyserBase> functionAnalyser = std::make_shared<analyser::DefinitionAnalyser>("function");
+std::shared_ptr<analyser::AnalyserBase> monkeAnalyser = std::make_shared<analyser::DefinitionAnalyser>("monke-label");
+std::shared_ptr<analyser::AnalyserBase> upgradeAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("upgrade-marker");
+std::shared_ptr<analyser::AnalyserBase> bananaAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("banana-marker");
 
 /*
  * This is where all MemeASM commands are documented.
