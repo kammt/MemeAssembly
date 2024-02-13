@@ -12,11 +12,13 @@ struct compileOpts compileOpts;
 
 int main(int argc, char** argv) {
     int martyrdom = true;
+    int fortify = false;
     const struct option long_options[] = {
             {"output", required_argument, nullptr, 'o'},
             {"help", no_argument, nullptr, 'h'},
             {"debug", no_argument, nullptr, 'd'},
-            {"fno-martyrdom", no_argument, &martyrdom, false},
+            {"fno-martyrdom", no_argument, &martyrdom, false}, //TODO actually use this
+            {"D_FORTIFY_SOURCE", optional_argument, &fortify, true}, //TODO actually use this
             {"fcompile-mode", required_argument, nullptr, 'c'},
             { nullptr, 0, nullptr, 0 }
     };
@@ -77,6 +79,8 @@ int main(int argc, char** argv) {
                 return 1;
         }
     }
+    compileOpts.martyrdom = martyrdom;
+    compileOpts.fortify = fortify;
 
     if(compileOpts.outputFile.empty()) {
         std::cerr << "Error: no output file specified" << std::endl;

@@ -100,7 +100,7 @@ namespace parser {
                                 logger::printError(filename, lineNum, "only one parameter is allowed to be a pointer");
                             } else {
                                 isPointer = paramNum + 1;
-                                //Move out line iterator forward to skip "do you know de wey"
+                                //Move our line iterator forward to skip "do you know de wey"
                                 lineIt.next(); lineIt.next(); lineIt.next(); lineIt.next(); lineIt.next();
                             }
                         }

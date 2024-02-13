@@ -19,6 +19,7 @@ struct compileOpts {
     optLevel optLvl = optLevel::none;
     outputMode outputMd = outputMode::executable;
     bool martyrdom = true;
+    bool fortify = false;
     bool debuginfo = false;
 };
 
