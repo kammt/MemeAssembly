@@ -22,3 +22,4 @@ struct compileOpts {
     bool debuginfo = false;
 };
 
+extern struct compileOpts compileOpts;
