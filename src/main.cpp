@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <iostream>
 
+#include "command.h"
 #include "version.h"
 #include "compileOpts.h"
 #include "parser.h"
@@ -16,7 +17,6 @@ int main(int argc, char** argv) {
     const struct option long_options[] = {
             {"output", required_argument, nullptr, 'o'},
             {"help", no_argument, nullptr, 'h'},
-            {"debug", no_argument, nullptr, 'd'},
             {"fno-martyrdom", no_argument, &martyrdom, false}, //TODO actually use this
             {"D_FORTIFY_SOURCE", optional_argument, &fortify, true}, //TODO actually use this
             {"fcompile-mode", required_argument, nullptr, 'c'},
@@ -108,6 +108,12 @@ int main(int argc, char** argv) {
 
             //Start with file parsing
             parser::parseFile(file, filename);
+        }
+
+        for(command_t command : commandList) {
+            if(command.analyser) {
+                command.analyser->analysisEnd();
+            }
         }
     }
 }

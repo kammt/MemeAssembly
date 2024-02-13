@@ -6,7 +6,7 @@ namespace parser {
         std::string_view filename;
         size_t line;
         unsigned opcode;
-        std::string_view param1;
+        std::string param1;
     };
 
     /**

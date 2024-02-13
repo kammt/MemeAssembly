@@ -1,5 +1,9 @@
+#include <memory>
 #include <vector>
+#include "analyser.h"
 #include "command.h"
+
+std::shared_ptr<Analyser> functionAnalyser = std::make_shared<DefinitionAnalyser>("function");
 
 /*
  * This is where all MemeASM commands are documented.
@@ -8,8 +12,9 @@
 const std::vector<command_t> commandList {{
     {
         .pattern {"I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {}"},
-        .analyser {},
+        .analyser {functionAnalyser},
         .generateIR {},
+        .cmdType = commandType::funcDef,
         .allowedParams {0, 0}
     },
     //TODO all other commands

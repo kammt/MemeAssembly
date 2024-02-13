@@ -114,7 +114,10 @@ namespace parser {
                     continue;
                 } else if(!lineIt.hasNext() && !patternIt.hasNext()) {
                     //Success!
-                    result = {{filename, lineNum, i}};
+                    result = {{filename, lineNum, i, std::string {params[0]}}};
+                    if(command.analyser) {
+                        command.analyser->commandEncountered(result.value());
+                    }
                 } else if(!patternIt.hasNext() && lineIt.hasNext()) {
                     if(lineIt.restEquals("or draw 25")) {
                         result = {{filename, lineNum, static_cast<unsigned>(commandList.size() - 1)}};
@@ -128,6 +131,11 @@ namespace parser {
             } else {
                 std::cout << "Success!\n";
                 //TODO call generateIR() on command_t, and use isPointer in some way
+            }
+        }
+        for(command_t command : commandList) {
+            if(command.analyser) {
+                command.analyser->endOfFile();
             }
         }
     }

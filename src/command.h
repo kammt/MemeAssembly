@@ -2,10 +2,10 @@
 #include <functional>
 #include <memory>
 #include <string_view>
+#include "analyser.h"
 
 //TODO
 class IRGroup;
-class Analyser;
 
 enum class commandType {
     funcDef,    //This is a function definition
@@ -20,7 +20,7 @@ struct command_t {
     //Example: "{} is brilliant, but I like {}"
     std::string_view pattern;
     //A pointer to the analyser object used for analysis
-    std::weak_ptr<Analyser> analyser;
+    std::shared_ptr<Analyser> analyser;
     //A function that creates the IR, based on the parameters provided to the command
     std::function<IRGroup(std::string_view, std::string_view)> generateIR;
     //If this command has a special meaning during analysis, then save that here
