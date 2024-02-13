@@ -1,0 +1,4 @@
+#pragma once
+
+#define MEMEASM_VERSION "@PROJECT_VERSION@"
+
