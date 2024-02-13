@@ -3,6 +3,10 @@
 #include <string_view>
 #include <fstream>
 #include <iostream>
+#include <optional>
+#include <format>
+#include "command.h"
+#include "log.h"
 
 namespace parser {
     /* Receives a string, and returns a string view where the leading and trailing whitespace is gone */
@@ -38,6 +42,10 @@ namespace parser {
             return str.size() > 0;
         }
 
+        bool restEquals(std::string_view reference) {
+            return str == reference;
+        }
+
         std::string_view next() {
             size_t wordEndIndex {0};
             for(char c : str) {
@@ -57,13 +65,62 @@ namespace parser {
         std::string_view str;
     };
 
-    void parseFile(std::ifstream &input) {
+    void parseFile(std::ifstream &input, std::string_view filename) {
         std::string line;
-        while(std::getline(input, line)) {
-            std::string_view trimmed {trim(line)};
-            std::cout << trimmed << std::endl;
-            for(auto it = WordIterator(trimmed); it.hasNext();) {
-                std::cout << "Word: \"" << it.next() << "\"\n";
+        for(size_t lineNum = 0; std::getline(input, line); lineNum++) {
+            std::string_view trimmedLine {trim(line)};
+            //Empty line or comment
+            if(trimmedLine.size() == 0 || trimmedLine.starts_with("What the hell happened here?")) {
+                continue;
+            }
+
+            //Now, iterate over all possible commands and check if they match
+            std::optional<parsedCommand_t> result {};
+            for(unsigned i = 0; i < commandList.size(); i++) {
+                command_t command = commandList[i];
+
+                WordIterator lineIt(trimmedLine);
+                WordIterator patternIt(command.pattern);
+
+                std::string_view param1 {};
+                std::string_view param2 {};
+                bool error {false};
+
+                while(lineIt.hasNext() && patternIt.hasNext()) {
+                    std::string_view referenceToken = patternIt.next();
+                    std::string_view lineToken = lineIt.next();
+
+                    if(referenceToken == "{}") {
+                        //A parameter
+                        if(param1.empty()) {
+                            param1 = lineToken;
+                        } else {
+                            param2 = lineToken;
+                        }
+                    } else if(referenceToken != lineToken) {
+                        error = true;
+                        break;
+                    }
+                }
+
+                if(error) {
+                    continue;
+                } else if(!lineIt.hasNext() && !patternIt.hasNext()) {
+                    //Success!
+                    result = {{filename, lineNum, i}};
+                } else if(!patternIt.hasNext() && lineIt.hasNext()) {
+                    if(lineIt.restEquals("or draw 25")) {
+                        result = {{filename, lineNum, static_cast<unsigned>(commandList.size() - 1)}};
+                    }
+                }
+
+            }
+
+            if(!result.has_value()) {
+                logger::printError(filename, lineNum, std::format("undefined command: \"{}\"", trimmedLine));
+            } else {
+                std::cout << "Success!\n";
+                //TODO call generateIR() on command_t
             }
         }
     }

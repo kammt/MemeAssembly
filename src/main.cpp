@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
             }
 
             //Start with file parsing
-            parser::parseFile(file);
+            parser::parseFile(file, filename);
         }
     }
 }
