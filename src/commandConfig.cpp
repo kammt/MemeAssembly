@@ -18,7 +18,7 @@ const std::vector<command_t> commandList {{
         .analyser {functionAnalyser},
         .generateIR {},
         .cmdType = commandType::funcDef,
-        .allowedParams {0, 0}
+        .allowedParams {PARAM_FUNC_NAME, 0}
     },
     //TODO all other commands
 
