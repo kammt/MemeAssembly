@@ -16,5 +16,5 @@ namespace parser {
      *Nothing is returned, but the command IR is added to
      *the respective vector
      **/
-    void parseFile(std::ifstream& input, std::string_view filename);
+    void parseFile(std::ifstream& input, std::string_view& filename);
 }

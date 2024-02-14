@@ -10,11 +10,10 @@ namespace analyser {
     void DefinitionAnalyser::commandEncountered(parser::parsedCommand_t& cmd) {
         commandType cmdType {commandList[cmd.opcode].cmdType};
         if(cmdType == commandType::funcDef || cmdType == commandType::labelDef) {
-            if(labelSet.find(cmd.param1) != labelSet.end()) {
-                logger::printError(cmd.filename, cmd.line, std::format("redefinition of {} \"{}\"", this->name, cmd.param1));
+            if(labelSet.find(cmd.params[0]) != labelSet.end()) {
+                logger::printError(cmd.filename, cmd.line, std::format("redefinition of {} \"{}\"", this->name, cmd.params[0]));
             } else {
-                labelSet.emplace(cmd.param1);
-                std::cout << "emplaced\n";
+                labelSet.emplace(cmd.params[0]);
             }
         }
     }
@@ -26,8 +25,8 @@ namespace analyser {
         }
 
         for(parser::parsedCommand_t& cmd : errorCandidates) {
-            if(labelSet.find(cmd.param1) == labelSet.end()) {
-                logger::printError(cmd.filename, cmd.line, std::format("use of undefined {} \"{}\"", this->name, cmd.param1));
+            if(labelSet.find(cmd.params[0]) == labelSet.end()) {
+                logger::printError(cmd.filename, cmd.line, std::format("use of undefined {} \"{}\"", this->name, cmd.params[0]));
             }
         }
     }
