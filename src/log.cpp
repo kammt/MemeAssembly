@@ -66,6 +66,13 @@ namespace logger {
         compileErrors++;
     }
 
+    void printInternalError(std::string_view msg, bool report) {
+        std::cerr << RED "internal compiler error: " RESET << msg << std::endl;
+        if(report) {
+            std::cerr << "This is a bug, please report it at https://github.com/kammt/MemeAssembly/issues" << std::endl;
+        }
+    }
+
     void printHelpPage() {
         std::cout << BLU "  __  __                                                    " RED " _     _       " << std::endl;
         std::cout << BLU " |  \\/  |                      " RED" /\\                          | |   | |      " << std::endl;
