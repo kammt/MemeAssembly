@@ -1,8 +1,8 @@
 #include "analyser.h"
-#include "command.h"
-#include "compileOpts.h"
-#include "parser.h"
-#include "log.h"
+#include "../command.h"
+#include "../compileOpts.h"
+#include "../parser/parser.h"
+#include "../log.h"
 #include <format>
 #include <iostream>
 

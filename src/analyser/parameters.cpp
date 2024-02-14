@@ -1,6 +1,6 @@
 #include "parameters.h"
-#include "command.h"
-#include "log.h"
+#include "../command.h"
+#include "../log.h"
 #include <exception>
 #include <stdexcept>
 #include <format>

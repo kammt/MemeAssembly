@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include "parser.h"
+#include "../parser/parser.h"
 
 namespace analyser {
     class AnalyserBase {

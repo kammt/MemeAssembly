@@ -5,9 +5,9 @@
 #include <iostream>
 #include <optional>
 #include <format>
-#include "parameters.h"
-#include "command.h"
-#include "log.h"
+#include "../analyser/parameters.h"
+#include "../command.h"
+#include "../log.h"
 
 namespace parser {
     /* Receives a string, and returns a string view where the leading and trailing whitespace is gone */
@@ -131,9 +131,9 @@ namespace parser {
             logger::printError(filename, lineNum, std::format("undefined command: \"{}\"", trimmedLine));
             return commandType::normal;
         } else {
-            auto params = analyser::checkParameters(result.value());
-            //TODO call generateIR() on command_t
-            return commandList[result.value().opcode].cmdType;
+          std::array<analyser::parameter_t, 2> params = analyser::checkParameters(result.value());
+          // TODO call generateIR() on command_t
+          return commandList[result.value().opcode].cmdType;
         }
     }
 

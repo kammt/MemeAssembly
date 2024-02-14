@@ -1,6 +1,6 @@
 #include <memory>
 #include <vector>
-#include "analyser.h"
+#include "analyser/analyser.h"
 #include "command.h"
 
 std::shared_ptr<analyser::AnalyserBase> functionAnalyser = std::make_shared<analyser::DefinitionAnalyser>("function");

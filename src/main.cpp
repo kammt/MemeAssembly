@@ -7,7 +7,7 @@
 #include "log.h"
 #include "version.h"
 #include "compileOpts.h"
-#include "parser.h"
+#include "parser/parser.h"
 
 //Compiler options stored as a global variable
 struct compileOpts compileOpts;

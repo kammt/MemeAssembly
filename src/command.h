@@ -2,7 +2,7 @@
 #include <functional>
 #include <memory>
 #include <string_view>
-#include "analyser.h"
+#include "analyser/analyser.h"
 
 //TODO
 class IRGroup;
