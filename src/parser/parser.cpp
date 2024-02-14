@@ -91,10 +91,25 @@ namespace parser {
                 std::string_view referenceToken = patternIt.next();
                 std::string_view lineToken = lineIt.next();
 
-                if(referenceToken == "{}") {
-                    //A parameter
+                size_t paramStartIndex = referenceToken.find("{}");
+                if(paramStartIndex != std::string_view::npos) {
+                    //Verify that all chars up until that token match
+                    //The first condition is to allow for short-circuiting
+                    if(paramStartIndex != 0 && referenceToken.substr(0, paramStartIndex) != lineToken.substr(0, paramStartIndex)) {
+                        error = true;
+                        break;
+                    }
+
+                    //Does the stuff after the parameter match?
+                    std::string_view stuffAfterParam = referenceToken.substr(paramStartIndex + 2);
+                    if(stuffAfterParam.size() > 0 && stuffAfterParam != lineToken.substr(lineToken.size() - stuffAfterParam.size())) {
+                        error = true;
+                        break;
+                    }
+
+                    //Now parse the parameter
                     unsigned paramNum = (params[0].empty()) ? 0 : 1;
-                    params[paramNum] = lineToken;
+                    params[paramNum] = lineToken.substr(paramStartIndex, lineToken.size() - stuffAfterParam.size());
                     if(lineIt.restStartsWith("do you know de wey")) {
                         //This is a pointer!
                         if(isPointer != 0) {
