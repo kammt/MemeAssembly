@@ -11,7 +11,9 @@ std::shared_ptr<analyser::AnalyserBase> upgradeAnalyser = std::make_shared<analy
 std::shared_ptr<analyser::AnalyserBase> bananaAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("banana-marker");
 
 std::vector<std::unique_ptr<IRCommand>> irCommands {};
+std::unordered_map<std::string, size_t> labels {};
 auto insertStartCommand = []() { irCommands.emplace_back(std::make_unique<StartCommand>()); };
+auto insertLabel = [](std::string& label) { labels.emplace(label, irCommands.size() - 1); };
 
 /*
  * This is where all MemeASM commands are documented.
@@ -23,10 +25,36 @@ const std::vector<command_t> commandList {{
         .analyser {functionAnalyser},
         .generateIR = [](analyser::paramArray_t params) {
             analyser::assertParamType<analyser::label_t>(params[0]);
-            insertStartCommand();
-            irCommands.emplace_back(std::make_unique<LabelDefCommand>(std::get<analyser::label_t>(params[0])));
+            insertLabel(std::get<analyser::label_t>(params[0]));
         },
         .cmdType = commandType::funcDef,
+        .allowedParams {PARAM_FUNC_NAME, 0}
+    },
+    {
+        .pattern {"I see this as an absolute win"},
+        .generateIR = [](analyser::paramArray_t params) {
+            insertStartCommand();
+            irCommands.emplace_back(std::make_unique<RetCommand>(0));
+        },
+        .cmdType = commandType::ret
+    },
+    {
+        .pattern {"no, I don't think I will"},
+        .generateIR = [](analyser::paramArray_t params) {
+            insertStartCommand();
+            irCommands.emplace_back(std::make_unique<RetCommand>(1));
+        },
+        .cmdType = commandType::ret
+    },
+    {
+        .pattern {"{}: whomst has summoned the almighty one"},
+        .analyser {functionAnalyser},
+        .generateIR = [](analyser::paramArray_t params) {
+            insertStartCommand();
+            analyser::assertParamType<analyser::label_t>(params[0]);
+            irCommands.emplace_back(std::make_unique<CallCommand>(std::get<analyser::label_t>(params[0])));
+        },
+        .cmdType = commandType::labelUse,
         .allowedParams {PARAM_FUNC_NAME, 0}
     },
     //TODO all other commands
