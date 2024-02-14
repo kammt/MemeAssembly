@@ -131,8 +131,12 @@ namespace parser {
             logger::printError(filename, lineNum, std::format("undefined command: \"{}\"", trimmedLine));
             return commandType::normal;
         } else {
-          std::array<analyser::parameter_t, 2> params = analyser::checkParameters(result.value());
-          // TODO call generateIR() on command_t
+          std::optional<analyser::paramArray_t> params = analyser::checkParameters(result.value());
+          //Generate IR - iff the command makes sense of course
+          if(params.has_value()) {
+              commandList[result.value().opcode].generateIR(params.value());
+          }
+          //Return the command type for function parsing
           return commandList[result.value().opcode].cmdType;
         }
     }
