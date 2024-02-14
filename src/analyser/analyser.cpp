@@ -58,6 +58,6 @@ namespace analyser {
     }
 
     void CountOccurrenceAnalyser::commandEncountered(parser::parsedCommand_t& cmd) {
-    occurrences++;
+        occurrences++;
     }
 }

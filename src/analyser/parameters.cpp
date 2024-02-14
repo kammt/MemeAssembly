@@ -29,7 +29,7 @@ namespace analyser {
   }
 
 
-  std::array<parameter_t, 2> checkParameters(parser::parsedCommand_t &cmd) {
+  std::optional<paramArray_t> checkParameters(parser::parsedCommand_t &cmd) {
     auto forbidPointer = [&cmd](unsigned i) {
       if(cmd.isPointer == i + 1) {
         logger::printError(cmd.filename, cmd.line, std::format("only registers can be pointers (found: \"{}\")", cmd.params[i]));
@@ -38,6 +38,7 @@ namespace analyser {
 
     auto allowedParams = commandList[cmd.opcode].allowedParams;
     std::array<parameter_t, 2> result {};
+    bool failed = false;
 
     for (int i = 0; i < 2; i++) {
         if (allowedParams[i] == NO_PARAM) {
@@ -158,8 +159,15 @@ namespace analyser {
 
           //We got here, meaning that the parameter is invalid
           logger::printError(cmd.filename, cmd.line, std::format("provided parameter \"{}\" is invalid", cmd.params[i]));
+          //Don't return directly to ensure that *all* errors are printed
+          failed = true;
         }
       }
-      return result;
+
+      if(failed) {
+        return {};
+      } else {
+        return {result};
+      }
    }
 }
