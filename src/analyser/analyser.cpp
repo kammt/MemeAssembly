@@ -15,6 +15,8 @@ namespace analyser {
             } else {
                 labelSet.emplace(cmd.params[0]);
             }
+        } else {
+            errorCandidates.emplace_back(cmd);
         }
     }
 
@@ -22,6 +24,7 @@ namespace analyser {
         //If we analyser functions and don't create an executable, then we actually don't care about this error
         if(this->name == "function" && compileOpts.outputMd != outputMode::executable) {
             errorCandidates.clear();
+            return;
         }
 
         for(parser::parsedCommand_t& cmd : errorCandidates) {
@@ -29,6 +32,7 @@ namespace analyser {
                 logger::printError(cmd.filename, cmd.line, std::format("use of undefined {} \"{}\"", this->name, cmd.params[0]));
             }
         }
+        errorCandidates.clear();
     }
 
     void OneLabelJumpAnalyser::commandEncountered(parser::parsedCommand_t& cmd) {
