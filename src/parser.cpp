@@ -5,6 +5,7 @@
 #include <iostream>
 #include <optional>
 #include <format>
+#include "parameters.h"
 #include "command.h"
 #include "log.h"
 

@@ -1,12 +1,14 @@
 #pragma once
 #include <filesystem>
+#include <array>
 
 namespace parser {
     struct parsedCommand_t {
         std::string_view filename;
         size_t line;
         unsigned opcode;
-        std::string param1;
+        std::array<std::string, 2> params;
+        char isPointer;
     };
 
     /**
