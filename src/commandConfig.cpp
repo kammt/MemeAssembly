@@ -47,6 +47,14 @@ const std::vector<command_t> commandList {{
         .cmdType = commandType::ret
     },
     {
+        .pattern {"right back at ya, buckaroo"},
+        .generateIR = [](analyser::paramArray_t) {
+            insertStartCommand();
+            irCommands.emplace_back(std::make_unique<RetCommand>());
+        },
+        .cmdType = commandType::ret
+    },
+    {
         .pattern {"{}: whomst has summoned the almighty one"},
         .analyser {functionAnalyser},
         .generateIR = [](analyser::paramArray_t params) {
