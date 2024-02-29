@@ -194,6 +194,9 @@ namespace parser {
 
     void parseFile(std::ifstream &input, std::string_view& filename) {
         std::string line;
+
+        bool prevCommandWasReturn {true};
+        size_t lastLineNum;
         for(size_t lineNum = 1; std::getline(input, line); lineNum++) {
             std::string_view trimmedLine {trim(line)};
             //Empty line or comment
@@ -202,7 +205,26 @@ namespace parser {
             }
 
             commandType cmdType = parseCommand(trimmedLine, filename, lineNum);
+
+            /*
+            ** Regarding function parsing:
+            ** We cannot catch every error, as the control flow is quite intransparent in an assembly-like language
+            ** What we can check for however is
+            **  - that the last command of a file is a return
+            **  - that when we encounter a function definition, the previous command was a return
+             */
+            if(cmdType == commandType::funcDef && !prevCommandWasReturn) {
+                logger::printError(filename, lineNum, "illegal function definition: previous command wasn't a return statement");
+            }
+
+            prevCommandWasReturn = (cmdType == commandType::ret);
+            lastLineNum = lineNum;
         }
+
+        if(!prevCommandWasReturn) {
+           logger::printError(filename, lastLineNum, "file does not end with a return command");
+        }
+
         for(command_t command : commandList) {
             if(command.analyser) {
                 command.analyser->endOfFile();
