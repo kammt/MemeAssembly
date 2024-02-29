@@ -1,4 +1,5 @@
 #include "parser.h"
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <fstream>
@@ -33,14 +34,41 @@ namespace parser {
         return {str.begin() + start, str.begin() + end};
     }
 
-    //A basic class for iterating over a string word by word (Yes, a Java-style iterator)
+    //A basic class for iterating over a string word by word - an input iterator
     class WordIterator {
     public:
-        WordIterator() = delete;
-        WordIterator(std::string_view strv) : str{strv} {};
+        using iterator_category = std::input_iterator_tag;
 
-        bool hasNext() const {
-            return str.size() > 0;
+        WordIterator() = delete;
+        explicit WordIterator(std::string_view strv) : str{strv} {
+            if(strv != "") {
+                next();
+            }
+        };
+
+        static WordIterator end() {
+            return WordIterator("");
+        }
+
+        WordIterator begin() {
+            return *this;
+        }
+
+        WordIterator& operator++() {
+            next();
+            return *this;
+        }
+
+        std::string_view operator*() {
+            return currentWord;
+        }
+
+        bool operator==(const WordIterator& other) const {
+            return currentWord == other.currentWord;
+        }
+
+        bool operator!=(const WordIterator& other) const {
+            return currentWord != other.currentWord;
         }
 
         bool restEquals(std::string_view reference) const {
@@ -51,7 +79,8 @@ namespace parser {
             return str.starts_with(reference);
         }
 
-        std::string_view next() {
+    private:
+        void next() {
             size_t wordEndIndex {0};
             for(char c : str) {
                 if(c == ' ' && wordEndIndex != 0) {
@@ -60,13 +89,13 @@ namespace parser {
                 wordEndIndex++;
             }
 
-            std::string_view result = str.substr(0, wordEndIndex);
+           currentWord = str.substr(0, wordEndIndex);
             //Update our reference string_view, so that the returned word is removed
             //If we're not at the end of the string, skip the space after our word as well
             str = str.substr((str.size() > wordEndIndex) ? wordEndIndex + 1 : wordEndIndex);
-            return result;
         }
-    private:
+
+        std::string_view currentWord;
         std::string_view str;
     };
 
@@ -87,9 +116,17 @@ namespace parser {
             char isPointer = 0;
             bool error {false};
 
-            while(lineIt.hasNext() && patternIt.hasNext()) {
-                std::string_view referenceToken = patternIt.next();
-                std::string_view lineToken = lineIt.next();
+
+            for(std::string_view lineToken : lineIt) {
+                if(patternIt == patternIt.end()) {
+                    if(lineIt.restEquals("or draw 25")) {
+                        result = {{filename, lineNum, static_cast<unsigned>(commandList.size() - 1)}};
+                    } else {
+                        error = true;
+                    }
+                    break;
+                }
+                std::string_view referenceToken = *patternIt;
 
                 size_t paramStartIndex = referenceToken.find("{}");
                 if(paramStartIndex != std::string_view::npos) {
@@ -117,29 +154,27 @@ namespace parser {
                         } else {
                             isPointer = paramNum + 1;
                             //Move our line iterator forward to skip "do you know de wey"
-                            lineIt.next(); lineIt.next(); lineIt.next(); lineIt.next(); lineIt.next();
+                            for(int i = 0; i < 5; i++) { ++lineIt; }
                         }
                     }
                 } else if(referenceToken != lineToken) {
                     error = true;
                     break;
                 }
+                ++patternIt;
             }
 
             if(error) {
                 continue;
-            } else if(!lineIt.hasNext() && !patternIt.hasNext()) {
+            } else if(patternIt == WordIterator::end()) {
                 //Success!
                 result = {{filename, lineNum, i, params, isPointer}};
                 if(command.analyser) {
                     command.analyser->commandEncountered(result.value());
                 }
-            } else if(!patternIt.hasNext() && lineIt.hasNext()) {
-                if(lineIt.restEquals("or draw 25")) {
-                    result = {{filename, lineNum, static_cast<unsigned>(commandList.size() - 1)}};
-                }
+                break;
             }
-
+            break;
         }
 
         if(!result.has_value()) {
