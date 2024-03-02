@@ -1,4 +1,4 @@
-add_executable(memeasm main.cpp parser/parser.cpp log.cpp analyser/parameters.cpp analyser/analyser.cpp ir/irCommand.cpp commandConfig.cpp)
+add_executable(memeasm main.cpp parser/parser.cpp log.cpp analyser/parameters.cpp analyser/analyser.cpp ir/irCommand.cpp register.cpp commandConfig.cpp)
 #set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 target_include_directories(memeasm PUBLIC ${PROJECT_BINARY_DIR}/src)
