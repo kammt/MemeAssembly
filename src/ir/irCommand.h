@@ -18,7 +18,7 @@ public:
  */
 class LabelDefCommand : public IRCommand {
 public:
-    explicit LabelDefCommand(std::string str) : labelName(str) {};
+    explicit LabelDefCommand(std::string str) : labelName(std::move(str)) {};
     void assemble(resultVec_t) override {}; //Does nothing
     void transpile(std::ofstream&) override;
 private:

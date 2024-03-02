@@ -29,7 +29,7 @@ namespace analyser {
     std::optional<paramArray_t> checkParameters(parser::parsedCommand_t& cmd);
 
     using regMap_t = std::unordered_map<std::string, analyser::reg>;
-    extern regMap_t regMap;
+    extern const regMap_t regMap;
 
     template<typename T>
     std::function<void(parameter_t)> assertParamType = [](parameter_t param) {
