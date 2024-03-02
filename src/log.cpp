@@ -56,7 +56,7 @@ namespace logger {
     size_t compileErrors {0};
 
     void printError(std::string_view filename, size_t line, std::string_view msg) {
-        std::cerr << filename << ":" << line << " " RED "error: " RESET;
+        std::cerr << filename << ":" << line << ": " RED "error: " RESET;
         if(compileOpts.compileMd != compileMode::obfuscated) {
             std::cerr << msg;
         } else {
@@ -82,7 +82,7 @@ namespace logger {
         std::cout << BLU " |_|  |_|\\___|_| |_| |_|\\___" RED"/_/    \\_\\___/___/\\___|_| |_| |_|_.__/|_|\\__, |" << std::endl;
         std::cout << RESET"  A Meme-based programming language.             " RED "                     __/ |" << std::endl;
         std::cout << "                                                                     |___/ " RESET << std::endl << std::endl;
-        std::cout << "For more information, a list of commands and code examples, please visit https://memeassembly.wtf." << std::endl;
+        std::cout << "For more information, a list of commands, and code examples, visit https://memeassembly.wtf." << std::endl;
         std::cout << "This is the MemeAssembly compiler v" << MEMEASM_VERSION << ", created by Tobias Kamm." << std::endl << std::endl;
         //TODO more help
     }
