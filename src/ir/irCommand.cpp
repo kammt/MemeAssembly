@@ -11,8 +11,5 @@ void CallCommand::transpile(std::ofstream& out) {
 }
 
 void RetCommand::transpile(std::ofstream& out) {
-    if(val.has_value()) {
-        out << "\tmov rax, " << val.value() << std::endl;
-    }
     out << "\tret" << std::endl;
 }

@@ -34,7 +34,8 @@ const std::vector<command_t> commandList {{
         .pattern {"I see this as an absolute win"},
         .generateIR = [](analyser::paramArray_t params) {
             insertStartCommand();
-            irCommands.emplace_back(std::make_unique<RetCommand>(0));
+            irCommands.emplace_back(std::make_unique<MovCommand>(std::make_pair(reg::rax, false), 0));
+            irCommands.emplace_back(std::make_unique<RetCommand>());
         },
         .cmdType = commandType::ret
     },
@@ -42,7 +43,8 @@ const std::vector<command_t> commandList {{
         .pattern {"no, I don't think I will"},
         .generateIR = [](analyser::paramArray_t params) {
             insertStartCommand();
-            irCommands.emplace_back(std::make_unique<RetCommand>(1));
+            irCommands.emplace_back(std::make_unique<MovCommand>(std::make_pair(reg::rax, false), 1));
+            irCommands.emplace_back(std::make_unique<RetCommand>());
         },
         .cmdType = commandType::ret
     },

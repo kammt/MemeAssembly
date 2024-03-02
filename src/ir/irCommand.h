@@ -4,7 +4,9 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include "../analyser/parameters.h"
 
+enum class reg;
 using resultVec_t = std::vector<uint8_t>;
 
 class IRCommand {
@@ -46,10 +48,16 @@ private:
 //TODO split into mov + ret?
 class RetCommand : public IRCommand {
 public:
-    RetCommand(int64_t value) : val(value) {};
-    RetCommand() : val() {};
     void assemble(resultVec_t) override {}; //TODO
     void transpile(std::ofstream&) override;
+};
+
+class MovCommand : public IRCommand {
+public:
+    MovCommand(analyser::register_t reg, analyser::parameter_t val) : dest_register(reg), val(val) {};
+    void assemble(resultVec_t) override {}; //TODO
+    void transpile(std::ofstream&) override {}; //TODO
 private:
-    std::optional<int64_t> val;
+    analyser::register_t dest_register;
+    analyser::parameter_t val;
 };
