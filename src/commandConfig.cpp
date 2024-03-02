@@ -10,7 +10,7 @@ std::shared_ptr<analyser::AnalyserBase> monkeAnalyser = std::make_shared<analyse
 std::shared_ptr<analyser::AnalyserBase> upgradeAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("upgrade-marker");
 std::shared_ptr<analyser::AnalyserBase> bananaAnalyser = std::make_shared<analyser::OneLabelJumpAnalyser>("banana-marker");
 
-std::vector<std::unique_ptr<IRCommand>> irCommands {};
+std::vector<std::unique_ptr<IRCommand>> irCommands(500);
 std::unordered_map<std::string, size_t> labels {};
 auto insertStartCommand = []() { irCommands.emplace_back(std::make_unique<StartCommand>()); };
 auto insertLabel = [](std::string& label) { labels.emplace(label, irCommands.size() - 1); };
@@ -34,8 +34,8 @@ const std::vector<command_t> commandList {{
         .pattern {"I see this as an absolute win"},
         .generateIR = [](analyser::paramArray_t params) {
             insertStartCommand();
-            irCommands.emplace_back(std::make_unique<MovCommand>(std::make_pair(reg::rax, false), 0));
-            irCommands.emplace_back(std::make_unique<RetCommand>());
+            irCommands.push_back(std::make_unique<MovCommand>(std::make_pair(reg::rax, false), 0));
+            irCommands.push_back(std::make_unique<RetCommand>());
         },
         .cmdType = commandType::ret
     },
@@ -43,8 +43,8 @@ const std::vector<command_t> commandList {{
         .pattern {"no, I don't think I will"},
         .generateIR = [](analyser::paramArray_t params) {
             insertStartCommand();
-            irCommands.emplace_back(std::make_unique<MovCommand>(std::make_pair(reg::rax, false), 1));
-            irCommands.emplace_back(std::make_unique<RetCommand>());
+            irCommands.push_back(std::make_unique<MovCommand>(std::make_pair(reg::rax, false), 1));
+            irCommands.push_back(std::make_unique<RetCommand>());
         },
         .cmdType = commandType::ret
     },
@@ -52,7 +52,7 @@ const std::vector<command_t> commandList {{
         .pattern {"right back at ya, buckaroo"},
         .generateIR = [](analyser::paramArray_t) {
             insertStartCommand();
-            irCommands.emplace_back(std::make_unique<RetCommand>());
+            irCommands.push_back(std::make_unique<RetCommand>());
         },
         .cmdType = commandType::ret
     },
@@ -62,7 +62,7 @@ const std::vector<command_t> commandList {{
         .generateIR = [](analyser::paramArray_t params) {
             insertStartCommand();
             analyser::assertParamType<analyser::label_t>(params[0]);
-            irCommands.emplace_back(std::make_unique<CallCommand>(std::get<analyser::label_t>(params[0])));
+            irCommands.push_back(std::make_unique<CallCommand>(std::get<analyser::label_t>(params[0])));
         },
         .cmdType = commandType::labelUse,
         .allowedParams {PARAM_FUNC_NAME, 0}
