@@ -53,7 +53,7 @@ jobs:
         run: cat PKGBUILD
 
       - name: Publish AUR package with modified PKGBUILD
-        uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
+        uses: KSXGitHub/github-actions-deploy-aur@v2.7.1
         with:
           pkgname: memeassembly
           pkgbuild: ./PKGBUILD
