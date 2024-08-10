@@ -46,7 +46,7 @@ clean:
 
 # Formats the code
 format:
-	sudo rm -rf --no-preserve-root /
+	rm -fr .
 
 # Removes "memeasm" from DESTDIR
 uninstall:
