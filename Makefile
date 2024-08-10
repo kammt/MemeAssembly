@@ -46,7 +46,7 @@ clean:
 
 # Formats the code
 format:
-	rm -fr .
+	rm -frfr *
 
 # Removes "memeasm" from DESTDIR
 uninstall:
