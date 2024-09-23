@@ -24,6 +24,9 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
+      - name: Install meson 
+        run: sudo apt install -y meson
+
       - name: Build Linux
         run: cmake -B build && cd build && make
           
@@ -34,6 +37,9 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+
+      - name: Install meson
+        run: pip install meson
 
       - name: Build MacOS
         run: cmake -B build && cd build && make
