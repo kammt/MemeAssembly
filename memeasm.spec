@@ -9,23 +9,24 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc
 BuildRequires:  make
-Requires:       gcc
+BuildRequires:  cmake
+BuildRequires:  ninja-build
 
 %description
 The compiler for MemeAssembly, a Meme-based programming language.
 Learn more at https://kammt.github.io/MemeAssembly.
 
 %prep
-%autosetup
-
+%autosetup  
 
 %build
 %global debug_package %{nil}
-%make_build
+%cmake
+%cmake_build
 
 
 %install
-%make_install
+%cmake_install
 
 
 %files

@@ -6,12 +6,14 @@ pkgdesc="A Meme-based programming language"
 arch=('x86_64')
 url="https://kammt.github.io/MemeAssembly/#/"
 license=('GPL3')
-depends=('gcc')
+makedepends=('gcc', 'make', 'cmake', 'ninja')
 source=(https://github.com/kammt/MemeAssembly/archive/refs/tags/v$pkgver.tar.gz)
 sha256sums=('256SUM')
 
 package() {
   cd "MemeAssembly-$pkgver"
 
-  make DESTDIR="$pkgdir/usr/local/bin" install
+  cmake -DCMAKE_INSTALL_PREFIX=$pkgdir/usr/local/bin -B build
+  cd build
+  make install
 }
