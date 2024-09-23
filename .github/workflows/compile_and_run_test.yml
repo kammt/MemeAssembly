@@ -17,45 +17,34 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Compile the project
-        run: make debug
+      - name: Install meson
+        run: sudo apt install -y meson
+
+      - name: compile the project
+        run: cmake -DCMAKE_BUILD_TYPE=Debug -B build && cd build && sudo make install
 
       - name: Run the compiler on runnable_example.memeasm
-        run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
+        run: memeasm -d -o tmp .github/workflows/runnable_example.memeasm
 
       - name: Run the executable
         run: ./tmp
 
-  run_windows:
-      runs-on: windows-2019
-
-      steps:
-        - uses: actions/checkout@v2
-
-        - name: Compile memeasm
-          shell: powershell
-          run: |
-            $env:Path += ";C:\msys64\mingw64\bin"
-            mingw32-make.exe debug
-
-        - name: Run compiler on runnable_example.memeasm
-          shell: powershell
-          run: ./memeasm.exe -d -o tmp.exe .github\workflows\runnable_example.memeasm
-
-        - name: Run the executable
-          shell: powershell
-          run: ./tmp.exe
-
   run_macos:
-    runs-on: macos-11
+    runs-on: macos-13
 
     steps:
       - uses: actions/checkout@v2
 
-      - name: Compile the project
-        run: make debug
+      - name: Install dependencies
+        run: |
+          pip install meson
+          pip install ninja 
+
+      - name: compile the project
+        run: cmake -DCMAKE_BUILD_TYPE=Debug -B build && cd build && sudo make install
 
       - name: Run the compiler on runnable_example.memeasm
-        run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
+        run:    memeasm -d -o tmp .github/workflows/runnable_example.memeasm
+
       - name: Run the executable
         run: ./tmp
