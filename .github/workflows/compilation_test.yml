@@ -45,7 +45,7 @@ jobs:
 
   compile_macos:
     # The type of runner that the job will run on
-    runs-on: macos-latest
+    runs-on: macos-13
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install meson
-          pip install ninja
+          pip install ninja 
 
       - name: compile the project
         run: cmake -DCMAKE_BUILD_TYPE=Debug -B build && cd build && sudo make install
