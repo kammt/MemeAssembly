@@ -5,7 +5,7 @@ set(FILES src/memeasm.c src/compiler.c src/logger/log.c src/parser/parser.c src/
 
 if(APPLE)
     set(PLATFORM_MACRO "MACOS")
-elseif(LINUX)
+elseif(UNIX)
     set(PLATFORM_MACRO "Linux")
 else()
     MESSAGE(FATAL_ERROR "Unsupported Platform: MemeAssembly is only supported on Linux/MacOS.")
@@ -19,7 +19,7 @@ execute_process(COMMAND id -u OUTPUT_VARIABLE UID OUTPUT_STRIP_TRAILING_WHITESPA
 execute_process(COMMAND id -g OUTPUT_VARIABLE GID OUTPUT_STRIP_TRAILING_WHITESPACE)
 # build memeasm for WASM
 add_custom_target(wasm
-    docker run --rm -v ${PWD}:/src -u ${UID}:${GID} emscripten/emsdk emcc -o memeasm.js -s WASM=1 -s INVOKE_RUN=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORTED_RUNTIME_METHODS="['FS', 'callMain', 'cwrap']" -s 'EXPORT_NAME="runMemeAssemblyCompiler"' ${FILES} -std=gnu17 -D ${PLATFORM_MACRO} -O2
+    docker run --rm -v ${CMAKE_SOURCE_DIR}:/src -w /src -u ${UID}:${GID} emscripten/emsdk emcc -o memeasm.js -s WASM=1 -s INVOKE_RUN=0 -s EXPORT_ES6=1 -s MODULARIZE=1 -s EXPORTED_RUNTIME_METHODS="['FS', 'callMain', 'cwrap']" -s 'EXPORT_NAME="runMemeAssemblyCompiler"' ${FILES} -std=gnu17 -D ${PLATFORM_MACRO} -O2
 )
 # formats the project
 add_custom_target(format
