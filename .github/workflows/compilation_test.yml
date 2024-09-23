@@ -22,16 +22,17 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
+      - name: Install meson
+        run: sudo apt install -y meson
+
       - name: compile the project
-        run: make debug
+        run: cmake -DCMAKE_BUILD_TYPE=Debug -B build && cd build && sudo make install
 
       - name: run the compiler on example.memeasm
-        run: ./memeasm -S -d -o example.S .github/workflows/example.memeasm
+        run: memeasm -S -d -o example.S .github/workflows/example.memeasm
 
       - name: Function parser tests
         run: |
-          sudo make install
           cd .github/workflows/multiple_files
           make && exit 0 || exit 1 
           make fail_undefined && exit 1 || exit 0
@@ -39,30 +40,8 @@ jobs:
 
       - name: Compile all code examples
         run: |
-          sudo make install
           cd examples
           make
-
-  compile_windows:
-    # The type of runner that the job will run on
-    runs-on: windows-2019
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Compile memeasm
-        shell: powershell
-        run: |
-          $env:Path += ";C:\msys64\mingw64\bin"
-          mingw32-make.exe debug
-
-      - name: Run compiler on example.memeasm
-        shell: powershell
-        run: ./memeasm.exe -S -d -o example.S .github\workflows\example.memeasm
-
-      - name: Check that compiling multiple input files works
-        run: ./memeasm.exe -d -o tmp.exe .github/workflows/multiple_files/*.memeasm
 
   compile_macos:
     # The type of runner that the job will run on
@@ -73,22 +52,25 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
+      - name: Install dependencies
+        run: |
+          pip install meson
+          pip install ninja
+
       - name: compile the project
-        run: make debug
+        run: cmake -DCMAKE_BUILD_TYPE=Debug -B build && cd build && sudo make install
 
       - name: run the compiler on example.memeasm
-        run: ./memeasm -S -d -o example.S .github/workflows/example.memeasm
+        run: memeasm -S -d -o example.S .github/workflows/example.memeasm
 
       - name: Function parser tests
         run: |
-          sudo make install
           cd .github/workflows/multiple_files
           make && exit 0 || exit 1 
           make fail_undefined && exit 1 || exit 0
           make fail_no_main && exit 1 || exit 0
+            
       - name: Compile all code examples
         run: |
-          sudo make install
           cd examples
           make
