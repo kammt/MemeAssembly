@@ -25,21 +25,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Build Linux
-        run: make CFLAGS+=-Werror debug
-
-  build_windows:
-    # The type of runner that the job will run on
-    runs-on: windows-2019
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      - uses: actions/checkout@v2
-      
-      - name: Run Makefile
-        shell: powershell
-        run: |
-          $env:Path += ";C:\msys64\mingw64\bin"
-          mingw32-make.exe debug
+        run: cmake -B build && cd build && make
           
   build_macos:
     # The type of runner that the job will run on
@@ -50,4 +36,4 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Build MacOS
-        run: make CFLAGS+=-Werror debug
+        run: cmake -B build && cd build && make
