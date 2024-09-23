@@ -8,9 +8,13 @@ if(APPLE)
 elseif(UNIX)
     set(PLATFORM_MACRO "LINUX")
 else()
-    MESSAGE(FATAL_ERROR "Unsupported Platform: MemeAssembly is only supported on Linux/MacOS.")
+    MESSAGE(FATAL_ERROR "Unsupported Platform: MemeAssembly only supports Linux/MacOS.")
 endif()
 add_definitions(-D${PLATFORM_MACRO})
+
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    message(FATAL_ERROR "Unsupported architecture: MemeAssembly only supports x86-64")
+endif()
 
 # Add other build commands
 execute_process(COMMAND pwd OUTPUT_VARIABLE PWD OUTPUT_STRIP_TRAILING_WHITESPACE)
