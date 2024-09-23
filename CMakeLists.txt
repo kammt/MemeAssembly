@@ -6,11 +6,11 @@ set(FILES src/memeasm.c src/compiler.c src/logger/log.c src/parser/parser.c src/
 if(APPLE)
     set(PLATFORM_MACRO "MACOS")
 elseif(UNIX)
-    set(PLATFORM_MACRO "Linux")
+    set(PLATFORM_MACRO "LINUX")
 else()
     MESSAGE(FATAL_ERROR "Unsupported Platform: MemeAssembly is only supported on Linux/MacOS.")
 endif()
-add_definitions(-${PLATFORM_MACRO})
+add_definitions(-D${PLATFORM_MACRO})
 
 # Add other build commands
 execute_process(COMMAND pwd OUTPUT_VARIABLE PWD OUTPUT_STRIP_TRAILING_WHITESPACE)
