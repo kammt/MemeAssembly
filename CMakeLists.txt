@@ -50,4 +50,4 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 add_executable(memeasm ${FILES})
 target_link_libraries(memeasm ${FADEC_RES})
 
-install(TARGETS memeasm DESTINATION /usr/bin)
+install(TARGETS memeasm DESTINATION /usr/local/bin)
