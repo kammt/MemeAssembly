@@ -283,30 +283,35 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .usedParameters = 1,
             .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8 | PARAM_CHAR},
-            .translationPattern = "mov BYTE PTR [rip + .LCharacter], {0}\n\t"
-                                  "test rsp, 0xF\n\t"
-                                  "jz 1f\n\t"
-                                  "sub rsp, 8\n\t"
-                                  "call writechar\n\t"
-                                  "add rsp, 8\n\t"
-                                  "jmp 2f\n\t"
-                                  "1: call writechar\n\t"
-                                  "2:\n\t"
+            .translationPattern = "push rsi\n\t"
+                                  "push rdx\n\t"
+                                  "push rax\n\t"
+                                  "mov BYTE PTR [rsp - 1], {0}\n\t"
+                                  "lea rsi, [rsp - 1]\n\t"
+                                  "mov rdx, 1\n\t"
+                                  "mov rax, 1\n\t"
+                                  "syscall\n\t"
+                                  "pop rax\n\t"
+                                  "pop rdx\n\t"
+                                  "pop rsi\n\t"
         },
         {
             .pattern = "let me in. LET ME IIIIIIIIN {p}",
             .usedParameters = 1,
             .analysisFunction = &checkIOCommands,
             .allowedParamTypes = {PARAM_REG8},
-            .translationPattern = "test rsp, 0xF\n\t"
-                                  "jz 1f\n\t"
-                                  "sub rsp, 8\n\t"
-                                  "call readchar\n\t"
-                                  "add rsp, 8\n\t"
-                                  "jmp 2f\n\t"
-                                  "1: call readchar\n\t"
-                                  "2:\n\t"
-                                  "mov {0}, BYTE PTR [rip + .LCharacter]\n\t"
+            .translationPattern = "push rsi\n\t"
+                                  "push rdx\n\t"
+                                  "push rax\n\t"
+                                  "mov BYTE PTR [rsp - 1], {0}\n\t"
+                                  "lea rsi, [rsp - 1]\n\t"
+                                  "mov rdx, 1\n\t"
+                                  "mov rax, 0\n\t"
+                                  "syscall\n\t"
+                                  "pop rax\n\t"
+                                  "pop rdx\n\t"
+                                  "pop rsi\n\t"
+                                  "mov {0}, BYTE PTR [rsp - 25]\n\t" // Recover read character from stack
         },
 
         ///Random commands
@@ -434,15 +439,15 @@ void compile(struct compileState compileState, char* outputFileName) {
         char* commandPrefix;
         if(compileState.outputMode == objectFile) {
             #ifndef LINUX
-            commandPrefix = "gcc -w -O -c -x assembler - -o";
+            commandPrefix = "gcc -nostdlib -w -O -c -x assembler - -o";
             #else
-            commandPrefix = "gcc -z execstack -w -O -c -x assembler - -o";
+            commandPrefix = "gcc -nostdlib -z execstack -w -O -c -x assembler - -o";
             #endif
         } else {
             #ifndef LINUX
-            commandPrefix = "gcc -w -O -x assembler - -o";
+            commandPrefix = "gcc -nostdlib -w -O -x assembler - -o";
             #else
-            commandPrefix = "gcc -z execstack -w -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
+            commandPrefix = "gcc -nostdlib -z execstack -w -O -no-pie -x assembler - -o"; //-no-pie is only defined because for some reason, the generated stabs info does not work when a PIE object is generated
             #endif
         }
 

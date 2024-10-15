@@ -3,12 +3,10 @@ project(memeassembly LANGUAGES C)
 
 set(FILES src/memeasm.c src/compiler.c src/logger/log.c src/parser/parser.c src/parser/fileParser.c src/parser/functionParser.c src/analyser/analysisHelper.c src/analyser/parameters.c src/analyser/functions.c src/analyser/jumpMarkers.c src/analyser/comparisons.c src/analyser/randomCommands.c src/analyser/analyser.c src/translator/translator.c)
 
-if(APPLE)
-    set(PLATFORM_MACRO "MACOS")
-elseif(UNIX)
+if(UNIX)
     set(PLATFORM_MACRO "LINUX")
 else()
-    MESSAGE(FATAL_ERROR "Unsupported Platform: MemeAssembly only supports Linux/MacOS.")
+    MESSAGE(FATAL_ERROR "Unsupported Platform: MemeAssembly only supports Linux.")
 endif()
 add_definitions(-D${PLATFORM_MACRO})
 
