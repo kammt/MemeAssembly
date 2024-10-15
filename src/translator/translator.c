@@ -18,6 +18,9 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "translator.h"
+
+#include <assert.h>
+
 #include "../logger/log.h"
 #include "../analyser/functions.h"
 
@@ -25,13 +28,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-
-///STABS flags
-#define N_SO 100
-#define N_SLINE 68
-#define N_FUN 36
-#define N_LBRAC 0xc0
-#define N_RBRAC 0xe0
 
 extern const char* const versionString;
 extern const struct command commandList[];
@@ -74,56 +70,6 @@ const char* const martyrdomCode = "push rax\n"
                                   "    pop rdi\n"
                                   "    pop rax\n\n";
 
-/**
- * Creates the first STABS entry in which the origin file is stored
- * @param outputFile the output file
- */
-void stabs_writeFileInfo(FILE *outputFile, char* inputFileString) {
-    //Check if the input file string starts with a /. If it does, it is an absolute path
-    char cwd[PATH_MAX + 1];
-    if(inputFileString[0] == '/') {
-        fprintf(outputFile, ".stabs \"%s\", %d, 0, 0, .Ltext0\n", inputFileString, N_SO);
-    } else {
-        fprintf(outputFile, ".stabs \"%s/%s\", %d, 0, 0, .Ltext0\n", getcwd(cwd, PATH_MAX), inputFileString, N_SO);
-    }
-}
-
-/**
- * Creates a function info STABS of a given function
- * @param outputFile the output file
- * @param functionName the name of the function
- */
-void stabs_writeFunctionInfo(FILE *outputFile, char* functionName) {
-    fprintf(outputFile, ".stabs \"%s:F1\", %d, 0, 0, %s\n", functionName, N_FUN, functionName);
-    fprintf(outputFile, ".stabn %d, 0, 0, %s\n", N_LBRAC, functionName);
-    fprintf(outputFile, ".stabn %d, 0, 0, .Lret_%s\n", N_RBRAC, functionName);
-}
-
-/**
- * Is called after a function return command is found. Creates a label for the function info stab to use
- * @param outputFile the output file
- */
-void stabs_writeFunctionEndLabel(FILE *outputFile, char* currentFunctionName) {
-    fprintf(outputFile, "\t.Lret_%s:\n", currentFunctionName);
-}
-
-/**
- * Creates a label for the line number STABS to use
- * @param outputFile the output file
- * @param parsedCommand the command that requires a line number info
- */
-void stabs_writeLineLabel(FILE *outputFile, struct parsedCommand parsedCommand) {
-    fprintf(outputFile, "\t.Lcmd_%lu:\n", parsedCommand.lineNum);
-}
-
-/**
- * Creates a line number STABS of the provided command
- * @param outputFile the output file
- * @param parsedCommand the command that requires a line number info
- */
-void stabs_writeLineInfo(FILE *outputFile, struct parsedCommand parsedCommand) {
-    fprintf(outputFile, "\t.stabn %d, 0, %lu, .Lcmd_%lu\n", N_SLINE, parsedCommand.lineNum, parsedCommand.lineNum);
-}
 
 /**
  * Receives a command and writes its assembly translation into the output file
@@ -139,64 +85,65 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         return;
     }
 
-    //If we are supposed to create STABS info, we now need to create labels
-    if(compileState->useStabs) {
-        //If this is a function declaration, update the current function name
-        if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
-            stabs_writeLineLabel(outputFile, parsedCommand);
-        }
-    }
-
     struct command command = commandList[parsedCommand.opcode];
-    char *translationPattern = command.translationPattern;
+    const char* translationPattern = command.translationPattern;
 
     if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
         fprintf(outputFile, "\t");
     }
-    for(size_t i = 0; i < strlen(translationPattern); i++) {
 
-        //Check if this is a format specifier
-        if(translationPattern[i] == '{' && translationPattern[i + 2] == '}') {
-            char formatSpecifier = translationPattern[i + 1];
-            //If the format_specifier is F, we need to add the value of the current file's index to the string
-            if(formatSpecifier == 'F') {
-                fprintf(outputFile, "%u", fileNum);
-            //Is it a parameter?
-            } else if(formatSpecifier >= '0' && formatSpecifier < command.usedParameters + '0') {
-                uint8_t index = formatSpecifier - 48;
-                char *parameter = parsedCommand.parameters[index];
-                if(parsedCommand.isPointer == index + 1) {
-                    /*
-                     * If we are in bully mode, we first need to check if the operand size is unknown (e.g. a pointer
-                     * and a decimal number are used). This is because this check is skipped in parameters.c
-                     */
-                    if(compileState->compileMode == bully && commandList[parsedCommand.opcode].usedParameters == 2 && !PARAM_ISREG(parsedCommand.paramTypes[index + 1 % 2])) {
-                        const char* operandSizes[] = {"BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR"};
-                        fprintf(outputFile, "%s [%s]", operandSizes[computedIndex % 4], parameter);
-                    } else {
-                        fprintf(outputFile, "[%s]", parameter);
-                    }
+    for(size_t i = 0; i < strlen(translationPattern); i++) {
+        char* nextParam = strstr(translationPattern + i, "{");
+
+        if(nextParam == NULL) {
+            fwrite(translationPattern + i, 1, strlen(translationPattern + i), outputFile);
+            break;
+        }
+
+        //Print all characters up to the {X}
+        size_t charsToPrint = nextParam - i - translationPattern;
+        fwrite(translationPattern + i, 1, charsToPrint, outputFile);
+        //After this, we point to the character that is between the {}'s
+        i += charsToPrint + 1;
+        assert(translationPattern[i + 1] == '}');
+
+        char formatSpecifier = translationPattern[i];
+        //If the format_specifier is F, we need to add the value of the current file's index to the string
+        if(formatSpecifier == 'F') {
+            fprintf(outputFile, "%u", fileNum);
+        //Is it a parameter?
+        } else if(formatSpecifier >= '0' && formatSpecifier < command.usedParameters + '0') {
+            uint8_t index = formatSpecifier - 48;
+            char *parameter = parsedCommand.parameters[index];
+            if(parsedCommand.isPointer == index + 1) {
+                /*
+                 * If we are in bully mode, we first need to check if the operand size is unknown (e.g. a pointer
+                 * and a decimal number are used). This is because this check is skipped in parameters.c
+                 */
+                if(compileState->compileMode == bully && commandList[parsedCommand.opcode].usedParameters == 2 && !PARAM_ISREG(parsedCommand.paramTypes[index + 1 % 2])) {
+                    const char* operandSizes[] = {"BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR"};
+                    fprintf(outputFile, "%s [%s]", operandSizes[computedIndex % 4], parameter);
                 } else {
-                    /*
-                     * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
-                     * The check is only needed here, as a decimal number cannot be a pointer
-                     */
-                    if(parsedCommand.paramTypes[index] == PARAM_DECIMAL) {
-                        fprintf(outputFile, "0x%llX", strtoll(parameter, NULL, 10));
-                    } else {
-                        fprintf(outputFile, "%s", parameter);
-                    }
+                    fprintf(outputFile, "[%s]", parameter);
                 }
             } else {
-                printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", true, 2, formatSpecifier, parsedCommand.opcode);
-                exit(EXIT_FAILURE);
+                /*
+                 * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
+                 * The check is only needed here, as a decimal number cannot be a pointer
+                 */
+                if(parsedCommand.paramTypes[index] == PARAM_DECIMAL) {
+                    fprintf(outputFile, "0x%llX", strtoll(parameter, NULL, 10));
+                } else {
+                    fprintf(outputFile, "%s", parameter);
+                }
             }
-
-            //move our pointer along by three characters instead of one, as we just parsed three characters
-            i += 2;
         } else {
-            fprintf(outputFile, "%c", translationPattern[i]);
+            printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", true, 2, formatSpecifier, parsedCommand.opcode);
+            exit(EXIT_FAILURE);
         }
+
+        //Move by two to skip the character and closing parenthesis
+        i += 2;
     }
     fprintf(outputFile, "\n");
 
@@ -213,15 +160,6 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     } else if(compileState->optimisationLevel == o69420) {
         //If we get here, then this was a function declaration. Insert a ret-statement and exit
         fprintf(outputFile, "\txor rax, rax\n\tret\n");
-    }
-
-    if(compileState->useStabs && commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
-        //If this was a return statement and this is the end of file or a function definition is followed by it, we reached the end of the function. Define the label for the N_RBRAC stab
-        if(lastCommand) {
-            stabs_writeFunctionEndLabel(outputFile, currentFunctionName);
-        }
-        //In any case, we now need to write the line info to the file
-        stabs_writeLineInfo(outputFile, parsedCommand);
     }
 }
 
@@ -306,10 +244,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         struct file currentFile = compileState->files[i];
-        //Write the file info if we are using stabs
-        if(compileState->useStabs) {
-            stabs_writeFileInfo(outputFile, currentFile.fileName);
-        }
 
         size_t line = 0;
         for(size_t j = 0; j < currentFile.functionCount; j++) {
@@ -343,10 +277,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                                         (k == currentFunction.numberOfCommands - 1), outputFile);
                 }
 
-                //Insert STABS function-info
-                if (compileState->useStabs) {
-                    stabs_writeFunctionInfo(outputFile, functionName);
-                }
                 line++;
             }
         }
@@ -462,12 +392,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                             "pop rcx\n\t"
                             "ret\n");
         #endif
-    }
-
-    //Add an "end marker" if we are using stabs
-    if(compileState->useStabs) {
-        fprintf(outputFile, "\n.LEOF:\n");
-        fprintf(outputFile, ".stabs \"\", %d, 0, 0, .LEOF\n", N_SO);
     }
 
     if(compileState->optimisationLevel == o_s) {
