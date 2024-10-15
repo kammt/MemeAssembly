@@ -181,11 +181,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
         }
     }
 
-    #ifdef WINDOWS
-    //To interact with the Windows API, we need to reference the needed functions
-    fprintf(outputFile, "\n.extern GetStdHandle\n.extern WriteFile\n.extern ReadFile\n");
-    #endif
-
     fprintf(outputFile, "\n.data\n\t");
     fprintf(outputFile, ".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
 
@@ -205,7 +200,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fprintf(outputFile, "\n\n.text\n\t");
     fprintf(outputFile, "\n\n.Ltext0:\n");
 
-    #ifndef WINDOWS
     if(compileState->allowIoCommands) {
         fprintf(outputFile, "killParent:\n"
                             #ifdef LINUX
@@ -229,7 +223,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                             "    syscall\n"
                             "    ret\n\n");
     }
-    #endif
 
     /*
      * If we're in bully mode and an executable is to be generated, we omitted the check
@@ -284,66 +277,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
     //If the optimisation level is 42069, then this function will not be used as all commands are optimised out
     if(compileState->optimisationLevel != o69420 && compileState->allowIoCommands) {
-        #ifdef WINDOWS
-        //Using Windows API
-        fprintf(outputFile,
-                "\n\nwritechar:\n"
-                "\tpush rcx\n"
-                "\tpush rax\n"
-                "\tpush rdx\n"
-                "\tpush r8\n"
-                "\tpush r9\n"
-                //Get Handle of stdout
-                "\tsub rsp, 32\n"
-                "\tmov rcx, -11\n" //-11=stdout
-                "\tcall GetStdHandle\n"//return value is in rax
-                //Prepare the parameters for output
-                "\tmov rcx, rax\n" //move Handle of stdout into rcx
-                "\tlea rdx, [rip + .LCharacter]\n"
-                "\tmov r8, 1\n" //Length of message = 1 character
-                "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes written, just discard that value
-                "\tmov QWORD PTR [rsp + 32], 0\n"
-                "\tcall WriteFile\n"
-                "\tadd rsp, 32\n"
-
-                //Restore all registers
-                "\tpop r9\n"
-                "\tpop r8\n"
-                "\tpop rdx\n"
-                "\tpop rax\n"
-                "\tpop rcx\n"
-                "\tret\n");
-
-        fprintf(outputFile,
-                "\n\nreadchar:\n"
-                "\tpush rcx\n"
-                "\tpush rax\n"
-                "\tpush rdx\n"
-                "\tpush r8\n"
-                "\tpush r9\n"
-                //Get Handle of stdin
-                "\tsub rsp, 32\n"
-                "\tmov rcx, -10\n" //-10=stdin
-                "\tcall GetStdHandle\n"//return value is in rax
-                //Prepare the parameters for reading from input
-                "\tmov rcx, rax\n" //move Handle of stdin into rcx
-                "\tlea rdx, [rip + .LCharacter]\n"
-                "\tmov r8, 1\n" //Bytes to read = 1 character
-                "\tlea r9, [rip + .Ltmp64]\n" //Number of bytes read, just discard that value
-                //Parameter 5 and then 4 Bytes of emptiness on the stack
-                "\tmov QWORD PTR [rsp + 32], 0\n"
-                "\tcall ReadFile\n"
-                "\tadd rsp, 32\n"
-
-                //Restore all registers
-                "\tpop r9\n"
-                "\tpop r8\n"
-                "\tpop rdx\n"
-                "\tpop rax\n"
-                "\tpop rcx\n"
-                "\tret\n");
-        #else
-        //Using Linux syscalls
         fprintf(outputFile, "\n\nwritechar:\n\t"
                             "push rcx\n\t"
                             "push r11\n\t"
@@ -391,7 +324,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                             "pop r11\n\t"
                             "pop rcx\n\t"
                             "ret\n");
-        #endif
     }
 
     if(compileState->optimisationLevel == o_s) {
