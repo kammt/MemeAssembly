@@ -85,7 +85,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         return;
     }
 
-    struct command command = commandList[parsedCommand.opcode];
+    const struct command command = commandList[parsedCommand.opcode];
     const char* translationPattern = command.translationPattern;
 
     if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF) {
@@ -93,7 +93,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
     }
 
     for(size_t i = 0; i < strlen(translationPattern); i++) {
-        char* nextParam = strstr(translationPattern + i, "{");
+        const char* nextParam = strstr(translationPattern + i, "{");
 
         if(nextParam == NULL) {
             fwrite(translationPattern + i, 1, strlen(translationPattern + i), outputFile);
@@ -107,7 +107,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         i += charsToPrint + 1;
         assert(translationPattern[i + 1] == '}');
 
-        char formatSpecifier = translationPattern[i];
+        const char formatSpecifier = translationPattern[i];
         //If the format_specifier is F, we need to add the value of the current file's index to the string
         if(formatSpecifier == 'F') {
             fprintf(outputFile, "%u", fileNum);
@@ -142,8 +142,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
             exit(EXIT_FAILURE);
         }
 
-        //Move by two to skip the character and closing parenthesis
-        i += 2;
+        i += 1;
     }
     fprintf(outputFile, "\n");
 
@@ -244,7 +243,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
             char* functionName = currentFunction.commands[0].parameters[0];
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
-                #ifndef WINDOWS
                 const char *const mainFuncName =
                 #ifdef MACOS
                         "_main";
@@ -255,7 +253,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                 if (compileState->martyrdom && compileState->allowIoCommands && k == 1 && strcmp(functionName, mainFuncName) == 0) {
                     fprintf(outputFile, "%s", martyrdomCode);
                 }
-                #endif
 
                 struct parsedCommand currentCommand = currentFunction.commands[k];
 
