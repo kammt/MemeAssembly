@@ -48,7 +48,6 @@ void printHelpPage(char* programName) {
     printf(" -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
     printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscated\n");
     printf(" -fno-io - Forbid all I/O commands, such as \"what can I say except\" and syscalls\n");
-    printf(" -g \t\t- write debug info into the compiled file. Currently, only the STABS format is supported (Linux-only)\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -d \t\t- enables debug logs\n");
 }
@@ -63,7 +62,6 @@ int main(int argc, char* argv[]) {
         .optimisationLevel = none,
         .translateMode = intSISD,
         .outputMode = executable,
-        .useStabs = false,
         .allowIoCommands = true,
         .compilerErrors = 0,
         .logLevel = normal
@@ -134,15 +132,7 @@ int main(int argc, char* argv[]) {
                 outputFileString = optarg;
                 break;
             case 'g':
-                #ifdef WINDOWS
-                //If we use Windows, STABS does not work - output a warning, but don't do anything
-                printNote("-g cannot be used on Windows-systems, this option will be ignored.", false, 0);
-                #elif defined(MACOS)
-		        //If we use MacOS, STABS does not work - output a warning, but don't do anything
-                printNote("-g cannot be used on MacOS-systems, this option will be ignored.", false, 0);
-		        #else
-                compileState.useStabs = true;
-                #endif
+                printNote("-g is discontinued, this option will be ignored.", false, 0);
                 break;
             case 'c': //-fcompile-mode
                 if(strcmp(optarg, "bully") == 0) { //Bully mode
