@@ -35,9 +35,9 @@ extern const char* const versionString;
 void printHelpPage(char* programName) {
     printInformationHeader();
     printf("Usage:\n");
-    printf(" %s [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n", programName);
-    printf(" %s [options] -S -o outputFile.S [-i | -d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n", programName);
-    printf(" %s [options] -O -o outputFile.o [-i | -d] inputFile\tOnly compiles the specified file and saves it an object file\n", programName);
+    printf(" %s [options] -o outputFile [-d] inputFile\t\tCompiles the specified file into an executable\n", programName);
+    printf(" %s [options] -S -o outputFile.S [-d] inputFile\t\tOnly compiles the specified file and saves it as x86_64 Assembly code\n", programName);
+    printf(" %s [options] -O -o outputFile.o [-d] inputFile\t\tOnly compiles the specified file and saves it an object file\n", programName);
     printf(" %s (-h | --help)\t\t\t\t\tDisplays this help page\n", programName);
     printf(" %s -v\t\t\t\t\t\t\tPrints version information\n\n", programName);
     printf("Compiler options:\n");
@@ -47,7 +47,7 @@ void printHelpPage(char* programName) {
     printf(" -O-s \t\t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
     printf(" -O69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
     printf(" -fcompile-mode - Change the compile mode to noob (default), bully, or obfuscated\n");
-    printf(" -fno-io - Forbid all I/O commands, such as \"what can I say except\" and syscalls\n");
+    printf(" -fno-io \t- Forbid all I/O commands, such as \"what can I say except\" and syscalls\n");
     printf(" -fno-martyrdom - Disables martyrdom\n");
     printf(" -d \t\t- enables debug logs\n");
 }

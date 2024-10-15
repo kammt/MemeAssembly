@@ -21,15 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdarg.h>
 #include <string.h>
 
-const char* const versionString = "v1.6";
-const char* const platformSuffix =
-    #ifdef WINDOWS
-        "Windows";
-    #elif defined(MACOS)
-        "MacOS";
-    #else
-        "Linux";
-    #endif
+const char* const versionString = "v2.0";
 
 const char* const randomErrorMessages[] = {
         //sudo
@@ -82,7 +74,7 @@ void printInformationHeader() {
     printf(RESET"  A Meme-based programming language.             " RED "                     __/ |\n");
     printf("                                                                     |___/ \n\n"RESET);
     printf("For more information, a list of commands and code examples, please visit https://github.com/kammt/MemeAssembly.\n");
-    printf("This is the MemeAssembly compiler %s (%s), created by Tobias Kamm.\n\n", versionString, platformSuffix);
+    printf("This is the MemeAssembly compiler %s, created by Tobias Kamm et al.\n\n", versionString);
 }
 
 /**
