@@ -29,19 +29,3 @@ jobs:
 
       - name: Build Linux
         run: cmake -B build && cd build && make
-          
-  build_macos:
-    # The type of runner that the job will run on
-    runs-on: macos-13
-    
-    steps:
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-
-      - name: Install dependencies
-        run: |
-          pip install meson
-          pip install ninja
-
-      - name: Build MacOS
-        run: cmake -B build && cd build && make
