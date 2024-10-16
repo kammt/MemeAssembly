@@ -44,9 +44,23 @@ const char* const martyrdomCode = "    push rax\n"
                                   "    push 0\n"
                                   "    push 0\n"
                                   "    push 0x04000000\n"
-                                  "    lea rax, [rip + killParent]\n"
-                                  "    push rax\n"
+                                  "    lea rax, [rip + 2]\n"
+                                  "    jmp 0f\n" //Skip signal handler
+                                  "    " //Start of signal handler
+                                  "    mov rax, 110\n"
+                                  "    syscall\n"
                                   "\n"
+                                  "    mov rdi, rax\n"
+                                  "    mov rsi, 9\n"
+                                  "    mov rax, 62\n"
+                                  "    syscall\n"
+                                  "\n"
+                                  "    mov rdi, 0\n"
+                                  "    mov rax, 60\n"
+                                  "    syscall\n"
+                                  "    ret\n\n"
+                                  "\n" //End of signal handler
+                                  "    0: push rax\n"
                                   "    mov rax, 13\n"
                                   "    mov rdi, 2\n"
                                   "    lea rsi, [rsp]\n"
@@ -187,22 +201,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
                "\tmov edi, eax\n"
                "\tmov eax, 60\n"
                "\tsyscall\n\n", outputFile);
-    }
-
-    if(compileState->allowIoCommands) {
-        fputs("killParent:\n"
-              "    mov rax, 110\n"
-              "    syscall\n"
-              "\n"
-              "    mov rdi, rax\n"
-              "    mov rsi, 9\n"
-              "    mov rax, 62\n"
-              "    syscall\n"
-              "\n"
-              "    mov rdi, 0\n"
-              "    mov rax, 60\n"
-              "    syscall\n"
-              "    ret\n\n", outputFile);
     }
 
     /*
