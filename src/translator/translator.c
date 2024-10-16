@@ -33,7 +33,7 @@ extern const struct command commandList[];
 //Used to pseudo-random generation when using bully mode
 extern uint64_t computedIndex;
 
-const char* const martyrdomCode = "push rax\n"
+const char* const martyrdomCode = "    push rax\n"
                                   "    push rdi\n"
                                   "    push rsi\n"
                                   "    push rdx\n"
@@ -41,16 +41,20 @@ const char* const martyrdomCode = "push rax\n"
                                   "    push rcx\n"
                                   "    push r11\n"
                                   "    \n"
+                                  "    push 0\n"
+                                  "    push 0\n"
+                                  "    push 0x04000000\n"
                                   "    lea rax, [rip + killParent]\n"
-                                  "    mov [rip + .Lsa_handler], rax\n"
+                                  "    push rax\n"
                                   "\n"
                                   "    mov rax, 13\n"
                                   "    mov rdi, 2\n"
-                                  "    lea rsi, [rip + .LsigStruct]\n"
+                                  "    lea rsi, [rsp]\n"
                                   "    xor rdx, rdx\n"
                                   "    mov r10, 8\n"
                                   "    syscall\n"
                                   "    \n"
+                                  "    add rsp, 0x20\n"
                                   "    pop r11\n"
                                   "    pop rcx\n"
                                   "    pop r10\n"
@@ -172,12 +176,6 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
     fputs("\n.data\n\t", outputFile);
     fputs(".Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n", outputFile);
 
-    //Struct for martyrdom command
-    fputs("\t.LsigStruct:\n"
-          "\t\t.Lsa_handler: .quad 0\n"
-          "\t\t.quad 0x04000000\n"
-          "\t\t.quad 0, 0\n\n", outputFile);
-
     fprintf(outputFile, "\n\n.text\n\t");
 
     if(compileState->outputMode == executable) {
@@ -228,7 +226,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
                 if (compileState->martyrdom && compileState->allowIoCommands && k == 1 && strcmp(functionName, "main") == 0) {
-                    fprintf(outputFile, "%s", martyrdomCode);
+                    fputs(martyrdomCode, outputFile);
                 }
 
                 const struct parsedCommand currentCommand = currentFunction.commands[k];
