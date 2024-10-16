@@ -286,11 +286,15 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "push rsi\n\t"
                                   "push rdx\n\t"
                                   "push rax\n\t"
+                                  "push rcx\n\t"
+                                  "push r11\n\t"
                                   "mov BYTE PTR [rsp - 1], {0}\n\t"
                                   "lea rsi, [rsp - 1]\n\t"
                                   "mov rdx, 1\n\t"
                                   "mov rax, 1\n\t"
                                   "syscall\n\t"
+                                  "pop r11\n\t"
+                                  "pop rcx\n\t"
                                   "pop rax\n\t"
                                   "pop rdx\n\t"
                                   "pop rsi\n\t"
@@ -303,15 +307,19 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
             .translationPattern = "push rsi\n\t"
                                   "push rdx\n\t"
                                   "push rax\n\t"
+                                  "push rcx\n\t"
+                                  "push r11\n\t"
                                   "mov BYTE PTR [rsp - 1], {0}\n\t"
                                   "lea rsi, [rsp - 1]\n\t"
                                   "mov rdx, 1\n\t"
                                   "mov rax, 0\n\t"
                                   "syscall\n\t"
+                                  "pop r11\n\t"
+                                  "pop rcx\n\t"
                                   "pop rax\n\t"
                                   "pop rdx\n\t"
                                   "pop rsi\n\t"
-                                  "mov {0}, BYTE PTR [rsp - 25]\n\t" // Recover read character from stack
+                                  "mov {0}, BYTE PTR [rsp - 41]\n\t" // Recover read character from stack
         },
 
         ///Random commands
