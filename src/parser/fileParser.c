@@ -24,11 +24,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../logger/log.h"
 
-#ifdef WINDOWS
-/* strtok_r does not exist on Windows and instead is strtok_s. Use a preprocessor directive to replace all occurrences */
-# define strtok_r strtok_s
-#endif
-
 extern struct command commandList[];
 
 //Used to pseudo-random generation when using bully mode
@@ -62,60 +57,6 @@ int isLineOfInterest(const char* line, ssize_t lineLength) {
     return 0;
 }
 
-/**
- * A basic implementation of a getline-function.
- * Reads a full line and stores it in lineptr. If lineptr is NULL, it will be initialised and n will be set accordingly. When too little is allocated, 128 more Bytes will be added
- * @param lineptr a pointer to the current storage for lines. May be NULL
- * @param n must be the size of lineptr and will be updated by this function
- * @param stream from where to read
- * @return the number of bytes read if successful, -1 on error (e.g. EOF found, malloc/realloc failed)
- */
-ssize_t getLine(char **restrict lineptr, size_t *restrict n, FILE *restrict stream) {
-    if(*lineptr == NULL) {
-        if(!(*lineptr = malloc(128))) {
-            return -1;
-        }
-        *n = 128;
-    }
-
-    char* result = *lineptr;
-    char c = 'c';
-    ssize_t bytesRead = 0;
-    while(c != '\n') {
-        size_t readRes = fread(&c, 1, 1, stream);
-        if(readRes == 0) {
-            if(bytesRead == 0) {
-                return -1;
-            }
-            //If EOF was found somewhere while reading from file, still return this string
-            break;
-        }
-
-        *result = c;
-        bytesRead++;
-        result++;
-        if(bytesRead == (ssize_t) *n) {
-            *n += 128;
-            *lineptr = realloc(*lineptr, *n);
-            result = *lineptr + bytesRead;
-
-            if(!*lineptr) {
-                return -1;
-            }
-        }
-    }
-
-    //On Windows, file endings are done using \r\n. This means that there will be a \r at the end of every string, breaking the entire compiler
-    //To fix this, check if the string ends with \r\n. If so, replace it with \n
-    //However, we first need to check that we are not reading out of bounds
-    if(((uintptr_t) result - 2 >= (uintptr_t) *lineptr) && *(result - 2) == '\r') {
-        *(result - 2) = '\n';
-        result--;
-    }
-    //We got to the end of a line or the end of a file, now append a '\0'
-    *result = '\0';
-    return bytesRead;
-}
 
 /**
  * Counts the lines of code in a memeasm file. A line counts as a line of code if:
@@ -130,7 +71,7 @@ size_t getLinesOfCode(FILE *inputFile) {
     size_t len;
     ssize_t lineLength;
 
-    while((lineLength = getLine(&line, &len, inputFile)) != -1) {
+    while((lineLength = getline(&line, &len, inputFile)) != -1) {
         if(isLineOfInterest(line, lineLength) == 1) {
             loc++;
         }
@@ -360,7 +301,7 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
     int lineNumber = 1; //The line number we are currently on. We differentiate between number of commands and number of lines to print the correct line number in case of an error
 
     //Parse the file line by line
-    while((lineLength = getLine(&line, &len, inputFile)) != -1) {
+    while((lineLength = getline(&line, &len, inputFile)) != -1) {
         //Check if the line contains actual code or if it's empty/contains comments
         if(isLineOfInterest(line, lineLength) == 1) {
             //Remove \n from the end of the line
@@ -373,10 +314,10 @@ void parseCommands(FILE *inputFile, char* inputFileName, struct compileState* co
         }
         lineNumber++;
     }
+    CHECK_ALLOC(line);
+    free(line);
 
     commandsArray->size = loc;
     commandsArray->arrayPointer = commands;
-
-    free(line);
 }
 
