@@ -105,24 +105,25 @@ void printParameter(const enum parameterType paramType, const union parameter pa
             switch(param.chr) {
                 //Handling escape sequences first
                 case '\n':
-                    fputs("\\n", outputFile);
+                    fputs("'\\n'", outputFile);
                     break;
                 case '\b':
-                    fputs("\\b", outputFile);
+                    fputs("'\\b'", outputFile);
                     break;
                 case '\t':
-                    fputs("\\t", outputFile);
+                    fputs("'\\t'", outputFile);
                     break;
                 case '\f':
-                    fputs("\\f", outputFile);
+                    fputs("'\\f'", outputFile);
                     break;
                 case '\v':
-                    fputs("\\v", outputFile);
+                    fputs("'\\v'", outputFile);
                     break;
                 default:
                     fprintf(outputFile, "'%c'", param.chr);
                     break;
             }
+            break;
         case NUMBER:
             //If the parameter is a decimal number, write it as a hex string. Fixes issue #73
             fprintf(outputFile, "0x%llX", param.number);
