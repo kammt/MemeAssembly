@@ -33,6 +33,8 @@ bool isEqualParameter(enum parameterType param0Type, union parameter param0, enu
                 return strcmp(param0.str, param1.str) == 0;
             case MONKE_LABEL:
                 return param0.monkeLbl == param1.monkeLbl;
+            case NUMBER:
+                return param0.number == param1.number;
             default:
                 printInternalCompilerError("Unable to compare parameters of parameter type %d", true, 1, param0Type);
                 return false;
@@ -97,8 +99,9 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
 
     struct commandLinkedList* parentCommand = parentCommands;
     while (parentCommand != NULL) {
-        bool childFound[parametersToCheck];
-        for(int i = 0; i < parametersToCheck; i++) {
+        const unsigned arrSize = parametersToCheck ? parametersToCheck : 1;
+        bool childFound[arrSize];
+        for(int i = 0; i < arrSize; i++) {
             childFound[i] = false;
         }
         const struct parsedCommand* command = parentCommand->command;
@@ -108,9 +111,17 @@ void checkCompanionCommandExistence(struct commandLinkedList* parentCommands, st
         const struct commandLinkedList* childCommand = childCommands;
         while(childCommand != NULL) {
             if(!sameFile || parentCommand->definedInFile == childCommand->definedInFile) {
+                //If we don't check any parameters, then we already found our child command
+                if(parametersToCheck == 0) {
+                    childFound[0] = true;
+                    break;
+                }
+
+                //Check if any of our parameters match the child's first parameter
                 for(int i = 0; i < parametersToCheck; i++) {
-                    if(!childFound[i] && isEqualParameter(command->paramTypes[i], command->parameters[i], childCommand->command->paramTypes[i], childCommand->command->parameters[i])) {
+                    if(!childFound[i] && isEqualParameter(command->paramTypes[i], command->parameters[i], childCommand->command->paramTypes[0], childCommand->command->parameters[0])) {
                         childFound[i] = true;
+                        break;
                     }
                 }
             }
