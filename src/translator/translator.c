@@ -21,6 +21,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 #include "../logger/log.h"
 #include "../analyser/functions.h"
+#include "../analyser/parameters.h"
 
 #include <time.h>
 #include <string.h>
@@ -77,16 +78,46 @@ const char* const martyrdomCode = "    push rax\n"
                                   "    pop rdi\n"
                                   "    pop rax\n\n";
 
+void printParameter(const enum parameterType paramType, const union parameter param, FILE* outputFile) {
+    switch(paramType) {
+        case FUNC_NAME:
+            fputs(param.str, outputFile);
+            break;
+        case MONKE_LABEL:
+            fprintf(outputFile, "%llx", param.monkeLbl);
+            break;
+        case REG64:
+            fputs(registers_64_bit[param.reg64], outputFile);
+            break;
+        case REG32:
+            fputs(registers_32_bit[param.reg32], outputFile);
+            break;
+        case REG16:
+            fputs(registers_16_bit[param.reg16], outputFile);
+            break;
+        case REG8:
+            fputs(registers_8_bit[param.reg8], outputFile);
+            break;
+        case CHAR:
+            fprintf(outputFile, "'%c'", param.chr); //FIXME what about escape seqs?
+            break;
+        case NUMBER:
+            //If the parameter is a decimal number, write it as a hex string. Fixes issue #73
+            fprintf(outputFile, "0x%llX", param.number);
+            break;
+        default:
+            printInternalCompilerError("Unhandled parameter type in asm-printing: %d", true, 1, paramType);
+    }
+}
 
 /**
  * Receives a command and writes its assembly translation into the output file
  * @param compileState the current compile state
- * @param currentFunctionName the name of the current function. Needed for writing some stabs debugging info
  * @param parsedCommand the command to be translated
  * @param fileNum the id of the current file
  * @param outputFile the file where the translation should be written to
  */
-void translateToAssembly(struct compileState* compileState, char* currentFunctionName, struct parsedCommand parsedCommand, unsigned fileNum, bool lastCommand, FILE *outputFile) {
+void translateToAssembly(const struct compileState *compileState, const struct parsedCommand parsedCommand, const unsigned fileNum, FILE *outputFile) {
     if(commandList[parsedCommand.opcode].commandType != COMMAND_TYPE_FUNC_DEF && compileState->optimisationLevel == o69420) {
         printDebugMessage(compileState->logLevel, "\tCommand is not a function declaration, abort.", 0);
         return;
@@ -108,7 +139,7 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         }
 
         //Print all characters up to the {X}
-        size_t charsToPrint = nextParam - i - translationPattern;
+        const size_t charsToPrint = nextParam - i - translationPattern;
         fwrite(translationPattern + i, 1, charsToPrint, outputFile);
         //After this, we point to the character that is between the {}'s
         i += charsToPrint + 1;
@@ -121,7 +152,9 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
         //Is it a parameter?
         } else if(formatSpecifier >= '0' && formatSpecifier < command.usedParameters + '0') {
             const uint8_t index = formatSpecifier - 48;
-            char *parameter = parsedCommand.parameters[index];
+            const enum parameterType paramType = parsedCommand.paramTypes[index];
+            const union parameter parameter = parsedCommand.parameters[index];
+
             if(parsedCommand.isPointer == index + 1) {
                 /*
                  * If we are in bully mode, we first need to check if the operand size is unknown (e.g. a pointer
@@ -129,20 +162,17 @@ void translateToAssembly(struct compileState* compileState, char* currentFunctio
                  */
                 if(compileState->compileMode == bully && commandList[parsedCommand.opcode].usedParameters == 2 && !PARAM_ISREG(parsedCommand.paramTypes[index + 1 % 2])) {
                     const char* operandSizes[] = {"BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR"};
-                    fprintf(outputFile, "%s [%s]", operandSizes[computedIndex % 4], parameter);
+                    fputs(operandSizes[computedIndex % 4], outputFile);
+                    fputs(" [", outputFile);
+                    printParameter(paramType, parameter, outputFile);
+                    fputs("]", outputFile);
                 } else {
-                    fprintf(outputFile, "[%s]", parameter);
+                    fputs("[", outputFile);
+                    printParameter(paramType, parameter, outputFile);
+                    fputs("]", outputFile);
                 }
             } else {
-                /*
-                 * If the parameter is a decimal number, write it as a hex string. Fixes issue #73
-                 * The check is only needed here, as a decimal number cannot be a pointer
-                 */
-                if(parsedCommand.paramTypes[index] == PARAM_DECIMAL) {
-                    fprintf(outputFile, "0x%llX", strtoll(parameter, NULL, 10));
-                } else {
-                    fprintf(outputFile, "%s", parameter);
-                }
+                printParameter(paramType, parameter, outputFile);
             }
         } else {
             printInternalCompilerError("Invalid translation format specifier '%c' for opcode %u", true, 2, formatSpecifier, parsedCommand.opcode);
@@ -220,7 +250,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
         size_t line = 0;
         for(size_t j = 0; j < currentFile.functionCount; j++) {
             const struct function currentFunction = currentFile.functions[j];
-            char* functionName = currentFunction.commands[0].parameters[0];
+            const char* functionName = currentFunction.commands[0].parameters[0].str;
 
             for(size_t k = 0; k < currentFunction.numberOfCommands; k++) {
                 if (compileState->martyrdom && compileState->allowIoCommands && k == 1 && strcmp(functionName, "main") == 0) {
@@ -236,8 +266,7 @@ void writeToFile(struct compileState* compileState, FILE *outputFile) {
 
                 //If it should be translated, translate it
                 if (currentCommand.translate) {
-                    translateToAssembly(compileState, functionName, currentCommand, i,
-                                        (k == currentFunction.numberOfCommands - 1), outputFile);
+                    translateToAssembly(compileState, currentCommand, i, outputFile);
                 }
 
                 line++;
