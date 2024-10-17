@@ -37,10 +37,43 @@ struct commandLinkedList {
     struct commandLinkedList* next;
 };
 
+enum Reg64 { rax, rbx, rcx, rdx, rdi, rsi, rsp, rbp, r8, r9, r10, r11, r12, r13, r14, r15 };
+enum Reg32 { eax, ebx, ecx, edx, edi, esi, esp, ebp, r8d, r9d, r10d, r11d, r12d, r13d, r14d, r15d };
+enum Reg16 { ax, bx, cx, dx, di, si, sp, bp, r8w, r9w, r10w, r11w, r12w, r13w, r14w, r15w };
+enum Reg8 { al, ah, bl, bh, cl, ch, dl, dh, dil, sil, spl, bpl, r8b, r9b, r10b, r11b, r12b, r13b, r14b, r15b };
+
+// Parameter types
+enum parameterType {
+    REG64 = 1,
+    REG32 = 2,
+    REG16 = 4,
+    REG8 = 8,
+    REG = REG64 | REG32 | REG16 | REG8,
+    NUMBER = 16,
+    CHAR = 32,
+    MONKE_LABEL = 64,
+    FUNC_NAME = 128,
+};
+
+//Helper macros for register parameter macros
+#define PARAM_ISREG(param) (param <= REG8 && param >= REG64)
+#define PARAM_REG (REG64 | REG32 | REG16 | REG8)
+
+union parameter {
+    char* str;
+    char chr;
+    enum Reg64 reg64;
+    enum Reg32 reg32;
+    enum Reg16 reg16;
+    enum Reg8 reg8;
+    int64_t number;
+    uint64_t monkeLbl;
+};
+
 struct parsedCommand {
     uint8_t opcode;
-    char *parameters[MAX_PARAMETER_COUNT];
-    uint8_t paramTypes[MAX_PARAMETER_COUNT];
+    union parameter parameters[MAX_PARAMETER_COUNT];
+    enum parameterType paramTypes[MAX_PARAMETER_COUNT];
     uint8_t isPointer; //0 = No Pointer, 1 = first parameter, 2 = second parameter, ...
     size_t lineNum;
     bool translate; //Default is 1 (true). Is set to false in case this command is selected for deletion by "perfectly balanced as all things should be"
@@ -84,19 +117,6 @@ struct compileState {
     logLevel logLevel;
 };
 
-// Parameter types
-#define PARAM_REG64 1
-#define PARAM_REG32 2
-#define PARAM_REG16 4
-#define PARAM_REG8 8
-#define PARAM_DECIMAL 16
-#define PARAM_CHAR 32
-#define PARAM_MONKE_LABEL 64
-#define PARAM_FUNC_NAME 128
-//Helper macros for register parameter macros
-#define PARAM_ISREG(param) (param <= PARAM_REG8 && param > 0)
-#define PARAM_REG (PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8)
-
 // Command types
 #define COMMAND_TYPE_MOV 1
 #define COMMAND_TYPE_FUNC_RETURN 2
@@ -109,14 +129,6 @@ struct command {
     /*
      * Allowed types work as follows: Each bit is assigned to a type of variable. If it is set to one, it is allowed.
      * That way, each parameter can allow multiple variable types.
-     *  Bit 0: 64 bit registers
-     *  Bit 1: 32 bit registers
-     *  Bit 2: 16 bit registers
-     *  Bit 3: 8 bit registers
-     *  Bit 4: decimal numbers
-     *  Bit 5: Characters (including Escape Sequences) / ASCII-code
-     *  Bit 6: Valid Monke Jump Label
-     *  Bit 7: Valid function name
      */
     uint8_t allowedParamTypes[MAX_PARAMETER_COUNT];
     /*
