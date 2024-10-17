@@ -222,7 +222,7 @@ void printNote(char* message, bool indent, unsigned varArgNum, ...) {
  * @param varArgNum How many variable arguments were passed (important!)
  * @param ... variable arguments
  */
-void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...) {
+_Noreturn void printInternalCompilerError(char* message, bool report, unsigned varArgNum, ...) {
     //Initialise va_list to pass it on to vprintf
     va_list vaList;
     va_start(vaList, varArgNum);
@@ -233,4 +233,5 @@ void printInternalCompilerError(char* message, bool report, unsigned varArgNum, 
     vfprintf(stderr, message, vaList);
     fprintf(stderr, "\n");
     if(report) fprintf(stderr, "Please report this error at https://github.com/kammt/MemeAssembly/issues/new\n");
+    exit(1);
 }
