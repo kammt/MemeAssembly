@@ -118,108 +118,24 @@ char *registers_8_bit[NUMBER_OF_8_BIT_REGISTERS] = {
 char *escapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
         "\\n", "\\s", "space", "\\t", "\\f", "\\b", "\\v", "\\\"", "\\?", "\\\\"
 };
-char *translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
-        "'\\n'", "' '", "' '", "'\\t'", "'\\f'", "'\\b'", "'\\v'", "'\\\"'", "'\\?'", "'\\\\'"
+char translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
+        '\n', ' ', ' ', '\t', '\f', '\b', '\v', '"', '?', '\\'
 };
-
-uint8_t getRegisterSize(uint8_t paramType) {
-    switch(paramType) {
-        case PARAM_REG8:
-            return 8;
-        case PARAM_REG16:
-            return 16;
-        case PARAM_REG32:
-            return 32;
-        case PARAM_REG64:
-            return 64;
-        default:
-            return 0;
-    }
-}
-
-/**
- * Returns a random register for the specified size. Returned value may be NULL
- */
-char* getRandomRegister(uint8_t paramType) {
-    switch(paramType) {
-        case PARAM_REG64:
-            return strdup(registers_64_bit[computedIndex % NUMBER_OF_64_BIT_REGISTERS]);
-        case PARAM_REG32:
-            return strdup(registers_32_bit[computedIndex % NUMBER_OF_32_BIT_REGISTERS]);
-        case PARAM_REG16:
-            return strdup(registers_16_bit[computedIndex % NUMBER_OF_16_BIT_REGISTERS]);
-        case PARAM_REG8:
-            return strdup(registers_8_bit[computedIndex % NUMBER_OF_8_BIT_REGISTERS]);
-        default:
-            return NULL;
-    }
-}
 
 /**
  * Compares the parameter against all possible values in a pre-defined list
  * @param parameter the given parameter
  * @param array the array to be compared against
  * @param arraySize the number of items in this array
- * @return 1 if it is present in the array, 0 otherwise
+ * @return its index if it is present in the array, -1 otherwise
  */
-int isInArray(char* parameter, char **array, int arraySize) {
+int linearSearch(const char* parameter, const char **array, const int arraySize) {
     for(int i = 0; i < arraySize; i++) {
         if(strcmp(parameter, array[i]) == 0) {
-            return 1;
+            return i;
         }
     }
-    return 0;
-}
-
-/**
- * Translates a given escape sequence into a format that is usable in assembly code
- * @param parameter the given parameter
- * @param parameterNum the parameter number
- * @param parsedCommand the struct of the current command
- */
-void translateEscapeSequence(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
-    //Allocate new memory
-    char *modifiedParameter = malloc(5);
-    CHECK_ALLOC(modifiedParameter);
-
-    //Get the index that the escape sequence is in
-    int i = 0;
-    while(strcmp(parameter, escapeSequences[i]) != 0) {
-        i++;
-    }
-
-    //Set the value to the translated escape sequence
-    strcpy(modifiedParameter, translatedEscapeSequences[i]);
-
-    //Free the old memory
-    free(parameter);
-
-    //Set the reference to the new memory block
-    (*parsedCommand).parameters[parameterNum] = modifiedParameter;
-}
-
-/**
- * Translates a given character into a format that is usable in assembly code
- * @param parameter the given parameter
- * @param parameterNum the parameter number
- * @param parsedCommand the struct of the current command
- */
-void translateCharacter(char *parameter, int parameterNum, struct parsedCommand *parsedCommand) {
-    //Allocate new memory
-    char *modifiedParameter = malloc(4);
-    CHECK_ALLOC(modifiedParameter);
-
-    //Set the value to the provided character, surrounded by ''
-    modifiedParameter[0] = '\'';
-    modifiedParameter[1] = parameter[0];
-    modifiedParameter[2] = '\'';
-    modifiedParameter[3] = '\0';
-
-    //Free the old memory
-    free(parameter);
-
-    //Set the reference to the new memory block
-    (*parsedCommand).parameters[parameterNum] = modifiedParameter;
+    return -1;
 }
 
 void printParameterUsageNote(uint8_t allowedParams) {
@@ -251,51 +167,67 @@ void printParameterUsageNote(uint8_t allowedParams) {
 
 /**
  * Checks if the given parsed command adheres to the parameter constraints (i.e. the parameters are legal)
+ * The parsedCommand struct is modified to reflect the correct paramater types, the parameter union is also set correctly
  */
-void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, struct compileState* compileState) {
+void checkParameters(struct parsedCommand *parsedCommand, const char* inputFileName, struct compileState* compileState) {
     printDebugMessage(compileState->logLevel, "Starting parameter validity check", 0);
-    uint8_t usedParameters = commandList[(*parsedCommand).opcode].usedParameters;
+
+    const struct command currentCommand = commandList[parsedCommand->opcode];
+    const uint8_t usedParameters = currentCommand.usedParameters;
+
     for(uint8_t parameterNum = 0; parameterNum < usedParameters; parameterNum++) {
         //Get the current parameter
-        char* parameter = (*parsedCommand).parameters[parameterNum];
-        printDebugMessage( compileState->logLevel, "\tChecking parameter %s", 1, parameter);
+        char* parameter = parsedCommand->parameters[parameterNum].str;
+        printDebugMessage(compileState->logLevel, "\tChecking parameter %s", 1, parameter);
 
         //Get the allowed parameter types for this parameter
-        uint8_t allowedTypes = commandList[(*parsedCommand).opcode].allowedParamTypes[parameterNum];
+        const uint8_t allowedTypes = currentCommand.allowedParamTypes[parameterNum];
 
-        if((allowedTypes & PARAM_REG64) != 0) { //64 bit registers
-            if(isInArray(parameter, registers_64_bit, NUMBER_OF_64_BIT_REGISTERS)) {
-                printDebugMessage( compileState->logLevel, "\t\tParameter is a 64 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = PARAM_REG64;
+        if((allowedTypes & REG64) != 0) { //64 bit registers
+            const int index = linearSearch(parameter, registers_64_bit, NUMBER_OF_64_BIT_REGISTERS);
+            if(index != -1) {
+                printDebugMessage(compileState->logLevel, "\t\tParameter is a 64 bit register", 0);
+                parsedCommand->paramTypes[parameterNum] = REG64;
+                parsedCommand->parameters[parameterNum].reg64 = (enum Reg64) index;
                 continue;
             }
             printDebugMessage( compileState->logLevel, "\t\tParameter is not a 64 bit register", 0);
         }
-        if((allowedTypes & PARAM_REG32) != 0) { //32 bit registers
-            if(isInArray(parameter, registers_32_bit, NUMBER_OF_32_BIT_REGISTERS)) {
+
+        if((allowedTypes & REG32) != 0) { //32 bit registers
+            const int index = linearSearch(parameter, registers_32_bit, NUMBER_OF_32_BIT_REGISTERS);
+            if(index != -1) {
                 printDebugMessage( compileState->logLevel, "\t\tParameter is a 32 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = PARAM_REG32;
+                parsedCommand->paramTypes[parameterNum] = REG32;
+                parsedCommand->parameters[parameterNum].reg32 = (enum Reg32) index;
                 continue;
             }
             printDebugMessage(compileState->logLevel, "\t\tParameter is not a 32 bit register", 0);
         }
-        if((allowedTypes & PARAM_REG16) != 0) { //16 bit registers
-            if(isInArray(parameter, registers_16_bit, NUMBER_OF_16_BIT_REGISTERS)) {
-                printDebugMessage(compileState->logLevel, "\t\tParameter is a 16 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = PARAM_REG16;
+
+        if((allowedTypes & REG16) != 0) { //16 bit registers
+            const int index = linearSearch(parameter, registers_16_bit, NUMBER_OF_16_BIT_REGISTERS);
+            if(index != -1) {
+                printDebugMessage( compileState->logLevel, "\t\tParameter is a 16 bit register", 0);
+                parsedCommand->paramTypes[parameterNum] = REG16;
+                parsedCommand->parameters[parameterNum].reg16 = (enum Reg16) index;
                 continue;
             }
             printDebugMessage(compileState->logLevel, "\t\tParameter is not a 16 bit register", 0);
         }
-        if((allowedTypes & PARAM_REG8) != 0) { //8 bit registers
-            if(isInArray(parameter, registers_8_bit, NUMBER_OF_8_BIT_REGISTERS)) {
-                printDebugMessage(compileState->logLevel, "\t\tParameter is an 8 bit register", 0);
-                parsedCommand->paramTypes[parameterNum] = PARAM_REG8;
+
+        if((allowedTypes & REG8) != 0) { //8 bit registers
+            const int index = linearSearch(parameter, registers_8_bit, NUMBER_OF_8_BIT_REGISTERS);
+            if(index != -1) {
+                printDebugMessage( compileState->logLevel, "\t\tParameter is a 8 bit register", 0);
+                parsedCommand->paramTypes[parameterNum] = REG8;
+                parsedCommand->parameters[parameterNum].reg8 = (enum Reg8) index;
                 continue;
             }
-            printDebugMessage(compileState->logLevel, "\t\tParameter is not an 8 bit register", 0);
+            printDebugMessage(compileState->logLevel, "\t\tParameter is not a 8 bit register", 0);
         }
-        if((allowedTypes & PARAM_DECIMAL) != 0) { //Decimal number
+
+        if((allowedTypes & NUMBER) != 0) { //Decimal number
             char* endPtr;
             long long int number = strtoll(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
@@ -314,15 +246,17 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 } else if(number == 420) {
                     printBongASCII();
                 }
-                parsedCommand->paramTypes[parameterNum] = PARAM_DECIMAL;
+                parsedCommand->paramTypes[parameterNum] = NUMBER;
+                parsedCommand->parameters[parameterNum].number = number;
                 continue;
             }
             printDebugMessage(compileState->logLevel, "\t\tParameter is not a decimal number", 0);
         }
+
         if((allowedTypes & PARAM_CHAR) != 0) { //Characters (including escape sequences) / ASCII-code
             //Check if any of the escape sequences match
-            if(isInArray(parameter, (char **) escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES)) {
-                translateEscapeSequence(parameter, parameterNum, parsedCommand);
+            const int index = linearSearch(parameter, escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES);
+            if(index != -1) {
                 printDebugMessage(compileState->logLevel, "\t\tParameter is an escape sequence and has been translated", 0);
                 if(parsedCommand->isPointer == parameterNum + 1) {
                     if(compileState->compileMode != bully) {
@@ -332,12 +266,14 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         parsedCommand->isPointer = 0;
                     }
                 }
-                parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
+
+                parsedCommand->paramTypes[parameterNum] = CHAR;
+                parsedCommand->parameters[parameterNum].chr = translatedEscapeSequences[index];
                 continue;
+            }
+
             //If not, check if the parameter is only one character
-            } else if(strlen(parameter) == 1) {
-                translateCharacter(parameter, parameterNum, parsedCommand);
-                printDebugMessage(compileState->logLevel, "\t\tParameter is a character, translated to: %s", 1, (*parsedCommand).parameters[parameterNum]);
+            if(strlen(parameter) == 1) {
                 if(parsedCommand->isPointer == parameterNum + 1) {
                     if(compileState->compileMode != bully) {
                         printError(inputFileName, parsedCommand->lineNum, compileState, "a character cannot be a pointer", 0);
@@ -346,16 +282,17 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         parsedCommand->isPointer = 0;
                     }
                 }
-                parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
+                parsedCommand->paramTypes[parameterNum] = CHAR;
+                parsedCommand->parameters[parameterNum].chr = parameter[0];
                 continue;
             }
             printDebugMessage(compileState->logLevel, "\t\tParameter is neither a character nor an escape sequence", 0);
 
             //Now check if it is an ASCII-code
             char* endPtr;
-            long result = strtol(parameter, &endPtr, 10);
+            const long result = strtol(parameter, &endPtr, 10);
             //If the end pointer does not point to the end of the string, there was an illegal character
-            //We allow values greater than 128 so that it is possible to print unicode in multiple steps. See https://play.golang.org/p/TojzlTMIcJe
+            //We allow values greater than 128 so that it is possible to print Unicode in multiple steps. See https://play.golang.org/p/TojzlTMIcJe
             if(*endPtr == '\0' && result >= 0 && result <= 255) {
                 printDebugMessage(compileState->logLevel, "\t\tParameter is an ASCII-code", 0);
                 if(parsedCommand->isPointer == parameterNum + 1) {
@@ -366,29 +303,29 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         parsedCommand->isPointer = 0;
                     }
                 }
-                parsedCommand->paramTypes[parameterNum] = PARAM_CHAR;
+                parsedCommand->paramTypes[parameterNum] = CHAR;
+                parsedCommand->parameters[parameterNum].chr = (char) result;
                 continue;
             }
             printDebugMessage(compileState->logLevel, "\t\tParameter is not an ASCII-code", 0);
         }
-        if((allowedTypes & PARAM_MONKE_LABEL) != 0) { //Monke Jump label
-            //Iterate through each character and check if it is either a U or an A
-            //Define variables that are set to 1 if either a U or an A are found. That way, you can check if both of them occurred at least once
-            uint8_t a_used = 0;
-            uint8_t u_used = 0;
-            uint8_t unexpectedCharacter = 0;
-            for(size_t i = 0; i < strlen(parameter); i++) {
-                if(parameter[i] == 'a') {
-                    a_used = 1;
-                } else if(parameter[i] == 'u') {
-                    u_used = 1;
-                } else {
-                    unexpectedCharacter = 1;
+
+        if((allowedTypes & MONKE_LABEL) != 0 && strlen(parameter) <= 64) { //Monke Jump label
+            //Convert the monke label string into an 64 bit integer by using a bitmap
+            //1=U, 0=A
+            uint64_t monkeLbl = 0;
+            bool valid = true;
+            for(int i = 0; i < strlen(parameter); i++) {
+                if(parameter[i] == 'u') {
+                    monkeLbl |= 1 << i;
+                } else if(parameter[i] != 'a') {
+                    printDebugMessage(compileState->logLevel, "\t\tInvalid Monke label", 0);
+                    valid = false;
                     break;
                 }
             }
 
-            if(a_used == 1 && u_used == 1 && unexpectedCharacter == 0) {
+            if(valid) {
                 printDebugMessage(compileState->logLevel, "\t\tParameter is a valid Monke jump label", 0);
                 if(parsedCommand->isPointer == parameterNum + 1) {
                     if(compileState->compileMode != bully) {
@@ -398,15 +335,17 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         parsedCommand->isPointer = 0;
                     }
                 }
-                parsedCommand->paramTypes[parameterNum] = PARAM_MONKE_LABEL;
+                parsedCommand->paramTypes[parameterNum] = MONKE_LABEL;
+                parsedCommand->parameters[parameterNum].monkeLbl = monkeLbl;
                 continue;
             }
             printDebugMessage(compileState->logLevel, "\t\tParameter is not a valid Monke jump label", 0);
         }
-        if((allowedTypes & PARAM_FUNC_NAME) != 0) { //Function name
+
+        if((allowedTypes & FUNC_NAME) != 0) { //Function name
             bool unexpectedCharacter = false;
             for(size_t i = 0; i < strlen(parameter); i++) {
-                char character = parameter[i];
+                const char character = parameter[i];
                 if(i == 0 && character >= '0' && character <= '9') {
                     unexpectedCharacter = true;
                     printDebugMessage(compileState->logLevel, "\t\tParameter is not a valid function name, as there is a number in the first position", 0);
@@ -428,10 +367,12 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                         parsedCommand->isPointer = 0;
                     }
                 }
-                parsedCommand->paramTypes[parameterNum] = PARAM_FUNC_NAME;
+                parsedCommand->paramTypes[parameterNum] = FUNC_NAME;
+                //No need to modify the union, it is already set correctly to str
                 continue;
             }
         }
+
         printDebugMessage(compileState->logLevel, "No checks succeeded, invalid parameter!", 0);
         if(compileState->compileMode != bully) {
             printError(inputFileName, parsedCommand->lineNum, compileState, "invalid parameter provided: \"%s\"", 1, parameter);
@@ -440,7 +381,8 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
             }
             parsedCommand->paramTypes[parameterNum] = 0;
         } else {
-            /* To make this work, we need to replace this parameter with something that works
+            /*
+             * To make this work, we need to replace this parameter with something that works
              * To create something semi-random, we use the same technique used in fileParser.c:
              * "computedIndex", which is dependent on the previous failed parameters, is used to pseudo-randomly
              * generate a valid parameter
@@ -459,48 +401,42 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                 }
             }
 
-            char* newParam;
+            free(parameter);
+            parsedCommand->paramTypes[parameterNum] = chosenParameter;
             switch(chosenParameter) {
-                case PARAM_REG64:
-                case PARAM_REG32:
-                case PARAM_REG16:
-                case PARAM_REG8:
-                    newParam = getRandomRegister(chosenParameter);
+                case REG64:
+                    parsedCommand->parameters[parameterNum].reg64 = (enum Reg64) computedIndex % NUMBER_OF_64_BIT_REGISTERS;
                     break;
-                case PARAM_DECIMAL:
-                case PARAM_CHAR:
-                    newParam = malloc(10);
-                    CHECK_ALLOC(newParam);
-                    sprintf(newParam, "%u", (unsigned) computedIndex % 128);
+                case REG32:
+                    parsedCommand->parameters[parameterNum].reg32 = (enum Reg32) computedIndex % NUMBER_OF_32_BIT_REGISTERS;
                     break;
-                case PARAM_MONKE_LABEL:
-                    newParam = malloc(10);
-                    int j = 0;
-                    CHECK_ALLOC(newParam);
-                    unsigned length = computedIndex % 7 + 2;
-                    for(unsigned i = 0; i < length; i++) {
-                        newParam[j++] = (computedIndex % 2 == 0) ? 'u' : 'a';
-                        computedIndex = computedIndex * 3 / 2;
-                    }
-                    newParam[length] = 0;
+                case REG16:
+                    parsedCommand->parameters[parameterNum].reg16 = (enum Reg16) computedIndex % NUMBER_OF_16_BIT_REGISTERS;
                     break;
-                case PARAM_FUNC_NAME:
-                    newParam = strdup(functionNames[computedIndex % numFunctionNames]);
+                case REG8:
+                    parsedCommand->parameters[parameterNum].reg8 = (enum Reg8) computedIndex % NUMBER_OF_8_BIT_REGISTERS;
+                    break;
+                case NUMBER:
+                    parsedCommand->parameters[parameterNum].number = (int64_t) computedIndex % 42069;
+                    break;
+                case CHAR:
+                    parsedCommand->parameters[parameterNum].chr = (char) computedIndex;
+                case MONKE_LABEL:
+                    //Since it is stored as a bitmap, this is actually quite simple to generate
+                    parsedCommand->parameters[parameterNum].monkeLbl = computedIndex * 69;
+                case FUNC_NAME:
+                    char* name = strdup(functionNames[computedIndex % numFunctionNames]);
+                    CHECK_ALLOC(name);
+                    parsedCommand->parameters[parameterNum].str = name;
                     break;
                 default:
                     printInternalCompilerError("Random parameter generation unsupported for paramType %u", true, 1, chosenParameter);
                     exit(EXIT_FAILURE);
             }
+            //Just say that it may never be a pointer
             if(parsedCommand->isPointer == parameterNum + 1) {
                 parsedCommand->isPointer = 0;
             }
-
-            CHECK_ALLOC(newParam);
-            //Free the old parameter
-            free(parameter);
-            //Set the new parameter
-            parsedCommand->parameters[parameterNum] = newParam;
-            parsedCommand->paramTypes[parameterNum] = chosenParameter;
         }
     }
 
@@ -509,20 +445,21 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         //Now do some parameter checks
         //1: If a number and a register are used, they number must fit in the register
         //2: If a number and a 64 Bit register are used (and the command is not a mov-command), can the number be sign-extended from 32 Bits?
-        if((parsedCommand->paramTypes[0] == PARAM_DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
-           (parsedCommand->paramTypes[1] == PARAM_DECIMAL && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
-            unsigned decimalIndex = (parsedCommand->paramTypes[0] == PARAM_DECIMAL) ? 0 : 1;
-            unsigned regIndex = 1 - decimalIndex;
-            unsigned regSize = getRegisterSize(parsedCommand->paramTypes[regIndex]);
+        if((parsedCommand->paramTypes[0] == NUMBER && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
+           (parsedCommand->paramTypes[1] == NUMBER && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
+            const unsigned decimalIndex = (parsedCommand->paramTypes[0] == PARAM_DECIMAL) ? 0 : 1;
+            const unsigned regIndex = 1 - decimalIndex;
+            const enum paramType regType = parsedCommand->paramTypes[regIndex];
+            const unsigned regSize = (regType == REG64) ? 64 : (regType == REG32) ? 32 : (regType == REG16) ? 16 : 8;
 
-            long long number = strtoll(parsedCommand->parameters[decimalIndex], NULL, 10);
+            const long long number = parsedCommand->parameters[decimalIndex].number;
             /*
              * To calculate the number of bits needed, we need to keep in mind that we use the two's complement. So there are two scenarios:
              *  - positive number: just check how many leading zeros there are. These zeros are not needed => 64 - clz
              *  - negative number: Meaning the last bit is a 1. Flip all bits. Now do the same calculation as before, but add 1 at the end,
              *                     since the number requires at least one bit at the end that is set to one
              */
-            unsigned bitsNeeded = (number == 0) ? 1 : ((__builtin_clzll(number) > 0) ? 64 - __builtin_clzll(number) : 64 - __builtin_clzll(~number) + 1);
+            const unsigned bitsNeeded = (number == 0) ? 1 : ((__builtin_clzll(number) > 0) ? 64 - __builtin_clzll(number) : 64 - __builtin_clzll(~number) + 1);
             if(bitsNeeded > regSize) {
                 if(compileState->compileMode != bully) {
                     printError(inputFileName, parsedCommand->lineNum, compileState,
@@ -530,12 +467,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                                3, parsedCommand->parameters[decimalIndex], bitsNeeded, parsedCommand->parameters[regIndex], regSize);
                 } else {
                     //We replace the number with something that is guaranteed to fit into all registers
-                    char* newParam = malloc(10);
-                    CHECK_ALLOC(newParam);
-                    sprintf(newParam, "%u", (unsigned) computedIndex % 256);
-
-                    free(parsedCommand->parameters[decimalIndex]);
-                    parsedCommand->parameters[decimalIndex] = newParam;
+                    parsedCommand->parameters[decimalIndex].number = (uint8_t) computedIndex;
                 }
             //If command is not mov, are the last 33 Bits all 0 or all 1?
             } else if(commandList[parsedCommand->opcode].commandType != COMMAND_TYPE_MOV && regSize == 64 && !((number & 0xFFFFFFFF80000000) == 0 || (number | 0x7FFFFFFF) == -1)) {
@@ -544,7 +476,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                                "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits",0);
                 } else {
                     //We just make the number shorter than 32 bits :bigBrain:
-                    parsedCommand->parameters[decimalIndex][computedIndex % 32] = 0;
+                    parsedCommand->parameters[decimalIndex].number = (int32_t) parsedCommand->parameters[decimalIndex].number;
 
                     //Also, change computedIndex. Just because
                     computedIndex += (number & 0xFFF);
@@ -555,7 +487,7 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
         //3: If two (or potentially more) registers are used, they must be of the same size
         uint8_t currentReg = 0; // The first encountered register is set as the expected size. If 0, no register was found until now
         for (int i = 0; i < usedParameters; i++) { //Go over all parameters
-            uint8_t paramType = parsedCommand->paramTypes[i];
+            const uint8_t paramType = parsedCommand->paramTypes[i];
             if (currentReg == 0) { //If no register was found yet...
                 if (PARAM_ISREG(paramType) && parsedCommand->isPointer != i + 1) { //...and this parameter is a register...
                     currentReg = paramType; //...set it as the expected size
@@ -566,11 +498,13 @@ void checkParameters(struct parsedCommand *parsedCommand, char* inputFileName, s
                                "invalid parameter combination: cannot combine registers of different size", 0);
                 } else {
                     //We just replace this register with one of the correct size
-                    free(parsedCommand->parameters[i]);
-                    parsedCommand->parameters[i] = getRandomRegister(currentReg);
-                    CHECK_ALLOC(parsedCommand->parameters[i]);
+                    /*
+                     * To avoid checking for the actual type, just put a valid index in there, and
+                     * update the variable type. ✨ Undefined Behavior ✨
+                     */
+                    parsedCommand->parameters[i].number = computedIndex % NUMBER_OF_64_BIT_REGISTERS;
 
-                    parsedCommand->paramTypes[i] = currentReg;
+                    parsedCommand->paramTypes[i] = (enum parameterType) currentReg;
                 }
             }
         }
