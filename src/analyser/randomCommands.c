@@ -34,8 +34,6 @@ void setConfusedStonksJumpLabel(struct commandLinkedList** commandLinkedList, un
     (void)(commandLinkedList);
     (void)(opcode);
 
-    srand((unsigned int) time(NULL));
-
     for(unsigned i = 0; i < compileState->fileCount; i++) {
         if(compileState->files[i].loc == 0) {
             continue;
@@ -78,7 +76,6 @@ void chooseLinesToBeDeleted(struct commandLinkedList** commandLinkedList, unsign
     if(linesToBeDeleted > 0) {
         printThanosASCII(linesToBeDeleted);
 
-        srand(time(NULL));
         size_t selectedLines = 0;
         while(selectedLines < linesToBeDeleted) {
             //Generate a random file

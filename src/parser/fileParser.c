@@ -244,11 +244,11 @@ struct parsedCommand parseLine(char* inputFileName, size_t lineNum, char* line, 
         parsedCommand.opcode = computedIndex % (NUMBER_OF_COMMANDS - 1);
         if(commandList[parsedCommand.opcode].usedParameters > 0) {
             parsedCommand.parameters[0].str = strdup(randomParams[computedIndex % randomParamCount]);
-            CHECK_ALLOC(parsedCommand.parameters[0]);
+            CHECK_ALLOC(parsedCommand.parameters[0].str);
         }
         if (commandList[parsedCommand.opcode].usedParameters > 1) {
             parsedCommand.parameters[1].str = strdup(randomParams[(computedIndex * inputFileName[0]) % randomParamCount]);
-            CHECK_ALLOC(parsedCommand.parameters[1]);
+            CHECK_ALLOC(parsedCommand.parameters[1].str);
         }
         parsedCommand.isPointer = 0;
     } else {

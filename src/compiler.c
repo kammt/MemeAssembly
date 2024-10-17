@@ -23,6 +23,7 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include "parser/parser.h"
 #include "analyser/analyser.h"
@@ -423,6 +424,7 @@ const struct command commandList[NUMBER_OF_COMMANDS] = {
  */
 void compile(struct compileState compileState, char* outputFileName) {
     ///Analysis
+    srand(time(NULL));
     analyseCommands(&compileState);
 
     //Analysis done. If any errors occurred until now, print to stderr and exit

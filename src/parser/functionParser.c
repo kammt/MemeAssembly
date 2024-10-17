@@ -144,7 +144,7 @@ void parseFunctions(struct file* fileStruct, struct commandsArray commandsArray,
             //The first one is a function definition
             commands[0].opcode = 0;
             commands[0].lineNum = 69; //That doesn't matter, there are no error messages anyway
-            commands[0].parameters[0] = funcName;
+            commands[0].parameters[0].str = funcName;
             commands[0].translate = true;
 
             //memcpy the other commands

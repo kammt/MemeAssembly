@@ -27,11 +27,11 @@ void analyseCommands(struct compileState* compileState) {
 
     //Traverse all files
     for(unsigned i = 0; i < compileState->fileCount; i++) {
-        struct file file = compileState->files[i];
+        const struct file file = compileState->files[i];
 
         //Traverse all functions
         for(unsigned j = 0; j < file.functionCount; j++) {
-            struct function function = file.functions[j];
+            const struct function function = file.functions[j];
 
             //Traverse all commands
             for(unsigned k = 0; k < function.numberOfCommands; k++) {
@@ -67,7 +67,7 @@ void analyseCommands(struct compileState* compileState) {
 
     //Now go through each command and call its analysis function - if it has one
     for(unsigned i = 0; i < NUMBER_OF_COMMANDS; i++) {
-        struct command command = commandList[i];
+        const struct command command = commandList[i];
         if(command.analysisFunction != NULL) {
             command.analysisFunction(commandLinkedList, i, compileState);
         }

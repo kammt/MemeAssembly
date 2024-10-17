@@ -25,6 +25,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 
 void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
 void analyseCall(struct commandLinkedList** commandLinkedList, unsigned opcode, struct compileState* compileState);
-bool mainFunctionExists(struct compileState* compileState);
+bool mainFunctionExists(const struct compileState* compileState);
 
 #endif //MEMEASSEMBLY_FUNCTIONS_H

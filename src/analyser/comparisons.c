@@ -32,7 +32,7 @@ void analyseWhoWouldWinCommands(struct commandLinkedList** commandLinkedList, un
     printDebugMessage(compileState->logLevel, "Starting analysis for \"who would win?\" command", 0);
 
     //First check: No comparison jump labels were defined twice
-    checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 1, "comparison jump marker");
+    checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, true, "comparison jump marker");
 
     //Second check: "p wins" was declared
     checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 2, true, "comparison jump label");
@@ -50,7 +50,7 @@ void analyseTheyreTheSamePictureCommands(struct commandLinkedList** commandLinke
     printDebugMessage(compileState->logLevel, "Starting analysis for \"corporate needs you to find the difference...\" command", 0);
 
     //Check 1: Was the equality label defined twice in the same file?
-    checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, 0, "\"they're the same picture\"");
+    checkDuplicateDefinition(commandLinkedList[opcode + 1], compileState, true, false, "\"they're the same picture\"");
 
     //Check 2: "they're the same picture" must exist if a comparison was used
     checkCompanionCommandExistence(commandLinkedList[opcode], commandLinkedList[opcode + 1], compileState, 0, true, "\"they're the same picture\"");

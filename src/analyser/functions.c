@@ -46,16 +46,10 @@ void analyseFunctions(struct commandLinkedList** commandLinkedList, unsigned opc
 /**
  * Checks if a main function was defined anywhere
  */
-bool mainFunctionExists(struct compileState* compileState) {
+bool mainFunctionExists(const struct compileState* compileState) {
     for(unsigned fileNum = 0; fileNum < compileState->fileCount; fileNum++) {
         for(unsigned funcNum = 0; funcNum < compileState->files[fileNum].functionCount; funcNum++) {
-            const char* const mainFunctionName =
-                #ifdef MACOS
-                    "_main";
-                #else
-                    "main";
-                #endif
-            if (strcmp(compileState->files[fileNum].functions[funcNum].commands[0].parameters[0], mainFunctionName) == 0) {
+            if (strcmp(compileState->files[fileNum].functions[funcNum].commands[0].parameters[0].str, "main") == 0) {
                 return true;
             }
         }
