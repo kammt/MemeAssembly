@@ -78,6 +78,9 @@ const char* const martyrdomCode = "    push rax\n"
                                   "    pop rdi\n"
                                   "    pop rax\n\n";
 
+/**
+ * Prints a given parameter into the outputFile, based on its parameter type
+ */
 void printParameter(const enum parameterType paramType, const union parameter param, FILE* outputFile) {
     switch(paramType) {
         case FUNC_NAME:
@@ -99,8 +102,27 @@ void printParameter(const enum parameterType paramType, const union parameter pa
             fputs(registers_8_bit[param.reg8], outputFile);
             break;
         case CHAR:
-            fprintf(outputFile, "'%c'", param.chr); //FIXME what about escape seqs?
-            break;
+            switch(param.chr) {
+                //Handling escape sequences first
+                case '\n':
+                    fputs("\\n", outputFile);
+                    break;
+                case '\b':
+                    fputs("\\b", outputFile);
+                    break;
+                case '\t':
+                    fputs("\\t", outputFile);
+                    break;
+                case '\f':
+                    fputs("\\f", outputFile);
+                    break;
+                case '\v':
+                    fputs("\\v", outputFile);
+                    break;
+                default:
+                    fprintf(outputFile, "'%c'", param.chr);
+                    break;
+            }
         case NUMBER:
             //If the parameter is a decimal number, write it as a hex string. Fixes issue #73
             fprintf(outputFile, "0x%llX", param.number);
