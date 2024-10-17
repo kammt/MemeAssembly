@@ -35,6 +35,8 @@ bool isEqualParameter(enum parameterType param0Type, union parameter param0, enu
                 return param0.monkeLbl == param1.monkeLbl;
             case NUMBER:
                 return param0.number == param1.number;
+            case CHAR:
+                return param0.chr == param1.chr;
             default:
                 printInternalCompilerError("Unable to compare parameters of parameter type %d", true, 1, param0Type);
                 return false;
