@@ -23,11 +23,6 @@ along with MemeAssembly. If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <stdio.h>
 
-#define NUMBER_OF_8_BIT_REGISTERS 20
-#define NUMBER_OF_64_BIT_REGISTERS 16
-#define NUMBER_OF_32_BIT_REGISTERS 16
-#define NUMBER_OF_16_BIT_REGISTERS 16
-#define NUMBER_OF_ESCAPE_SEQUENCES 10
 
 //Used to pseudo-random generation when using bully mode
 extern uint64_t computedIndex;
@@ -39,7 +34,7 @@ const char* const paramNames[] = {"64 bit Register", "32 bit Register", "16 bit 
 
 extern struct command commandList[];
 
-char *registers_64_bit[NUMBER_OF_64_BIT_REGISTERS] = {
+const char *registers_64_bit[NUMBER_OF_64_BIT_REGISTERS] = {
         "rax",
         "rbx",
         "rcx",
@@ -58,7 +53,7 @@ char *registers_64_bit[NUMBER_OF_64_BIT_REGISTERS] = {
         "r15"
 };
 
-char *registers_32_bit[NUMBER_OF_32_BIT_REGISTERS] = {
+const char *registers_32_bit[NUMBER_OF_32_BIT_REGISTERS] = {
         "eax",
         "ebx",
         "ecx",
@@ -77,7 +72,7 @@ char *registers_32_bit[NUMBER_OF_32_BIT_REGISTERS] = {
         "r15d",
 };
 
-char *registers_16_bit[NUMBER_OF_16_BIT_REGISTERS] = {
+const char *registers_16_bit[NUMBER_OF_16_BIT_REGISTERS] = {
         "ax",
         "bx",
         "cx",
@@ -96,7 +91,7 @@ char *registers_16_bit[NUMBER_OF_16_BIT_REGISTERS] = {
         "r15w",
 };
 
-char *registers_8_bit[NUMBER_OF_8_BIT_REGISTERS] = {
+const char *registers_8_bit[NUMBER_OF_8_BIT_REGISTERS] = {
         "al", "ah",
         "bl", "bh",
         "cl", "ch",
@@ -115,10 +110,10 @@ char *registers_8_bit[NUMBER_OF_8_BIT_REGISTERS] = {
         "r15b",
 };
 
-char *escapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
+const char *escapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
         "\\n", "\\s", "space", "\\t", "\\f", "\\b", "\\v", "\\\"", "\\?", "\\\\"
 };
-char translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
+const char translatedEscapeSequences[NUMBER_OF_ESCAPE_SEQUENCES] = {
         '\n', ' ', ' ', '\t', '\f', '\b', '\v', '"', '?', '\\'
 };
 
@@ -253,7 +248,7 @@ void checkParameters(struct parsedCommand *parsedCommand, const char* inputFileN
             printDebugMessage(compileState->logLevel, "\t\tParameter is not a decimal number", 0);
         }
 
-        if((allowedTypes & PARAM_CHAR) != 0) { //Characters (including escape sequences) / ASCII-code
+        if((allowedTypes & CHAR) != 0) { //Characters (including escape sequences) / ASCII-code
             //Check if any of the escape sequences match
             const int index = linearSearch(parameter, escapeSequences, NUMBER_OF_ESCAPE_SEQUENCES);
             if(index != -1) {
@@ -447,10 +442,9 @@ void checkParameters(struct parsedCommand *parsedCommand, const char* inputFileN
         //2: If a number and a 64 Bit register are used (and the command is not a mov-command), can the number be sign-extended from 32 Bits?
         if((parsedCommand->paramTypes[0] == NUMBER && PARAM_ISREG(parsedCommand->paramTypes[1])) ||
            (parsedCommand->paramTypes[1] == NUMBER && PARAM_ISREG(parsedCommand->paramTypes[0])))  {
-            const unsigned decimalIndex = (parsedCommand->paramTypes[0] == PARAM_DECIMAL) ? 0 : 1;
+            const unsigned decimalIndex = (parsedCommand->paramTypes[0] == NUMBER) ? 0 : 1;
             const unsigned regIndex = 1 - decimalIndex;
-            const enum paramType regType = parsedCommand->paramTypes[regIndex];
-            const unsigned regSize = (regType == REG64) ? 64 : (regType == REG32) ? 32 : (regType == REG16) ? 16 : 8;
+            const unsigned regSize = (parsedCommand->paramTypes[regIndex] == REG64) ? 64 : (parsedCommand->paramTypes[regIndex] == REG32) ? 32 : (parsedCommand->paramTypes[regIndex] == REG16) ? 16 : 8;
 
             const long long number = parsedCommand->parameters[decimalIndex].number;
             /*
