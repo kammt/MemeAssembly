@@ -232,5 +232,5 @@ void printInternalCompilerError(char* message, bool report, unsigned varArgNum, 
     //Now print the custom message with variable args
     vfprintf(stderr, message, vaList);
     fprintf(stderr, "\n");
-    if(report) fprintf(stderr, "Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
+    if(report) fprintf(stderr, "Please report this error at https://github.com/kammt/MemeAssembly/issues/new\n");
 }
