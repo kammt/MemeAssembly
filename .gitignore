@@ -19,3 +19,6 @@ test.S
 
 #compiledb used by clang tooling
 compile_commands.json
+
+# Rust
+/target/
