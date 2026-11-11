@@ -575,8 +575,7 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
     let mut e = Emitter::new(target);
 
     if state.use_debug_info {
-        let cwd = String::from_utf8_lossy(&super::translator::getcwd_bytes()).into_owned();
-        e.set_debug_meta(&cwd, &format!("MemeAssembly compiler {VERSION_STRING}"));
+        e.set_debug_meta(&super::translator::getcwd_bytes(), &format!("MemeAssembly compiler {VERSION_STRING}"));
     }
 
     // Define all functions as global
@@ -646,7 +645,7 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
     for (i, file) in state.files.iter().enumerate() {
         let debug_file = state
             .use_debug_info
-            .then(|| e.debug_file(&String::from_utf8_lossy(&debug_file_path(&file.file_name))));
+            .then(|| e.debug_file(&debug_file_path(&file.file_name)));
 
         let mut line = 0usize;
         for func in 0..file.functions.len() {

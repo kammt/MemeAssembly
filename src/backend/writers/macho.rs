@@ -305,17 +305,18 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
                 RelocKind::Pc32 | RelocKind::Branch32 => {
                     let p = addrs[si] + r.offset;
                     if let Some(id) = external {
-                        // The linker computes S + field - (P + 4 + j) for SIGNED_j (j = 0 for SIGNED
-                        // and BRANCH). Like LLVM, use SIGNED_j when the addend is exactly the -4 - j
-                        // of an instruction with j immediate bytes after the field.
-                        let (j, ty) = match (r.kind, -(addend + 4)) {
-                            (RelocKind::Branch32, _) => (0, X86_64_RELOC_BRANCH),
-                            (_, 1) => (1, X86_64_RELOC_SIGNED_1),
-                            (_, 2) => (2, X86_64_RELOC_SIGNED_2),
-                            (_, 4) => (4, X86_64_RELOC_SIGNED_4),
-                            _ => (0, X86_64_RELOC_SIGNED),
+                        // Like LLVM, the field holds the addend + 4, and SIGNED_j marks an
+                        // instruction with j immediate bytes after the field (the reference's own
+                        // addend, before rebasing onto the atom, is exactly -4 - j); ld64 adds j
+                        // back to the field and computes S + field + j - (P + 4 + j).
+                        let ty = match (r.kind, -(r.addend + 4)) {
+                            (RelocKind::Branch32, _) => X86_64_RELOC_BRANCH,
+                            (_, 1) => X86_64_RELOC_SIGNED_1,
+                            (_, 2) => X86_64_RELOC_SIGNED_2,
+                            (_, 4) => X86_64_RELOC_SIGNED_4,
+                            _ => X86_64_RELOC_SIGNED,
                         };
-                        let v = i32::try_from(addend + 4 + j).map_err(|_| format!("addend out of range for `{}'", s.name))?;
+                        let v = i32::try_from(addend + 4).map_err(|_| format!("addend out of range for `{}'", s.name))?;
                         buf[field..field + 4].copy_from_slice(&v.to_le_bytes());
                         reloc_entry(&mut relocs[si], r.offset, sym_index[&id], true, 2, true, ty);
                     } else {

@@ -501,14 +501,20 @@ pub(super) fn dump(errors: &[(usize, String)], module: Option<&ObjModule>) -> St
                 Some((sec, off)) => format!("{} {off}", if sec == 0 { "text" } else { "data" }),
                 None => "UND 0".into(),
             };
-            let local = s.temporary || s.binding == Binding::Local;
+            let scope = if s.temporary {
+                "temp"
+            } else if s.binding == Binding::Local {
+                "local"
+            } else {
+                "global"
+            };
             let _ = writeln!(
                 out,
                 "REL {name} {} {kind} {} {} {} {def}",
                 r.offset,
                 s.name.replace(' ', "\\x20"),
                 r.addend,
-                if local { "local" } else { "global" }
+                scope
             );
         }
     }
@@ -683,4 +689,130 @@ fn shifts_and_sizes() {
     assert_eq!(err_of("mov BYTE PTR [rax], DWORD PTR [ax]"), "conflicting operand size modifiers");
     assert_eq!(err_of("mov [rax], [eax + 8]"), "`[eax+8]' is not a valid base/index expression");
     assert_eq!(err_of("movups WORD PTR [rax], WORD PTR [rax]"), "operand size mismatch for `movups'");
+}
+
+/// `(offset, kind, symbol, addend)` of the `.text` relocations.
+fn text_relocs(m: &ObjModule) -> Vec<(u64, RelocKind, String, i64)> {
+    m.sections[0].relocs.iter().map(|r| (r.offset, r.kind, m.symbols[r.symbol].name.clone(), r.addend)).collect()
+}
+
+const RELOC_SRC: &str = ".global gf\ngf: ret\nlf: ret\nstart:\ncall gf\ncall lf\njmp gf\nlea rax, [rip + gf]\n\
+                         lea rax, [rip + lf]\njmp start\njmp .Lx\n.Lx: jz Lx\nLx: ret\n";
+
+#[test]
+fn relocations_elf() {
+    // gas: calls and RIP references to global symbols keep their relocation (interposition);
+    // `jmp`/`jcc` to them and references to local symbols are resolved.
+    let (e, m) = assemble_text(RELOC_SRC, Target::Linux);
+    assert!(e.is_empty(), "{e:?}");
+    let m = m.unwrap();
+    assert_eq!(
+        m.sections[0].data,
+        hex("c3 c3 e8 00000000 e8 f5ffffff eb f2 488d05 00000000 488d05 e5ffffff eb e4 eb 00 74 00 c3")
+    );
+    assert_eq!(
+        text_relocs(&m),
+        [(3, RelocKind::Branch32, "gf".into(), -4), (17, RelocKind::Pc32, "gf".into(), -4)]
+    );
+}
+
+#[test]
+fn relocations_coff() {
+    let (e, m) = assemble_text(RELOC_SRC, Target::Windows);
+    assert!(e.is_empty(), "{e:?}");
+    let m = m.unwrap();
+    assert_eq!(
+        &m.sections[0].data[..35],
+        &hex("c3 c3 e8 f9ffffff e8 f5ffffff eb f2 488d05 ebffffff 488d05 e5ffffff eb e4 eb 00 74 00 c3")[..]
+    );
+    assert!(m.sections[0].relocs.is_empty());
+    // `L` labels are temporary for COFF as well.
+    assert!(m.symbols.iter().any(|s| s.name == "Lx" && s.temporary));
+}
+
+#[test]
+fn relocations_macho() {
+    // LLVM: only references within one atom (from a non-temporary symbol to the next) are
+    // resolved; `.L` labels are ordinary symbols, `L` labels are temporary. Expected bytes and
+    // relocations from llvm-mc -triple x86_64-apple-macos.
+    let (e, m) = assemble_text(RELOC_SRC, Target::MacOS);
+    assert!(e.is_empty(), "{e:?}");
+    let m = m.unwrap();
+    assert_eq!(
+        m.sections[0].data,
+        hex("c3 c3 e8 00000000 e8 00000000 e9 00000000 488d05 00000000 488d05 00000000 eb e1 e9 00000000 \
+             74 00 c3")
+    );
+    assert_eq!(
+        text_relocs(&m),
+        [
+            (3, RelocKind::Branch32, "gf".into(), -4),
+            (8, RelocKind::Branch32, "lf".into(), -4),
+            (13, RelocKind::Branch32, "gf".into(), -4),
+            (20, RelocKind::Pc32, "gf".into(), -4),
+            (27, RelocKind::Pc32, "lf".into(), -4),
+            (34, RelocKind::Branch32, ".Lx".into(), -4),
+        ]
+    );
+    assert!(m.symbols.iter().any(|s| s.name == ".Lx" && !s.temporary));
+    assert!(m.symbols.iter().any(|s| s.name == "Lx" && s.temporary));
+}
+
+#[test]
+fn macho_atom_boundaries() {
+    // A temporary label defined right before a non-temporary one at the same position belongs
+    // to the previous atom; the instructions after them to the new one. (The writer refers to
+    // `Ltmp` relative to its atom: llvm-mc emits `e9 01000000` with a BRANCH relocation against `a`.)
+    let (e, m) = assemble_text("a: nop\nLtmp:\nb: jmp Ltmp\njmp b\n", Target::MacOS);
+    assert!(e.is_empty(), "{e:?}");
+    let m = m.unwrap();
+    assert_eq!(m.sections[0].data, hex("90 e9 00000000 eb f9"));
+    assert_eq!(text_relocs(&m), [(2, RelocKind::Branch32, "Ltmp".into(), -4)]);
+}
+
+#[test]
+fn macho_align() {
+    // Apple's `as` reads `.align n` as 2**n and pads code with LLVM's NOPs (at most 10 bytes).
+    let (e, m) = assemble_text("nop\n.align 5\nret\n", Target::MacOS);
+    assert!(e.is_empty(), "{e:?}");
+    let m = m.unwrap();
+    let ten = hex("66 2e 0f 1f 84 00 00 00 00 00");
+    let mut want = hex("90");
+    for _ in 0..3 {
+        want.extend_from_slice(&ten);
+    }
+    want.extend(hex("90 c3"));
+    assert_eq!(m.sections[0].data, want);
+    assert_eq!(m.sections[0].align, 32);
+    let mut em = Emitter::new(Target::MacOS);
+    assert_eq!(em.align(536_870_912).unwrap_err(), "invalid alignment value");
+    assert_eq!(em.align(32).unwrap_err(), "invalid alignment value");
+}
+
+#[test]
+fn debug_line_rows() {
+    // Like gas: every `.loc` keeps its row (consecutive ones at the same address, a pending one
+    // flushed at the current address by the next), rows only start at instructions, line 0 and
+    // a trailing `.loc` produce none. Paths are raw bytes.
+    let mut em = Emitter::new(Target::Linux);
+    em.set_debug_meta(b"/w\xff", "p");
+    let f = em.debug_file(b"/x/\xfe.memeasm");
+    em.debug_line(f, 1);
+    em.label("a").unwrap();
+    em.debug_line(f, 2);
+    em.insn(Op::Nop, &[]).unwrap();
+    em.debug_line(f, 0);
+    em.insn(Op::Ret, &[]).unwrap();
+    em.debug_line(f, 7);
+    em.bytes(&[0x90]);
+    em.debug_line(f, 8);
+    em.bytes(&[0x90]);
+    em.insn(Op::Nop, &[]).unwrap();
+    em.debug_line(f, 9);
+    let m = em.finish().unwrap();
+    let d = m.debug.unwrap();
+    let rows: Vec<(u64, u32)> = d.lines.iter().map(|r| (r.offset, r.line)).collect();
+    assert_eq!(rows, [(0, 1), (0, 2), (3, 7), (4, 8)]);
+    assert_eq!(d.files, [b"/x/\xfe.memeasm".to_vec()]);
+    assert_eq!(d.comp_dir, b"/w\xff");
 }
