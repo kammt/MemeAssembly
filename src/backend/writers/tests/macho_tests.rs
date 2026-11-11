@@ -448,6 +448,24 @@ fn macho_hand_built_hello_world() {
     same_linked_contents(&m, (&exe, &e), (&lld, &parse(&lld))).unwrap();
 }
 
+/// Calls to a global function defined in the same section become extern `BRANCH` relocations
+/// (like llvm-mc), and the executable resolves them like ld64.lld.
+#[test]
+fn macho_calls_to_defined_globals() {
+    let m = samples::hello_world_macos_global_calls();
+    let obj = write(&m, Target::MacOS, OutputKind::Object).unwrap();
+    let exe = write(&m, Target::MacOS, OutputKind::Executable).unwrap();
+    let dir = scratch("macho_global_calls");
+    let (po, pe) = (dir.join("hello.o"), dir.join("hello"));
+    write_file(&po, &obj);
+    write_file(&pe, &exe);
+    let Some(r) = objdump(&po, &["-r"]) else { return };
+    let branches = r.lines().filter(|l| l.split_whitespace().skip(1).eq(["True", "long", "True", "BRANCH", "False", "writechar"])).count();
+    assert_eq!(branches, 3, "{r}");
+    let Some(lld) = ld64(&[&po], &dir.join("hello.lld"), &[]) else { return };
+    same_linked_contents(&m, (&exe, &parse(&exe)), (&lld, &parse(&lld))).unwrap();
+}
+
 /// Link errors: undefined symbols (no libraries are linked), a missing `_main`, and 32-bit
 /// absolute references, which x86-64 Mach-O cannot express.
 #[test]

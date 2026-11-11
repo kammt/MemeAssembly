@@ -91,9 +91,14 @@ impl Builder {
 }
 
 /// Common shape: `main` prints "Hi\n" through `writechar` and returns 7.
-fn hello(main: &str, writechar: impl Fn(&mut Builder)) -> ObjModule {
+/// With `global_calls`, `writechar` is global and called through `Branch32` relocations, as the
+/// emitter does for calls to global functions on ELF/Mach-O.
+fn hello(main: &str, global_calls: bool, writechar: impl Fn(&mut Builder)) -> ObjModule {
     let mut b = Builder::new();
     b.global(main);
+    if global_calls {
+        b.global("writechar");
+    }
     b.label(1, ".LCharacter");
     b.data(b"a");
     b.label(1, ".Ltmp64");
@@ -102,7 +107,7 @@ fn hello(main: &str, writechar: impl Fn(&mut Builder)) -> ObjModule {
     b.ins(FE_SUB64ri, &[FE_SP, 8]); // keep the stack 16-byte aligned for the Win64 calls
     for c in *b"Hi\n" {
         b.rip(FE_MOV8mi, &[0, c as FeOp], 0, 1, ".LCharacter");
-        b.call("writechar", false);
+        b.call("writechar", global_calls);
     }
     b.ins(FE_ADD64ri, &[FE_SP, 8]);
     b.ins(FE_MOV32ri, &[FE_AX, 7]);
@@ -128,7 +133,7 @@ fn unix_writechar(b: &mut Builder, syscall_write: i64) {
 }
 
 pub fn hello_world_linux() -> ObjModule {
-    hello("main", |b| unix_writechar(b, 1))
+    hello("main", false, |b| unix_writechar(b, 1))
 }
 
 /// [`hello_world_linux`] with `-g` information: `main` on line 1 (one row per instruction,
@@ -156,11 +161,11 @@ pub fn hello_world_linux_debug() -> ObjModule {
 }
 
 pub fn hello_world_macos() -> ObjModule {
-    hello("_main", |b| unix_writechar(b, 0x2000004))
+    hello("_main", false, |b| unix_writechar(b, 0x2000004))
 }
 
 pub fn hello_world_windows() -> ObjModule {
-    hello("main", |b| {
+    hello("main", false, |b| {
         for r in [FE_CX, FE_AX, FE_DX, gp(8), gp(9)] {
             b.ins(FE_PUSHr, &[r]);
         }
@@ -179,4 +184,14 @@ pub fn hello_world_windows() -> ObjModule {
         }
         b.ins(FE_RET, &[]);
     })
+}
+
+/// [`hello_world_linux`] calling a global `writechar` through relocations.
+pub fn hello_world_linux_global_calls() -> ObjModule {
+    hello("main", true, |b| unix_writechar(b, 1))
+}
+
+/// [`hello_world_macos`] calling a global `writechar` through relocations.
+pub fn hello_world_macos_global_calls() -> ObjModule {
+    hello("_main", true, |b| unix_writechar(b, 0x2000004))
 }
