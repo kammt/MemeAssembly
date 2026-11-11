@@ -21,9 +21,10 @@ fn print_help_page(program_name: &str, target: Target) {
     print_information_header(target);
     let p = program_name;
     out_str("Usage:\n");
-    out_str(&format!(" {p} [options] -o outputFile [-i | -d] inputFile\t\tCompiles the specified file into an executable\n"));
-    out_str(&format!(" {p} [options] -S -o outputFile.S [-i | -d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n"));
-    out_str(&format!(" {p} [options] -O -o outputFile.o [-i | -d] inputFile\tOnly compiles the specified file and saves it an object file\n"));
+    // The C help page still advertised `[-i | -d]`, although -i was removed (commit e99f0b3).
+    out_str(&format!(" {p} [options] -o outputFile [-d] inputFile\t\tCompiles the specified file into an executable\n"));
+    out_str(&format!(" {p} [options] -S -o outputFile.S [-d] inputFile\tOnly compiles the specified file and saves it as x86_64 Assembly code\n"));
+    out_str(&format!(" {p} [options] -O -o outputFile.o [-d] inputFile\tOnly compiles the specified file and saves it an object file\n"));
     out_str(&format!(" {p} (-h | --help)\t\t\t\t\tDisplays this help page\n"));
     out_str(&format!(" {p} -v\t\t\t\t\t\t\tPrints version information\n\n"));
     out_str("Compiler options:\n");

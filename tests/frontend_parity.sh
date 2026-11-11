@@ -22,6 +22,9 @@
 #  * -g: the C compiler writes STABS, the Rust one gas DWARF directives (.file/.loc). The
 #    debug directives are removed from both outputs before diffing.
 #  * the help page (-h) and clap's argument errors are not compared.
+#  * bugs of the C compiler that the Rust port fixes (docs/rust-rewrite-changes.md): the
+#    reference output is rewritten by tests/frontend_parity_whitelist.pl, one rule per fix;
+#    cases where the C compiler crashes or hangs are checked separately (check_fixed).
 
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -88,6 +91,16 @@ normalize_stdout() {
     LC_ALL=C sed -e 's/^\t\tComparing against parameter .*$/\t\tComparing against parameter <masked>/' "$1"
 }
 
+# The reference -S output with the intentional differences applied (see the whitelist script).
+# Uses CASE_TARGET, CASE_MODE and CASE_OPT of the current case.
+expected_asm() {
+    [ -f "$WORK/ref/out.S" ] || return 0
+    local size
+    size=$(grep -m1 -oE '(BYTE|WORD|DWORD|QWORD) PTR \[[a-z0-9]+\]' "$WORK/mine/out.S" 2>/dev/null | cut -d' ' -f1)
+    normalize_asm "$WORK/ref/out.S" |
+        BULLY_SIZE=$size perl "$ROOT/tests/frontend_parity_whitelist.pl" "$CASE_TARGET" "$CASE_MODE" "$CASE_OPT"
+}
+
 compare_dirs() {
     local name=$1
     local ok=1
@@ -98,7 +111,7 @@ compare_dirs() {
     [ -f "$WORK/ref/out.S" ] && ref_exists=1
     [ -f "$WORK/mine/out.S" ] && mine_exists=1
     [ $ref_exists = $mine_exists ] || ok=0
-    if ! cmp -s <(normalize_asm "$WORK/ref/out.S") <(normalize_asm "$WORK/mine/out.S"); then ok=0; fi
+    if ! cmp -s <(expected_asm) <(normalize_asm "$WORK/mine/out.S"); then ok=0; fi
     if [ $ok = 1 ]; then
         PASS=$((PASS + 1))
     else
@@ -109,7 +122,7 @@ compare_dirs() {
             diff "$WORK/ref/code" "$WORK/mine/code" | head -5
             diff <(normalize_stdout "$WORK/ref/stdout") <(normalize_stdout "$WORK/mine/stdout") | head -20
             diff "$WORK/ref/stderr" "$WORK/mine/stderr" | head -20
-            diff <(normalize_asm "$WORK/ref/out.S") <(normalize_asm "$WORK/mine/out.S") | head -20
+            diff <(expected_asm) <(normalize_asm "$WORK/mine/out.S") | head -20
         fi
     fi
 }
@@ -127,8 +140,15 @@ check() {
     local ref
     ref=$(ref_for_target "$target")
     if [ -z "$ref" ]; then SKIP=$((SKIP + 1)); return 0; fi
-    local ref_args=() mine_args=("-ftarget=$target") a
+    local ref_args=() mine_args=("-ftarget=$target") a prev=
+    CASE_TARGET=$target CASE_MODE=noob CASE_OPT=
     for a in "$@"; do
+        case "$prev" in -fcompile-mode | -fc) CASE_MODE=$a ;; esac
+        case "$a" in
+            -fcompile-mode=*) CASE_MODE=${a#*=} ;;
+            -O-[0-9s] | -O69420) CASE_OPT=$a ;;
+        esac
+        prev=$a
         ref_args+=("${a//OUT/$WORK/ref/out.S}")
         mine_args+=("${a//OUT/$WORK/mine/out.S}")
     done
@@ -146,6 +166,43 @@ check() {
         return 0
     fi
     compare_dirs "$name"
+}
+
+# check_fixed <name> <target> <ref-outcome> <args...>: a C bug where the reference crashes or
+# hangs, so nothing can be diffed. Passes if the reference shows the bug (<ref-outcome> "hang":
+# killed after 5 s; "crash": died from a signal; "crash-or-ok": a signal or success, for random
+# crashes) and the Rust compiler succeeds and writes OUT.
+check_fixed() {
+    local name=$1 target=$2 expect=$3
+    shift 3
+    [[ "$name" =~ $FILTER ]] || return 0
+    local ref
+    ref=$(ref_for_target "$target")
+    if [ -z "$ref" ]; then SKIP=$((SKIP + 1)); return 0; fi
+    local ref_args=() mine_args=("-ftarget=$target") a
+    for a in "$@"; do
+        ref_args+=("${a//OUT/$WORK/ref/out.S}")
+        mine_args+=("${a//OUT/$WORK/mine/out.S}")
+    done
+    rm -f "$WORK/mine/out.S"
+    local ref_code
+    ref_code=$(exec 2>/dev/null; timeout 5 "$ref" "${ref_args[@]}" </dev/null >/dev/null; echo $?)
+    "$MINE" "${mine_args[@]}" >/dev/null 2>"$WORK/mine/stderr" </dev/null
+    local mine_code=$?
+    local ok=1
+    case "$expect" in
+        hang) [ $ref_code = 124 ] || ok=0 ;;
+        crash) [ $ref_code -gt 128 ] && [ $ref_code != 124 ] || ok=0 ;;
+        crash-or-ok) [ $ref_code -gt 128 ] && [ $ref_code != 124 ] || [ $ref_code = 0 ] || ok=0 ;;
+    esac
+    [ $mine_code = 0 ] && [ -s "$WORK/mine/out.S" ] || ok=0
+    if [ $ok = 1 ]; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+        FAILED_CASES+=("$name")
+        [ $VERBOSE = 1 ] && echo "=== FAIL: $name (reference exit $ref_code, rust exit $mine_code)"
+    fi
 }
 
 TARGETS=(linux windows)
@@ -175,6 +232,15 @@ for target in "${TARGETS[@]}"; do
         check "$target/$mode/multi/abc" "$target" -fcompile-mode "$mode" -S -o OUT tests/frontend_cases/multi/a.memeasm tests/frontend_cases/multi/b.memeasm tests/frontend_cases/multi/c_dup.memeasm
         check "$target/$mode/multi/github" "$target" -fcompile-mode "$mode" -S -o OUT .github/workflows/multiple_files/*.memeasm
         check "$target/$mode/multi/empty+ok" "$target" -fcompile-mode "$mode" -S -o OUT tests/frontend_cases/err/empty.memeasm tests/frontend_cases/ok/simple.memeasm
+        # Fixed C bugs with a hanging/crashing reference (bully mode accepts these inputs)
+        if [ "$mode" = bully ]; then
+            for opt in "" -d; do
+                # shellcheck disable=SC2086
+                check_fixed "$target/$mode/fixed/perfectly-balanced-hang$opt" "$target" hang -fcompile-mode bully $opt -S -o OUT tests/frontend_cases/fixes/perfectly_balanced_hang.memeasm
+                # shellcheck disable=SC2086
+                check_fixed "$target/$mode/fixed/perfectly-balanced-empty-file$opt" "$target" crash-or-ok -fcompile-mode bully $opt -S -o OUT tests/frontend_cases/err/empty.memeasm tests/frontend_cases/fixes/perfectly_balanced_twice.memeasm
+            done
+        fi
         # Without -S, compile errors (incl. "no main function" for executables) stop before
         # code generation, so these runs compare exactly as well.
         if [ "$mode" != bully ]; then

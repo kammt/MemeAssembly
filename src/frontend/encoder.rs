@@ -691,7 +691,7 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
         }
     }
 
-    // TODO(backend interface): `-O-s` (and, because o_s == o_2 in C, `-O-2`) ends the text with
+    // TODO(backend interface): `-O-s` ends the text with
     // `.align 536870912`. The Emitter has no alignment directive yet, so the padding is missing
     // on this path until `Emitter::align` exists.
 
