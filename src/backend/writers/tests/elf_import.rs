@@ -155,7 +155,7 @@ pub fn import(b: &[u8]) -> ObjModule {
             let Some(value) = value else { continue };
             let string = cstr(b, stabstr.off + u32_at(b, e) as usize);
             match n_type {
-                100 if d.files.is_empty() && !string.is_empty() => d.files.push(string),
+                100 if d.files.is_empty() && !string.is_empty() => d.files.push(string.into_bytes()),
                 68 => d.lines.push(LineRow { offset: value as u64, file: 0, line: desc as u32 }),
                 36 => {
                     let name = string.split(':').next().unwrap().to_string();

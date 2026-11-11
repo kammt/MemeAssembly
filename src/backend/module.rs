@@ -98,10 +98,11 @@ pub struct DebugFunction {
 /// the object format requires; executables get them resolved.
 #[derive(Debug, Clone, Default)]
 pub struct DebugInfo {
-    /// Source files as written in the debug info (absolute paths).
-    pub files: Vec<String>,
-    /// DW_AT_comp_dir (current working directory at compile time).
-    pub comp_dir: String,
+    /// Source files as written in the debug info (absolute paths; raw bytes, since paths need
+    /// not be UTF-8 – they are written verbatim, like gas does).
+    pub files: Vec<Vec<u8>>,
+    /// DW_AT_comp_dir (current working directory at compile time, raw bytes).
+    pub comp_dir: Vec<u8>,
     /// DW_AT_producer, e.g. "MemeAssembly compiler v1.6".
     pub producer: String,
     pub lines: Vec<LineRow>,

@@ -67,7 +67,8 @@ pub enum Base {
     /// like gas does for `[eax]`.
     Reg(Reg),
     /// `[rip + symbol + disp]` – symbol may be in .data (→ Pc32 reloc), in .text (resolved
-    /// locally), or undefined (→ Pc32 reloc against an undefined global).
+    /// locally where the target's assembler does so, else a Pc32 reloc; see `layout::finish`),
+    /// or undefined (→ Pc32 reloc against an undefined global).
     Rip(String),
     /// `[disp]` – absolute address, e.g. `mov rax, [69]` (SIB-encoded disp32, no reloc).
     Abs,
@@ -107,7 +108,9 @@ pub enum Cond {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BranchTarget {
     /// A named label/function (`.LUpgradeMarker_0`, `writechar`, `GetStdHandle`, user function).
-    /// Undefined names become undefined globals with a Branch32 reloc (like gas).
+    /// Undefined names become undefined globals with a Branch32 reloc (like gas). Branches to
+    /// defined symbols are resolved or keep a Branch32 reloc per object format (ELF: calls to
+    /// global symbols; Mach-O: anything outside the current atom); see `layout::finish`.
     Symbol(String),
     /// Numeric local label reference `Nf` (forward = true) / `Nb`.
     Local { n: u32, forward: bool },
@@ -127,6 +130,9 @@ pub struct Emitter {
     /// Largest `.align` seen per section.
     aligns: [u64; 2],
     syms: Vec<Sym>,
+    /// Label definitions per section in definition order: `(item index, symbol)`. Mach-O atoms
+    /// (see `layout::finish`) depend on the order of labels at the same position.
+    defs: [Vec<(usize, usize)>; 2],
     by_name: HashMap<String, usize>,
     /// Number of definitions so far of each numeric local label.
     fb_count: HashMap<u32, u32>,
@@ -140,15 +146,18 @@ struct Sym {
     global: bool,
     /// `(section, item index)`: the label sits at the start of that item.
     def: Option<(usize, usize)>,
+    /// An assembler-local label that never reaches the symbol table: `.L…` for ELF, `L…` for
+    /// Mach-O (where `.L…` labels are ordinary local symbols), both for COFF, plus numeric local
+    /// labels and `$`/`.`.
     temporary: bool,
 }
 
 #[derive(Default)]
 struct Dbg {
     info: DebugInfo,
-    cur: Option<(usize, u32)>,
-    pending: bool,
-    /// `(item index in .text, file, line)`
+    /// The last `debug_line` not yet attached to an instruction (gas: a pending `.loc`).
+    pending: Option<(usize, u32)>,
+    /// `(item index in .text, file, line)`, in `.loc` order (several rows may share an address).
     rows: Vec<(usize, usize, u32)>,
     /// `(name, file, line, begin item, end item)`
     funcs: Vec<(String, usize, u32, usize, Option<usize>)>,
@@ -173,6 +182,7 @@ impl Emitter {
             sections: [Vec::new(), Vec::new()],
             aligns: [1, 1],
             syms: Vec::new(),
+            defs: [Vec::new(), Vec::new()],
             by_name: HashMap::new(),
             fb_count: HashMap::new(),
             dot_count: 0,
@@ -216,7 +226,7 @@ impl Emitter {
             Some(d) if d == here => Ok(()),
             Some(_) => Err(format!("symbol `{name}' is already defined")),
             None => {
-                self.syms[id].def = Some(here);
+                self.define(id);
                 Ok(())
             }
         }
@@ -226,7 +236,7 @@ impl Emitter {
         let inst = self.fb_count.get(&n).copied().unwrap_or(0) + 1;
         self.fb_count.insert(n, inst);
         let id = self.sym(&fb_name(n, inst));
-        self.syms[id].def = Some((self.cur, self.sections[self.cur].len()));
+        self.define(id);
     }
     /// A non-branch instruction with gas Intel-syntax operand order (destination first).
     pub fn insn(&mut self, op: Op, ops: &[Operand]) -> Result<(), String> {
@@ -236,7 +246,7 @@ impl Emitter {
             let id = self.sym_ref(&sym)?;
             fixups.push(layout::Fixup { offset: field, symbol: id, end: e.bytes.len(), disp });
         }
-        self.push(layout::Item::Bytes { data: e.bytes, fixups });
+        self.push_insn(layout::Item::Bytes { data: e.bytes, fixups });
         Ok(())
     }
     /// `jmp target` (cond = None) or `jcc target`. Relaxed short/near like gas.
@@ -259,11 +269,21 @@ impl Emitter {
     pub fn quad(&mut self, value: i64) {
         self.bytes(&value.to_le_bytes());
     }
-    /// `.align n` (additive extension; used for `-O-s`). In `.text` the padding is filled with
-    /// the same NOP sequences gas uses, in `.data` with zeros. The section's alignment becomes at
-    /// least `n`. COFF (Windows) can't represent alignments above 8192: like gas, `finish` then
-    /// fails ("nonrepresentable section on output").
+    /// `.align n` (additive extension; used for `-O-s`), with the meaning the directive has for
+    /// the target's assembler: gas aligns to `n` bytes, Apple's `as` (Mach-O) to `2**n` bytes and
+    /// rejects `n >= 32` ("invalid alignment value"). In `.text` the padding is filled with the
+    /// same NOP sequences that assembler uses, in `.data` with zeros. The section's alignment
+    /// becomes at least that. COFF (Windows) can't represent alignments above 8192: like gas,
+    /// `finish` then fails ("nonrepresentable section on output").
     pub fn align(&mut self, n: u64) -> Result<(), String> {
+        let n = if self.target == Target::MacOS {
+            if n >= 32 {
+                return Err("invalid alignment value".into());
+            }
+            1 << n
+        } else {
+            n
+        };
         if !n.is_power_of_two() {
             return Err("alignment not a power of 2".into());
         }
@@ -273,20 +293,29 @@ impl Emitter {
     }
 
     // ---- -g debug info (DWARF, replaces STABS) ----
-    /// Register a source file (absolute path); returns its index for `debug_line`.
-    pub fn debug_file(&mut self, path: &str) -> usize {
+    /// Register a source file (absolute path, raw bytes as in the file system); returns its
+    /// index for `debug_line`.
+    pub fn debug_file(&mut self, path: &[u8]) -> usize {
         let d = self.debug.get_or_insert_with(Dbg::default);
         if let Some(i) = d.info.files.iter().position(|f| f == path) {
             return i;
         }
-        d.info.files.push(path.to_string());
+        d.info.files.push(path.to_vec());
         d.info.files.len() - 1
     }
-    /// Code emitted from now on (until the next call) belongs to `line` of `file`.
+    /// Like gas's `.loc file line`: the next instruction starts a line-table row for `line` of
+    /// `file`. Consecutive calls without an instruction in between each keep their row (gas
+    /// flushes a pending `.loc` at the current address when it sees the next one). Line 0 is
+    /// accepted, but like gas ("incomplete location information") it produces no row: the code
+    /// after it stays in the previous row.
     pub fn debug_line(&mut self, file: usize, line: u32) {
+        let idx = self.sections[0].len();
         let d = self.debug.get_or_insert_with(Dbg::default);
-        d.cur = Some((file, line));
-        d.pending = true;
+        if let Some((f, l)) = d.pending.replace((file, line)) {
+            if l != 0 {
+                d.rows.push((idx, f, l));
+            }
+        }
     }
     /// A function starts at the current `.text` position.
     pub fn debug_function_begin(&mut self, name: &str, file: usize, line: u32) {
@@ -302,9 +331,10 @@ impl Emitter {
             f.4 = Some(pos);
         }
     }
-    pub fn set_debug_meta(&mut self, comp_dir: &str, producer: &str) {
+    /// `comp_dir` is the raw bytes of the working directory.
+    pub fn set_debug_meta(&mut self, comp_dir: &[u8], producer: &str) {
         let d = self.debug.get_or_insert_with(Dbg::default);
-        d.info.comp_dir = comp_dir.to_string();
+        d.info.comp_dir = comp_dir.to_vec();
         d.info.producer = producer.to_string();
     }
 
@@ -322,10 +352,21 @@ impl Emitter {
             return id;
         }
         let id = self.syms.len();
-        let temporary = name.starts_with(".L") || name.contains('\u{2}');
+        let temporary = match self.target {
+            Target::Linux => name.starts_with(".L"),
+            Target::MacOS => name.starts_with('L'),
+            Target::Windows => name.starts_with(".L") || name.starts_with('L'),
+        } || name.contains('\u{2}');
         self.syms.push(Sym { name: name.to_string(), global: false, def: None, temporary });
         self.by_name.insert(name.to_string(), id);
         id
+    }
+
+    /// Define symbol `id` at the current position.
+    fn define(&mut self, id: usize) {
+        let here = (self.cur, self.sections[self.cur].len());
+        self.syms[id].def = Some(here);
+        self.defs[here.0].push((here.1, id));
     }
 
     /// A reference from an instruction operand (`[rip + name]`).
@@ -343,26 +384,26 @@ impl Emitter {
     fn dot(&mut self) -> usize {
         self.dot_count += 1;
         let id = self.sym(&format!("\u{2}dot{}", self.dot_count));
-        self.syms[id].def = Some((self.cur, self.sections[self.cur].len()));
+        self.define(id);
         id
     }
 
     fn push(&mut self, item: layout::Item) {
-        if self.cur == 0 && !matches!(item, layout::Item::Align { .. }) {
-            if let Some(d) = &mut self.debug {
-                if d.pending {
-                    if let Some((file, line)) = d.cur {
-                        let idx = self.sections[0].len();
-                        if d.rows.last().is_some_and(|r| r.0 == idx) {
-                            d.rows.pop();
-                        }
-                        d.rows.push((idx, file, line));
-                    }
-                    d.pending = false;
+        self.sections[self.cur].push(item);
+    }
+
+    /// Push an instruction; it gets the pending line-table row (gas emits `.loc` rows only for
+    /// instructions, not for data directives).
+    fn push_insn(&mut self, item: layout::Item) {
+        if self.cur == 0 {
+            if let Some((file, line)) = self.debug.as_mut().and_then(|d| d.pending.take()) {
+                if line != 0 {
+                    let idx = self.sections[0].len();
+                    self.debug.as_mut().unwrap().rows.push((idx, file, line));
                 }
             }
         }
-        self.sections[self.cur].push(item);
+        self.push(item);
     }
 
     fn branch(&mut self, kind: layout::BranchKind, target: BranchTarget) -> Result<(), String> {
@@ -386,14 +427,14 @@ impl Emitter {
                         regs::Ident::Symbol => self.sym_ref(&s)?,
                         other => {
                             let bytes = layout::indirect_branch(kind, other, &s)?;
-                            self.push(layout::Item::Bytes { data: bytes, fixups: Vec::new() });
+                            self.push_insn(layout::Item::Bytes { data: bytes, fixups: Vec::new() });
                             return Ok(());
                         }
                     }
                 }
             }
         };
-        self.push(layout::Item::Branch { kind, target });
+        self.push_insn(layout::Item::Branch { kind, target });
         Ok(())
     }
 }

@@ -9,6 +9,8 @@ test-only text shim in src/backend/emitter/tests.rs) must agree on:
   * relocations (offset, kind, target, addend; normalised so that "section symbol + offset"
     and "temporary label" forms compare equal),
   * the emitted (non-temporary) symbols.
+macOS (`.mac.`) files are assembled with llvm-mc for Mach-O instead (Apple's `as` is LLVM), whose
+object they must match; errors still come from gas, except for `.align` (2**n on Darwin).
 
 Corpus:
   ref.*   reference compilers (Linux, Windows, macOS build) with -S and all option combinations,
@@ -38,6 +40,7 @@ BIG_SEM = threading.Semaphore(2)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GAS_LINUX = "x86_64-linux-gnu-as"
 GAS_WIN = "x86_64-w64-mingw32-as"
+LLVM_MC = os.environ.get("LLVM_MC", "llvm-mc-24")
 REF_LINUX = os.environ.get("MEMEASM_REF_LINUX", "/opt/memeasm-ref/memeasm-ref")
 REF_WIN = os.environ.get("MEMEASM_REF_WIN", "/opt/memeasm-ref/memeasm-ref-win")
 
@@ -103,11 +106,6 @@ def parse_elf(data):
             elif sy["bind"] == 0 and sy["shndx"] != 0:
                 target = ("sec", secname.get(sy["shndx"], "other"), sy["value"] + addend)
             else:
-                if sy["shndx"] != 0 and secname.get(sy["shndx"]) == tsec and kind in ("pc", "branch"):
-                    # gas keeps relocations against global symbols defined in the same section;
-                    # the Emitter resolves them (module contract) – apply them here.
-                    struct.pack_into("<i", b, off, sy["value"] + addend - off)
-                    continue
                 target = ("sym", sy["name"], addend)
             if target[0] == "sec" and kind == "branch":
                 kind = "pc"
@@ -175,15 +173,93 @@ def parse_coff(data):
             else:
                 kind, size, addend = "type%d" % typ, 4, 0
             b[off:off + size] = bytes(size)
-            if sy["sclass"] != 2 and sy["secnum"] > 0:
+            if sy["secnum"] > 0 and secname.get(sy["secnum"]) == tsec and kind == "pc" and sy["sclass"] == 2:
+                struct.pack_into("<i", b, off, sy["value"] + addend - off)
+                continue
+            if sy["secnum"] > 0:
+                # gas reduces references to defined global symbols to section-relative ones.
                 target = ("sec", secname.get(sy["secnum"], "other"), sy["value"] + addend)
             else:
-                if sy["secnum"] > 0 and secname.get(sy["secnum"]) == tsec and kind == "pc":
-                    struct.pack_into("<i", b, off, sy["value"] + addend - off)
-                    continue
                 target = ("sym", sy["name"], addend)
             model["relocs"].append((tsec, off, kind, target))
     return finish_model(model, coff=True)
+
+
+def parse_macho(data):
+    """Mach-O (LLVM): relocation fields hold the addend; they are zeroed (like ELF RELA)."""
+    magic, _, _, _, ncmds = struct.unpack_from("<IiiII", data, 0)
+    assert magic == 0xFEEDFACF
+    secs, symtab, off = [], None, 32
+    for _ in range(ncmds):
+        cmd, size = struct.unpack_from("<II", data, off)
+        if cmd == 0x19:  # LC_SEGMENT_64
+            nsects = struct.unpack_from("<I", data, off + 64)[0]
+            for k in range(nsects):
+                f = struct.unpack_from("<16s16sQQIIIII", data, off + 72 + 80 * k)
+                secs.append(dict(name=f[0].rstrip(b"\0").decode(), addr=f[2], size=f[3], off=f[4], align=f[5],
+                                 reloff=f[6], nreloc=f[7], flags=f[8]))
+        elif cmd == 2:  # LC_SYMTAB
+            symtab = struct.unpack_from("<IIII", data, off + 8)
+        off += size
+    names = {"__text": "text", "__data": "data"}
+    model = {"sec": {}, "align": {}, "relocs": [], "syms": set()}
+    secname = {}
+    for i, s in enumerate(secs):
+        if s["name"] in names:
+            n = names[s["name"]]
+            secname[i + 1] = n
+            model["sec"][n] = bytearray(data[s["off"]:s["off"] + s["size"]])
+            model["align"][n] = 1 << s["align"]
+        elif s["size"]:
+            model["sec"]["other:" + s["name"]] = b"?"
+    syms = []
+    if symtab:
+        symoff, nsyms, stroff, _ = symtab
+        for k in range(nsyms):
+            strx, typ, sect, _, value = struct.unpack_from("<IBBHQ", data, symoff + 16 * k)
+            syms.append(dict(name=cstr(data, stroff + strx), type=typ, sect=sect, value=value))
+    rel = {}
+    for sy in syms:
+        if sy["type"] & 0xE0:  # stabs
+            continue
+        where = "UND" if sy["sect"] == 0 else secname.get(sy["sect"], "other")
+        val = sy["value"] - secs[sy["sect"] - 1]["addr"] if sy["sect"] else 0
+        sy["rel"] = val
+        model["syms"].add((sy["name"], "GLOBAL" if sy["type"] & 1 else "LOCAL", where, val))
+    for i, s in enumerate(secs):
+        if (i + 1) not in secname:
+            continue
+        tsec = secname[i + 1]
+        b = model["sec"][tsec]
+        for r in range(s["nreloc"]):
+            off, info = struct.unpack_from("<iI", data, s["reloff"] + 8 * r)
+            symnum, pcrel, length, ext, typ = info & 0xFFFFFF, (info >> 24) & 1, (info >> 25) & 3, (info >> 27) & 1, info >> 28
+            size = 1 << length
+            field = int.from_bytes(b[off:off + size], "little", signed=True)
+            b[off:off + size] = bytes(size)
+            if typ == 0 and not pcrel and size == 8:
+                kind, addend = "abs64", field
+            elif typ in (1, 2, 6, 7, 8) and pcrel and size == 4:
+                # LLVM stores the addend + 4 (SIGNED_j only tells ld64 about trailing immediates).
+                kind = "branch" if typ == 2 else "pc"
+                addend = field - 4
+            else:
+                kind, addend = "type%d" % typ, field
+            if not ext:
+                # The field holds the displacement to the target (section-relative form).
+                tgt = secname.get(symnum, "other")
+                tsecaddr = secs[symnum - 1]["addr"]
+                target = ("sec", tgt, s["addr"] + off + field - tsecaddr) if kind in ("pc", "branch") else ("sec", tgt, field - tsecaddr)
+                kind = "pc" if kind == "branch" else kind
+            else:
+                sy = syms[symnum]
+                if not sy["type"] & 1 and sy["sect"]:
+                    target = ("sec", secname.get(sy["sect"], "other"), sy["rel"] + addend)
+                    kind = "pc" if kind == "branch" else kind
+                else:
+                    target = ("sym", sy["name"], addend)
+            model["relocs"].append((tsec, off, kind, target))
+    return finish_model(model)
 
 
 def finish_model(model, coff=False):
@@ -196,9 +272,10 @@ def finish_model(model, coff=False):
     return out
 
 
-def parse_emit(text, coff):
+def parse_emit(text, fmt):
     errors = []
     model = {"relocs": [], "syms": set(), "align": {}}
+    rels = []
     have = False
     for line in text.splitlines():
         tag, _, rest = line.partition(" ")
@@ -215,32 +292,67 @@ def parse_emit(text, coff):
                 model[name] = bytes.fromhex(payload)
         elif tag == "REL":
             sec, off, kind, name, addend, scope, defsec, defoff = rest.split(" ")
-            name = name.replace("\\x20", " ")
             kind = {"Pc32": "pc", "Branch32": "branch", "Abs64": "abs64", "Abs32": "abs32"}[kind]
-            if scope == "local" and defsec != "UND":
-                target = ("sec", defsec, int(defoff) + int(addend))
-                if kind == "branch":
-                    kind = "pc"
-            else:
-                target = ("sym", name, int(addend))
-            if coff and kind == "branch":
-                kind = "pc"
-            model["relocs"].append((sec, int(off), kind, target))
+            rels.append((sec, int(off), kind, name.replace("\\x20", " "), int(addend), scope, defsec, int(defoff)))
         elif tag == "SYM":
             name, bind, where, val = rest.split(" ")
             model["syms"].add((name.replace("\\x20", " "), bind, where, int(val)))
+    for sec, off, kind, name, addend, scope, defsec, defoff in rels:
+        if fmt == "macho" and scope == "temp" and defsec != "UND":
+            # Like LLVM (and the Mach-O writer), a reference to a temporary label refers to its
+            # atom: the closest symbol at or before it.
+            atoms = [(v, n, b) for n, b, w, v in model["syms"] if w == defsec and v <= defoff]
+            if atoms:
+                v, name, bind = max(atoms)
+                scope = "global" if bind == "GLOBAL" else "local"
+                addend += defoff - v
+                defoff = v
+        # Normalised: references to local (on COFF: all) defined symbols are section-relative.
+        if (scope != "global" or fmt == "coff") and defsec != "UND":
+            target = ("sec", defsec, defoff + addend)
+            if kind == "branch":
+                kind = "pc"
+        else:
+            target = ("sym", name, addend)
+        if fmt == "coff" and kind == "branch":
+            kind = "pc"
+        model["relocs"].append((sec, off, kind, target))
     model["relocs"].sort()
     return errors, (model if have else None)
 
 
 GAS_ERR = re.compile(r"^(?:[^:]*):(\d+): (?:Error|Fatal error): (.*)$")
 GAS_ERR0 = re.compile(r"^(?:[^:]*): (?:Error|Fatal error): (?:\S+\.o: )?(.*)$")
+LLVM_ERR = re.compile(r"^[^\n]*?:(\d+):\d+: error: (.*)$", re.M)
 GAS_BFD = re.compile(r"^\S*-as: \S+\.o: (.*)$")
+
+
+def run_llvm_mc(path, obj, align_lines):
+    """macOS: the object must match what LLVM (Apple's `as`; clang's default CPU for macOS is
+    penryn) produces. Errors are gas's, plus LLVM's for `.align` lines (2**n there)."""
+    p = subprocess.run([LLVM_MC, "-triple", "x86_64-apple-macos", "-mcpu=penryn", "-filetype=obj", path,
+                        "-o", obj], capture_output=True, text=True, errors="replace")
+    if p.returncode != 0:
+        lerr = [(int(m.group(1)), m.group(2)) for m in LLVM_ERR.finditer(p.stderr)]
+        if os.path.exists(obj):
+            os.remove(obj)
+        if not lerr:
+            return [(0, "llvm-mc failed: " + p.stderr.strip()[:300])], None
+        align_err = [e for e in lerr if e[0] in align_lines]
+        other = [e for e in lerr if e[0] not in align_lines]
+        # Known difference: LLVM rejects some gas syntax the Emitter (like gas) accepts, e.g.
+        # character constants in labels (`.L'a'Wins_0`); such files are only error-compared.
+        return align_err, (("llvm-syntax", other) if other else None)
+    with open(obj, "rb") as f:
+        data = f.read()
+    os.remove(obj)
+    return [], parse_macho(data)
 
 
 def run_gas(path):
     """Returns (errors, model)."""
     win = ".win." in os.path.basename(path)
+    mac = ".mac." in os.path.basename(path)
     obj = path[:-2] + ".gas.o"
     p = subprocess.run([GAS_WIN if win else GAS_LINUX, "-w", path, "-o", obj],
                        capture_output=True, text=True, errors="replace")
@@ -253,6 +365,16 @@ def run_gas(path):
         m = GAS_ERR0.match(line) or GAS_BFD.match(line)
         if m:
             errors.append((0, m.group(1)))
+    align_lines = set()
+    if mac:
+        # `.align n` means 2**n bytes for Apple's `as`: LLVM decides about those lines.
+        with open(path, errors="replace") as f:
+            align_lines = {i + 1 for i, l in enumerate(f.read().split("\n")) if l.strip().startswith(".align")}
+        errors = [e for e in errors if e[0] not in align_lines]
+        if not errors:
+            if os.path.exists(obj):
+                os.remove(obj)
+            return run_llvm_mc(path, obj, align_lines)
     if p.returncode != 0 or errors:
         if not errors:
             errors.append((0, "gas failed: " + p.stderr.strip()[:200]))
@@ -624,11 +746,33 @@ def gen_branches(corpus):
     cases["align_text"] = "nop\n.align 16\nret\n.align 128\nmov rax, 1\n.align 256\n.data\n.byte 1\n.align 8\n"
     for k in range(0, 140, 7):
         cases["align_%d" % k] = "nop\n" * k + "ret\n.align 128\n"
+    # Which references keep relocations: ELF keeps them for global symbols, Mach-O for anything
+    # outside the current atom (`L` labels are the temporaries there; `.L` ones are not).
+    cases["atoms"] = "\n".join([
+        ".global _main", "_main: nop", "Lt1: nop", "lf: jmp Lt1", "jmp _main", "jz _main", "call _main", "call lf",
+        "call Lt1", "jz Lt2", "jmp .Lx", "lea rax, [rip + Lt1]", "lea rax, [rip + lf]", "lea rax, [rip + .Lx]",
+        "lea rax, [rip + _main + 3]", "mov rax, [rip + Ld]", "mov rax, [rip + .Ld2]", "mov rax, [rip + gd]",
+        "Lt2:", ".Lx: nop", "jmp Lt2", "jmp lf", "Lt3:", "g2:", "jmp Lt3", "jmp g2", "call 1f", "1: ret",
+        "jmp 1b", "call ext", "jmp ext", "lea rax, [rip + Lt3 - 1]",
+        ".data", "Ld: .quad 1", ".Ld2: .quad 2", ".global gd", "gd: .quad 3",
+    ]) + "\n"
+    for k in range(0, 40, 3):
+        cases["macalign_%d" % k] = "nop\n" * k + "ret\n.align 5\nnop\n.align 2\n.data\n.byte 1\n.align 3\n"
+    cases["macalign_err"] = "nop\n.align 31\n.align 32\n.align 536870912\n"
+    n = 0
     for name, body in cases.items():
-        for tgt in ("lin", "win"):
+        if name.startswith("macalign"):
+            with open(os.path.join(corpus, "neg.mac.%s.s" % name), "w") as f:
+                f.write(".intel_syntax noprefix\n" + body)
+            n += 1
+            continue
+        # (`.align n` means 2**n bytes for Apple's `as`; see the unit tests for that.)
+        mac = name.startswith(("br_", "atoms"))
+        for tgt in ("lin", "win", "mac") if mac else ("lin", "win"):
             with open(os.path.join(corpus, "neg.%s.%s.s" % (tgt, name)), "w") as f:
                 f.write(".intel_syntax noprefix\n" + body)
-    return len(cases) * 2
+            n += 1
+    return n
 
 
 # --------------------------------------------------------------------------------------------
@@ -697,8 +841,14 @@ def describe_diff(a, b):
 def compare(path, gas, mine_text):
     coff = ".win." in os.path.basename(path)
     gerr, gmodel = gas
-    merr, mmodel = parse_emit(mine_text, coff)
+    fmt = "coff" if coff else "macho" if ".mac." in os.path.basename(path) else "elf"
+    merr, mmodel = parse_emit(mine_text, fmt)
     problems = []
+    if isinstance(gmodel, tuple):
+        # LLVM rejected gas syntax (see run_gas): compare gas's errors only.
+        if sorted(set(gerr)) != sorted(set(merr)):
+            problems.append("errors differ: gas/llvm %s emitter %s" % (gerr[:5], merr[:5]))
+        return problems, (0, 1)
     # Known difference: absolute branch targets are accepted by gas and rejected by the Emitter.
     # Such a file can't be byte-compared; the remaining errors must still agree.
     gas_lines = {l for l, _ in gerr}
@@ -712,7 +862,7 @@ def compare(path, gas, mine_text):
         rest = [e for e in merr if e not in known]
         if sorted(set(gerr)) != sorted(set(rest)):
             problems.append("errors differ: gas %s emitter %s" % (gerr[:5], rest[:5]))
-        return problems, len(known)
+        return problems, (len(known), 0)
     if sorted(set(gerr)) != sorted(set(merr)):
         only_g = sorted(set(gerr) - set(merr))
         only_m = sorted(set(merr) - set(gerr))
@@ -733,7 +883,7 @@ def compare(path, gas, mine_text):
         if gmodel["syms"] != mmodel["syms"]:
             g, m = gmodel["syms"], mmodel["syms"]
             problems.append("symbols: gas-only %s emitter-only %s" % (sorted(g - m)[:4], sorted(m - g)[:4]))
-    return problems, 0
+    return problems, (0, 0)
 
 
 def main():
@@ -757,13 +907,14 @@ def main():
     results = gas_phase(corpus)
     run_emitter(corpus)
     failures = []
-    n_err = n_bytes = n_known = 0
+    n_err = n_bytes = n_known = n_llvm = 0
     for path, gas in sorted(results.items()):
         with open(path[:-2] + ".emit") as f:
             mine = f.read()
-        probs, k = compare(path, gas, mine)
+        probs, (k, kl) = compare(path, gas, mine)
         n_known += k
-        if gas[1] is not None:
+        n_llvm += kl
+        if gas[1] is not None and not kl:
             n_bytes += 1
         else:
             n_err += 1
@@ -779,6 +930,7 @@ def main():
     print("files compared: %d (%d byte-compared, %d error-compared), source lines: %d" % (
         len(results), n_bytes, n_err, total_lines))
     print("known differences (absolute branch targets, rejected by the Emitter): %d lines" % n_known)
+    print("macOS files only error-compared (LLVM rejects gas syntax in them): %d" % n_llvm)
     for path, probs in failures[:args.show]:
         print("FAIL", os.path.relpath(path, corpus))
         for p in probs:
