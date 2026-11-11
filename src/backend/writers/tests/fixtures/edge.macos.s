@@ -4,6 +4,9 @@
 .global _main
 .global gdata
 .global undefined_but_global
+# GNU as turns references to local symbols into section-relative ones in ELF, so the module
+# (imported from its object) would never reference `dlocal` by symbol: make it global.
+.global dlocal
 
 .data
 .Lfoo: .quad 1

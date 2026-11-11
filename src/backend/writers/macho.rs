@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use super::super::module::{Binding, ObjModule, RelocKind, SymbolId};
-use super::{align_up, is_global, link, put_u64, Le};
+use super::{align_up, link, put_u64, Le};
 
 const MH_MAGIC_64: u32 = 0xfeed_facf;
 const CPU_TYPE_X86_64: u32 = 0x0100_0007;
@@ -261,7 +261,20 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
         syms.push(Nlist { name: s.name.clone(), n_type, n_sect, n_desc: 0, value });
     }
 
-    // Relocations (emitted in reverse order, like LLVM).
+    // Relocations (emitted in reverse order, like LLVM). A reference to a temporary label is
+    // made relative to its atom, the closest symbol in the symbol table at or before it in the
+    // same section, as LLVM does; without one, it refers to the section (non-extern), the target
+    // address being implicit in the field.
+    let atom = |sec: usize, off: u64| {
+        locals
+            .iter()
+            .chain(&extdefs)
+            .filter_map(|&id| match m.symbols[id].definition {
+                Some((s, o)) if s == sec && o <= off => Some((o, id)),
+                _ => None,
+            })
+            .max()
+    };
     let mut contents = [m.sections[0].data.clone(), m.sections[1].data.clone()];
     let mut relocs: [Vec<u8>; 2] = [Vec::new(), Vec::new()];
     for (si, sec) in m.sections.iter().enumerate() {
@@ -269,30 +282,42 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
             let s = &m.symbols[r.symbol];
             let field = r.offset as usize;
             let buf = &mut contents[si];
-            // Non-temporary symbols are referenced by symbol; temporaries become references to
-            // their section, the target address being implicit in the field.
-            let external = !s.temporary || s.definition.is_none();
-            debug_assert!(!external || sym_index.contains_key(&r.symbol) || is_global(s));
+            let (external, addend) = match s.definition {
+                Some((tsec, off)) if s.temporary => match atom(tsec, off) {
+                    Some((base, id)) => (Some(id), r.addend + (off - base) as i64),
+                    None => (None, r.addend),
+                },
+                _ => (Some(r.symbol), r.addend),
+            };
+            debug_assert!(external.map_or(true, |id| sym_index.contains_key(&id)), "`{}' not in the symbol table", s.name);
             match r.kind {
                 RelocKind::Abs32 => return Err(ABS32_UNSUPPORTED.into()),
                 RelocKind::Abs64 => {
-                    if external {
-                        put_u64(buf, field, r.addend as u64);
-                        reloc_entry(&mut relocs[si], r.offset, sym_index[&r.symbol], false, 3, true, X86_64_RELOC_UNSIGNED);
+                    if let Some(id) = external {
+                        put_u64(buf, field, addend as u64);
+                        reloc_entry(&mut relocs[si], r.offset, sym_index[&id], false, 3, true, X86_64_RELOC_UNSIGNED);
                     } else {
                         let (tsec, off) = s.definition.expect("temporary symbols are defined");
-                        put_u64(buf, field, (addrs[tsec] + off).wrapping_add(r.addend as u64));
+                        put_u64(buf, field, (addrs[tsec] + off).wrapping_add(addend as u64));
                         reloc_entry(&mut relocs[si], r.offset, tsec as u32 + 1, false, 3, false, X86_64_RELOC_UNSIGNED);
                     }
                 }
                 RelocKind::Pc32 | RelocKind::Branch32 => {
                     let p = addrs[si] + r.offset;
-                    if external {
-                        // The linker computes S + field - (P + 4) for every SIGNED variant.
-                        let v = i32::try_from(r.addend + 4).map_err(|_| format!("addend out of range for `{}'", s.name))?;
+                    if let Some(id) = external {
+                        // The linker computes S + field - (P + 4 + j) for SIGNED_j (j = 0 for SIGNED
+                        // and BRANCH). Like LLVM, use SIGNED_j when the addend is exactly the -4 - j
+                        // of an instruction with j immediate bytes after the field.
+                        let (j, ty) = match (r.kind, -(addend + 4)) {
+                            (RelocKind::Branch32, _) => (0, X86_64_RELOC_BRANCH),
+                            (_, 1) => (1, X86_64_RELOC_SIGNED_1),
+                            (_, 2) => (2, X86_64_RELOC_SIGNED_2),
+                            (_, 4) => (4, X86_64_RELOC_SIGNED_4),
+                            _ => (0, X86_64_RELOC_SIGNED),
+                        };
+                        let v = i32::try_from(addend + 4 + j).map_err(|_| format!("addend out of range for `{}'", s.name))?;
                         buf[field..field + 4].copy_from_slice(&v.to_le_bytes());
-                        let ty = if r.kind == RelocKind::Branch32 { X86_64_RELOC_BRANCH } else { X86_64_RELOC_SIGNED };
-                        reloc_entry(&mut relocs[si], r.offset, sym_index[&r.symbol], true, 2, true, ty);
+                        reloc_entry(&mut relocs[si], r.offset, sym_index[&id], true, 2, true, ty);
                     } else {
                         // The field holds the displacement; the linker finds the target section at
                         // P + 4 + j + field, where j is the SIGNED_j bias. Pick j so that this
@@ -300,20 +325,24 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
                         // the target section (its end included, for labels at the end).
                         let (tsec, off) = s.definition.expect("temporary symbols are defined");
                         let target = addrs[tsec] + off;
-                        let disp = target as i64 + r.addend - p as i64;
+                        let disp = target as i64 + addend - p as i64;
                         let v = i32::try_from(disp).map_err(|_| format!("relocation out of range for `{}'", s.name))?;
                         buf[field..field + 4].copy_from_slice(&v.to_le_bytes());
                         let lands = |j: i64| {
-                            let dst = target as i64 + r.addend + 4 + j;
+                            let dst = target as i64 + addend + 4 + j;
                             dst >= addrs[tsec] as i64 && dst <= (addrs[tsec] + sizes[tsec]) as i64
                         };
                         let candidates = [(0, X86_64_RELOC_SIGNED), (1, X86_64_RELOC_SIGNED_1), (2, X86_64_RELOC_SIGNED_2), (4, X86_64_RELOC_SIGNED_4)];
-                        let exact = candidates.iter().find(|(j, _)| *j == -(r.addend + 4));
-                        let ty = exact
-                            .filter(|(j, _)| lands(*j))
-                            .or_else(|| candidates.iter().find(|(j, _)| lands(*j)))
-                            .map(|&(_, t)| t)
-                            .ok_or_else(|| format!("relocation against `{}' points outside its section", s.name))?;
+                        let exact = candidates.iter().find(|(j, _)| *j == -(addend + 4));
+                        let ty = if r.kind == RelocKind::Branch32 && lands(0) {
+                            X86_64_RELOC_BRANCH
+                        } else {
+                            exact
+                                .filter(|(j, _)| lands(*j))
+                                .or_else(|| candidates.iter().find(|(j, _)| lands(*j)))
+                                .map(|&(_, t)| t)
+                                .ok_or_else(|| format!("relocation against `{}' points outside its section", s.name))?
+                        };
                         reloc_entry(&mut relocs[si], r.offset, tsec as u32 + 1, true, 2, false, ty);
                     }
                 }
