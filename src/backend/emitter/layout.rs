@@ -52,6 +52,10 @@ impl BranchKind {
             },
         }
     }
+    #[cfg(test)]
+    pub(super) fn fadec_mnemonic(self) -> u64 {
+        self.fadec()
+    }
     fn fadec(self) -> u64 {
         match self {
             BranchKind::Jmp => FE_JMP,

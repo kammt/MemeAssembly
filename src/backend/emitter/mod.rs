@@ -19,6 +19,11 @@ mod layout;
 mod regs;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod diff_fadec;
+mod x86;
+#[cfg(test)]
+mod x86_tests;
 
 use std::collections::HashMap;
 
