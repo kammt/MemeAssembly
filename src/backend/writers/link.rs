@@ -1,6 +1,6 @@
 //! The part of a static linker shared by the executable writers: given final addresses for
 //! the module's sections, resolve symbols and apply every relocation.
-use super::super::module::{ObjModule, RelocKind, SymbolId};
+use super::super::module::{Binding, ObjModule, RelocKind, Symbol, SymbolId};
 use super::{field_size, is_pcrel, put_u32, put_u64, section_name};
 
 /// Final address of a symbol, or `None` if it is undefined and `resolve_undefined` doesn't
@@ -116,7 +116,27 @@ fn kind_name(kind: RelocKind) -> &'static str {
     }
 }
 
-/// Reports an undefined `main` the way ld does for crt's reference to it.
-pub fn missing_entry(name: &str) -> String {
-    format!("in function `_start': undefined reference to `{name}'")
+/// An undefined `main`, reported the way ld does for crt's reference to it.
+pub const NO_MAIN: &str = "in function `_start': undefined reference to `main'";
+
+/// Links a program: [`relocate`]s `m` and finds its entry point, the global symbol `entry`
+/// defined in `m`. Returns the relocated sections and the entry's address. All errors are
+/// reported at once, a missing entry point (as `missing`) after the relocation errors.
+pub fn link_program(
+    m: &ObjModule,
+    entry: &str,
+    missing: &str,
+    section_addrs: &[u64; 2],
+    resolve_undefined: &dyn Fn(&str) -> Option<u64>,
+) -> Result<(Linked, u64), String> {
+    let entry = m.symbol_by_name(entry).and_then(|id| match m.symbols[id] {
+        Symbol { definition: Some((sec, off)), binding: Binding::Global, .. } => Some(section_addrs[sec] + off),
+        _ => None,
+    });
+    match (relocate(m, section_addrs, resolve_undefined), entry) {
+        (Ok(linked), Some(entry)) => Ok((linked, entry)),
+        (Ok(_), None) => Err(missing.to_string()),
+        (Err(e), Some(_)) => Err(e),
+        (Err(e), None) => Err(format!("{e}\n{missing}")),
+    }
 }

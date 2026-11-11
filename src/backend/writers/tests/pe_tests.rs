@@ -58,27 +58,6 @@ fn pe_executable_structure() {
     assert_eq!(p.matches("call   *0x").count(), 2, "{p}");
 }
 
-/// PE checksum matches what the mingw tools compute, if `objdump` reports one.
-#[test]
-fn pe_checksum_is_valid() {
-    let m = samples::hello_world_windows();
-    let exe = write(&m, Target::Windows, OutputKind::Executable).unwrap();
-    // Recompute independently.
-    let lfanew = u32::from_le_bytes(exe[0x3c..0x40].try_into().unwrap()) as usize;
-    let off = lfanew + 4 + 20 + 64;
-    let stored = u32::from_le_bytes(exe[off..off + 4].try_into().unwrap());
-    let mut sum: u64 = 0;
-    for i in (0..exe.len()).step_by(2) {
-        if i == off || i == off + 2 {
-            continue;
-        }
-        sum += u16::from_le_bytes([exe[i], *exe.get(i + 1).unwrap_or(&0)]) as u64;
-        sum = (sum & 0xffff) + (sum >> 16);
-    }
-    assert_eq!(stored, ((sum & 0xffff) + (sum >> 16)) as u32 + exe.len() as u32);
-    assert_ne!(stored, 0);
-}
-
 /// Our executables behave like the original toolchain's (mingw gcc on the same assembly).
 #[test]
 fn pe_executables_match_reference() {

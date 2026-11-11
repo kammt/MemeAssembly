@@ -1,14 +1,12 @@
-//! DWARF 5 debug sections for `-g` (ELF only): `.debug_info`, `.debug_abbrev`,
-//! `.debug_aranges`, `.debug_line`, `.debug_str`, `.debug_line_str`.
+//! DWARF 5 debug sections for `-g` (ELF only): `.debug_info`, `.debug_abbrev` and
+//! `.debug_line`. Strings are stored inline (`DW_FORM_string`), so there are no string sections.
 //!
 //! The sections are produced format-neutrally together with the places that need relocation:
 //! addresses inside `.text` (64-bit) and offsets into other debug sections (32-bit, DWARF32).
 //! Relocatable output turns them into relocations against section symbols (like gas);
 //! executables write the final values.
-use std::collections::HashMap;
-
 use super::super::module::DebugInfo;
-use super::Le;
+use super::{uleb, Le};
 
 /// What a relocated field refers to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,11 +33,6 @@ pub struct DebugSection {
 }
 
 impl DebugSection {
-    /// `SHF_MERGE | SHF_STRINGS` string sections.
-    pub fn is_strings(&self) -> bool {
-        matches!(self.name, ".debug_str" | ".debug_line_str")
-    }
-
     /// Contents with every relocation resolved, given the final address of `.text`.
     pub fn resolved(&self, text_addr: u64) -> Vec<u8> {
         let mut d = self.data.clone();
@@ -71,11 +64,10 @@ const DW_AT_EXTERNAL: u64 = 0x3f;
 const DW_FORM_ADDR: u64 = 0x01;
 const DW_FORM_DATA2: u64 = 0x05;
 const DW_FORM_DATA8: u64 = 0x07;
-const DW_FORM_STRP: u64 = 0x0e;
+const DW_FORM_STRING: u64 = 0x08;
 const DW_FORM_UDATA: u64 = 0x0f;
 const DW_FORM_SEC_OFFSET: u64 = 0x17;
 const DW_FORM_FLAG_PRESENT: u64 = 0x19;
-const DW_FORM_LINE_STRP: u64 = 0x1f;
 const DW_LANG_MIPS_ASSEMBLER: u16 = 0x8001;
 const DW_UT_COMPILE: u8 = 1;
 const DW_LNCT_PATH: u64 = 1;
@@ -86,18 +78,6 @@ const DW_LNS_ADVANCE_LINE: u8 = 3;
 const DW_LNS_SET_FILE: u8 = 4;
 const DW_LNE_END_SEQUENCE: u8 = 1;
 const DW_LNE_SET_ADDRESS: u8 = 2;
-
-fn uleb(b: &mut Vec<u8>, mut v: u64) {
-    loop {
-        let byte = (v & 0x7f) as u8;
-        v >>= 7;
-        if v == 0 {
-            b.push(byte);
-            return;
-        }
-        b.push(byte | 0x80);
-    }
-}
 
 fn sleb(b: &mut Vec<u8>, mut v: i64) {
     loop {
@@ -111,26 +91,10 @@ fn sleb(b: &mut Vec<u8>, mut v: i64) {
     }
 }
 
-/// A NUL-terminated string section with deduplication.
-struct Strings {
-    data: Vec<u8>,
-    seen: HashMap<Vec<u8>, u32>,
-}
-
-impl Strings {
-    fn new() -> Strings {
-        Strings { data: Vec::new(), seen: HashMap::new() }
-    }
-    fn get(&mut self, s: &[u8]) -> u32 {
-        if let Some(&o) = self.seen.get(s) {
-            return o;
-        }
-        let o = self.data.len() as u32;
-        self.data.extend_from_slice(s);
-        self.data.push(0);
-        self.seen.insert(s.to_vec(), o);
-        o
-    }
+/// A NUL-terminated inline string (`DW_FORM_string`).
+fn string(b: &mut Vec<u8>, s: &[u8]) {
+    b.extend_from_slice(s);
+    b.push(0);
 }
 
 /// Splits an absolute path into (directory, file name).
@@ -144,9 +108,6 @@ fn split_path(p: &[u8]) -> (&[u8], &[u8]) {
 
 /// Builds the DWARF sections describing a `.text` of `text_size` bytes.
 pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
-    let mut str_ = Strings::new();
-    let mut line_str = Strings::new();
-
     // ---- .debug_line ----
     // Directory 0 is the compilation directory; file 0 is the primary source file and is
     // repeated as file 1 (like gcc/gas), so `DebugInfo::files[i]` is DWARF file `i + 1`.
@@ -182,23 +143,19 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
     line.extend_from_slice(&[0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]);
     line.u8(1); // directory_entry_format_count
     uleb(&mut line, DW_LNCT_PATH);
-    uleb(&mut line, DW_FORM_LINE_STRP);
+    uleb(&mut line, DW_FORM_STRING);
     uleb(&mut line, dirs.len() as u64);
     for dir in &dirs {
-        let o = line_str.get(dir);
-        line_relocs.push(DebugReloc { offset: line.len() as u64, target: RelTarget::Section(".debug_line_str"), addend: o as i64 });
-        line.u32(0);
+        string(&mut line, dir);
     }
     line.u8(2); // file_name_entry_format_count
     uleb(&mut line, DW_LNCT_PATH);
-    uleb(&mut line, DW_FORM_LINE_STRP);
+    uleb(&mut line, DW_FORM_STRING);
     uleb(&mut line, DW_LNCT_DIRECTORY_INDEX);
     uleb(&mut line, DW_FORM_UDATA);
     uleb(&mut line, file_entries.len() as u64);
     for (name, di) in &file_entries {
-        let o = line_str.get(name);
-        line_relocs.push(DebugReloc { offset: line.len() as u64, target: RelTarget::Section(".debug_line_str"), addend: o as i64 });
-        line.u32(0);
+        string(&mut line, name);
         uleb(&mut line, *di);
     }
     let header_length = line.len() - header_length_at - 4;
@@ -263,9 +220,9 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
             (DW_AT_STMT_LIST, DW_FORM_SEC_OFFSET),
             (DW_AT_LOW_PC, DW_FORM_ADDR),
             (DW_AT_HIGH_PC, DW_FORM_DATA8),
-            (DW_AT_NAME, DW_FORM_LINE_STRP),
-            (DW_AT_COMP_DIR, DW_FORM_LINE_STRP),
-            (DW_AT_PRODUCER, DW_FORM_STRP),
+            (DW_AT_NAME, DW_FORM_STRING),
+            (DW_AT_COMP_DIR, DW_FORM_STRING),
+            (DW_AT_PRODUCER, DW_FORM_STRING),
             (DW_AT_LANGUAGE, DW_FORM_DATA2),
         ],
     );
@@ -275,7 +232,7 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
         false,
         &[
             (DW_AT_EXTERNAL, DW_FORM_FLAG_PRESENT),
-            (DW_AT_NAME, DW_FORM_STRP),
+            (DW_AT_NAME, DW_FORM_STRING),
             (DW_AT_DECL_FILE, DW_FORM_UDATA),
             (DW_AT_DECL_LINE, DW_FORM_UDATA),
             (DW_AT_LOW_PC, DW_FORM_ADDR),
@@ -287,31 +244,28 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
     // ---- .debug_info ----
     let mut info = Vec::new();
     let mut info_relocs = Vec::new();
-    let sec = |info: &mut Vec<u8>, relocs: &mut Vec<DebugReloc>, name: &'static str, addend: u32| {
-        relocs.push(DebugReloc { offset: info.len() as u64, target: RelTarget::Section(name), addend: addend as i64 });
+    // Offset 0 of another debug section.
+    let sec = |info: &mut Vec<u8>, relocs: &mut Vec<DebugReloc>, name: &'static str| {
+        relocs.push(DebugReloc { offset: info.len() as u64, target: RelTarget::Section(name), addend: 0 });
         info.u32(0);
     };
     info.u32(0); // unit_length, patched
     info.u16(5);
     info.u8(DW_UT_COMPILE);
     info.u8(8);
-    sec(&mut info, &mut info_relocs, ".debug_abbrev", 0);
+    sec(&mut info, &mut info_relocs, ".debug_abbrev");
     uleb(&mut info, 1);
-    sec(&mut info, &mut info_relocs, ".debug_line", 0);
+    sec(&mut info, &mut info_relocs, ".debug_line");
     info_relocs.push(DebugReloc { offset: info.len() as u64, target: RelTarget::Text, addend: 0 });
     info.u64(0);
     info.u64(text_size);
-    let name = line_str.get(&primary);
-    sec(&mut info, &mut info_relocs, ".debug_line_str", name);
-    let comp_dir = line_str.get(&d.comp_dir);
-    sec(&mut info, &mut info_relocs, ".debug_line_str", comp_dir);
-    let producer = str_.get(d.producer.as_bytes());
-    sec(&mut info, &mut info_relocs, ".debug_str", producer);
+    string(&mut info, &primary);
+    string(&mut info, &d.comp_dir);
+    string(&mut info, d.producer.as_bytes());
     info.u16(DW_LANG_MIPS_ASSEMBLER);
     for f in &d.functions {
         uleb(&mut info, 2);
-        let n = str_.get(f.name.as_bytes());
-        sec(&mut info, &mut info_relocs, ".debug_str", n);
+        string(&mut info, f.name.as_bytes());
         uleb(&mut info, f.file as u64 + 1);
         uleb(&mut info, f.line as u64);
         info_relocs.push(DebugReloc { offset: info.len() as u64, target: RelTarget::Text, addend: f.low as i64 });
@@ -324,32 +278,10 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
     let unit_length = info.len() as u32 - 4;
     info[..4].copy_from_slice(&unit_length.to_le_bytes());
 
-    // ---- .debug_aranges ----
-    let mut aranges = Vec::new();
-    let mut aranges_relocs = Vec::new();
-    aranges.u32(0);
-    aranges.u16(2);
-    aranges_relocs.push(DebugReloc { offset: aranges.len() as u64, target: RelTarget::Section(".debug_info"), addend: 0 });
-    aranges.u32(0);
-    aranges.u8(8);
-    aranges.u8(0);
-    aranges.pad_to(16, 0); // tuples are aligned to twice the address size
-    aranges_relocs.push(DebugReloc { offset: aranges.len() as u64, target: RelTarget::Text, addend: 0 });
-    aranges.u64(0);
-    aranges.u64(text_size);
-    aranges.u64(0);
-    aranges.u64(0);
-    let unit_length = aranges.len() as u32 - 4;
-    aranges[..4].copy_from_slice(&unit_length.to_le_bytes());
-
-    // Section order as gas emits it for `-gdwarf-5`.
     vec![
-        DebugSection { name: ".debug_line", data: line, relocs: line_relocs },
-        DebugSection { name: ".debug_line_str", data: line_str.data, relocs: Vec::new() },
         DebugSection { name: ".debug_info", data: info, relocs: info_relocs },
         DebugSection { name: ".debug_abbrev", data: abbrev, relocs: Vec::new() },
-        DebugSection { name: ".debug_aranges", data: aranges, relocs: aranges_relocs },
-        DebugSection { name: ".debug_str", data: str_.data, relocs: Vec::new() },
+        DebugSection { name: ".debug_line", data: line, relocs: line_relocs },
     ]
 }
 
