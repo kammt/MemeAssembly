@@ -1,5 +1,5 @@
 //! Replaces the original `popen("gcc ... -x assembler -")`: the translator drives
-//! [`emitter::Emitter`] (instructions encoded directly with fadec, no assembly text involved),
+//! [`emitter::Emitter`] (instructions encoded directly in Rust, no assembly text involved),
 //! and [`writers`] turn the resulting [`module::ObjModule`] into object files / executables.
 
 pub mod emitter;

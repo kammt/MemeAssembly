@@ -42,7 +42,6 @@ fn mem_size(m: &Mem) -> Option<Sz> {
         Size::Word => Some(Sz::W),
         Size::Dword => Some(Sz::D),
         Size::Qword => Some(Sz::Q),
-        Size::Xmmword => None,
     }
 }
 
@@ -199,8 +198,9 @@ fn modrm(sz: Option<Sz>, opcode: &[u8], field: Field, rm: Rm, imm: Imm) -> Optio
     prefix(&mut out, sz, addr32, rex, &regs)?;
     out.extend_from_slice(opcode);
     out.push(modrm_byte);
-    let field_at = out.len() + tail.len() - 4;
     out.extend_from_slice(&tail);
+    // (the RIP displacement is the last 4 bytes of `tail`)
+    let field_at = out.len().wrapping_sub(4);
     imm.put(&mut out);
     Some(Insn { bytes: out, rip: rip.map(|(s, d)| (field_at, s, d)) })
 }
@@ -232,7 +232,10 @@ fn op8(sz: Sz, b: u8) -> u8 {
 pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
     select(op, ops)
         .map(|i| Encoded { bytes: i.bytes, rip: i.rip })
-        .ok_or_else(|| format!("internal error: unsupported operand combination for `{op:?}'"))
+        .ok_or_else(|| {
+            let op = format!("{op:?}").to_ascii_lowercase();
+            format!("internal error: unsupported operand combination for `{op}'")
+        })
 }
 
 fn select(op: Op, ops: &[Operand]) -> Option<Insn> {
@@ -410,12 +413,8 @@ impl BranchKind {
 pub(super) fn branch(kind: BranchKind, long: bool, rel: i32) -> Vec<u8> {
     let cc = |c: Cond| match c {
         Cond::E | Cond::Z => 0x4,
-        Cond::Ne | Cond::Nz => 0x5,
-        Cond::B => 0x2,
-        Cond::A => 0x7,
         Cond::L => 0xc,
         Cond::Ge => 0xd,
-        Cond::Le => 0xe,
         Cond::G => 0xf,
     };
     let mut out = match (kind, long) {

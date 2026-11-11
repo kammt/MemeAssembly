@@ -1,26 +1,16 @@
 //! Direct code generation: the translator drives an [`Emitter`] with typed instructions, which
-//! are encoded with fadec into an [`ObjModule`]. No assembly text is produced or parsed on this
+//! are encoded (`x86.rs`) into an [`ObjModule`]. No assembly text is produced or parsed on this
 //! path – the `-S` text output is generated separately by the translator.
 //!
-//! OWNED BY: the encoder agent (implementation). The *public API* below is the contract with the
-//! frontend; extend it additively if needed, but do not change existing signatures without
-//! coordinating.
-//!
-//! Semantics must match what GNU as would have produced from the equivalent `-S` text (the
-//! reference compiler pipes that text into gas): same instruction forms (aim for byte-identical
-//! encodings incl. short/near jump relaxation), same acceptance/rejection of operand
-//! combinations (e.g. ambiguous memory operand size, size mismatches, immediates out of range)
-//! – errors are returned as `Err(String)` with a gas-like message.
-// Until the translator drives the emitter, most of the API is unused in the binary.
-#![allow(dead_code)]
+//! The result matches what GNU as produces from the equivalent `-S` text: the same instruction
+//! encodings, short/near jump relaxation, relocations and symbols. Operand combinations the
+//! translator never produces are rejected with an internal error; the errors real programs can
+//! reach (a symbol defined twice, a section alignment COFF can't represent) have gas's message.
 
-mod encode;
 mod layout;
 mod regs;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod diff_fadec;
 mod x86;
 #[cfg(test)]
 mod x86_tests;
@@ -61,8 +51,6 @@ pub enum Size {
     Word,
     Dword,
     Qword,
-    /// `XMMWORD PTR` – only for completeness; the translator never writes it.
-    Xmmword,
 }
 
 /// Base of a memory operand.
@@ -100,14 +88,14 @@ pub enum Operand {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
     Mov, Movups, Lea, Push, Pop,
-    Add, Sub, And, Xor, Cmp, Test, Not, Inc, Dec,
+    Add, Sub, And, Xor, Cmp, Test, Not,
     Shl, Shr, Imul, Idiv, Cqo,
     Ret, Nop, Hlt, Int3, Syscall, Rdrand,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cond {
-    E, Ne, Z, Nz, G, L, Ge, Le, A, B,
+    E, Z, G, L, Ge,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -223,7 +211,7 @@ impl Emitter {
     pub fn label(&mut self, name: &str) -> Result<(), String> {
         let name = &char_constants(name);
         if !valid_symbol(name) {
-            return Err(layout::bad_label_message(name));
+            return Err(format!("internal error: invalid label name `{name}'"));
         }
         if matches!(name.as_str(), ".text" | ".data" | ".bss") && self.target != Target::Windows {
             return Err(format!("symbol `{name}' is already defined"));
@@ -248,7 +236,7 @@ impl Emitter {
     }
     /// A non-branch instruction with gas Intel-syntax operand order (destination first).
     pub fn insn(&mut self, op: Op, ops: &[Operand]) -> Result<(), String> {
-        let e = encode::encode(op, ops)?;
+        let e = x86::encode(op, ops)?;
         let mut fixups = Vec::new();
         if let Some((field, sym, disp)) = e.rip {
             let id = self.sym_ref(&sym)?;
@@ -260,14 +248,14 @@ impl Emitter {
     /// `jmp target` (cond = None) or `jcc target`. Relaxed short/near like gas.
     pub fn jump(&mut self, cond: Option<Cond>, target: BranchTarget) -> Result<(), String> {
         let kind = match cond {
-            None => layout::BranchKind::Jmp,
-            Some(c) => layout::BranchKind::Jcc(c),
+            None => x86::BranchKind::Jmp,
+            Some(c) => x86::BranchKind::Jcc(c),
         };
         self.branch(kind, target)
     }
     /// `call target`
     pub fn call(&mut self, target: BranchTarget) -> Result<(), String> {
-        self.branch(layout::BranchKind::Call, target)
+        self.branch(x86::BranchKind::Call, target)
     }
     /// `.ascii` / `.byte`
     pub fn bytes(&mut self, data: &[u8]) {
@@ -279,8 +267,9 @@ impl Emitter {
     }
     /// `.align n` (additive extension; used for `-O-s`), with the meaning the directive has for
     /// the target's assembler: gas aligns to `n` bytes, Apple's `as` (Mach-O) to `2**n` bytes and
-    /// rejects `n >= 32` ("invalid alignment value"). In `.text` the padding is filled with the
-    /// same NOP sequences that assembler uses, in `.data` with zeros. The section's alignment
+    /// rejects `n >= 32` ("invalid alignment value"). The padding is filled with single-byte
+    /// NOPs in `.text` (unlike gas's multi-byte NOPs: it only follows the final `ret`) and
+    /// with zeros in `.data`. The section's alignment
     /// becomes at least that. COFF (Windows) can't represent alignments above 8192: like gas,
     /// `finish` then fails ("nonrepresentable section on output").
     pub fn align(&mut self, n: u64) -> Result<(), String> {
@@ -383,7 +372,7 @@ impl Emitter {
             return Ok(self.dot());
         }
         if !valid_symbol(name) {
-            return Err(layout::bad_reference_message(name));
+            return Err(format!("internal error: invalid symbol name `{name}'"));
         }
         Ok(self.sym(name))
     }
@@ -414,7 +403,7 @@ impl Emitter {
         self.push(item);
     }
 
-    fn branch(&mut self, kind: layout::BranchKind, target: BranchTarget) -> Result<(), String> {
+    fn branch(&mut self, kind: x86::BranchKind, target: BranchTarget) -> Result<(), String> {
         let target = match target {
             BranchTarget::Local { n, forward } => {
                 let count = self.fb_count.get(&n).copied().unwrap_or(0);
@@ -436,15 +425,12 @@ impl Emitter {
                 let s = char_constants(&s);
                 if s == "$" || s == "." {
                     self.dot()
+                } else if regs::is_symbol(&s) {
+                    self.sym_ref(&s)?
                 } else {
-                    match regs::classify(&s) {
-                        regs::Ident::Symbol => self.sym_ref(&s)?,
-                        other => {
-                            let bytes = layout::indirect_branch(kind, other, &s)?;
-                            self.push_insn(layout::Item::Bytes { data: bytes, fixups: Vec::new() });
-                            return Ok(());
-                        }
-                    }
+                    // gas would read a register name, `byte`, `and`, ... as something else (the
+                    // frontend passes those as `Quoted`).
+                    return Err(format!("internal error: `{s}' is not a symbol name"));
                 }
             }
         };

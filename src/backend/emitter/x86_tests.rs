@@ -43,7 +43,6 @@ fn operand_text(o: &Operand) -> String {
                 Some(Size::Word) => "WORD PTR ",
                 Some(Size::Dword) => "DWORD PTR ",
                 Some(Size::Qword) => "QWORD PTR ",
-                Some(Size::Xmmword) => "XMMWORD PTR ",
             };
             let disp = |d: i64| match d {
                 0 => String::new(),

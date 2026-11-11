@@ -1,8 +1,7 @@
 //! Section contents as a list of items, branch relaxation and final module assembly.
 
-use super::regs::Ident;
-use super::{Cond, Emitter, Reg};
-use crate::backend::fadec::{self, *};
+use super::x86::{self, BranchKind};
+use super::Emitter;
 use crate::backend::module::{
     DebugFunction, LineRow, ObjModule, Reloc, RelocKind, Section, SectionKind,
 };
@@ -24,202 +23,6 @@ pub(super) struct Fixup {
     pub symbol: usize,
     pub end: usize,
     pub disp: i64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum BranchKind {
-    Jmp,
-    Jcc(Cond),
-    Call,
-}
-
-impl BranchKind {
-    pub fn mnemonic(self) -> &'static str {
-        match self {
-            BranchKind::Jmp => "jmp",
-            BranchKind::Call => "call",
-            BranchKind::Jcc(c) => match c {
-                Cond::E => "je",
-                Cond::Ne => "jne",
-                Cond::Z => "jz",
-                Cond::Nz => "jnz",
-                Cond::G => "jg",
-                Cond::L => "jl",
-                Cond::Ge => "jge",
-                Cond::Le => "jle",
-                Cond::A => "ja",
-                Cond::B => "jb",
-            },
-        }
-    }
-    #[cfg(test)]
-    pub(super) fn fadec_mnemonic(self) -> u64 {
-        self.fadec()
-    }
-    fn fadec(self) -> u64 {
-        match self {
-            BranchKind::Jmp => FE_JMP,
-            BranchKind::Call => FE_CALL,
-            BranchKind::Jcc(c) => match c {
-                Cond::E | Cond::Z => FE_JZ,
-                Cond::Ne | Cond::Nz => FE_JNZ,
-                Cond::G => FE_JG,
-                Cond::L => FE_JL,
-                Cond::Ge => FE_JGE,
-                Cond::Le => FE_JLE,
-                Cond::A => FE_JA,
-                Cond::B => FE_JC,
-            },
-        }
-    }
-    fn len(self, long: bool) -> u64 {
-        match (self, long) {
-            (_, false) => 2,
-            (BranchKind::Jcc(_), true) => 6,
-            _ => 5,
-        }
-    }
-}
-
-/// `call reg` / `jmp reg` and the other non-symbol identifiers gas accepts (or rejects) as a
-/// branch operand.
-pub(super) fn indirect_branch(kind: BranchKind, id: Ident, name: &str) -> Result<Vec<u8>, String> {
-    let mn = kind.mnemonic();
-    let mismatch = || format!("operand type mismatch for `{mn}'");
-    // gas emits a PC-relative relocation against the absolute section for these (`call byte`
-    // calls address 1); ObjModule relocations always name a symbol, so this is rejected.
-    let absolute = || format!("`{mn} {name}': branch to an absolute address is not supported");
-    let modrm_base: u8 = match kind {
-        BranchKind::Call => 0xd0,
-        BranchKind::Jmp => 0xe0,
-        BranchKind::Jcc(_) => {
-            return Err(match id {
-                Ident::PseudoReg => "invalid use of pseudo-register".to_string(),
-                Ident::Operator => format!("invalid use of operator \"{name}\""),
-                Ident::UnaryOperator => "invalid expression".to_string(),
-                Ident::Constant => absolute(),
-                _ => mismatch(),
-            })
-        }
-    };
-    match id {
-        Ident::Gpr(Reg::R64(n)) => {
-            let m = if kind == BranchKind::Call { FE_CALLr } else { FE_JMPr };
-            fadec::encode(m, &[gp(n)]).map_err(|_| mismatch())
-        }
-        Ident::Gpr(Reg::R16(n)) => {
-            let mut v = vec![0x66];
-            if n >= 8 {
-                v.push(0x41);
-            }
-            v.extend([0xff, modrm_base + (n & 7)]);
-            Ok(v)
-        }
-        // APX r16..r31: REX2 prefix (d5, B4 = bit 4 of the register number, B3 = bit 3).
-        Ident::ApxGpr(n, w16) => {
-            let mut v = if w16 { vec![0x66] } else { Vec::new() };
-            v.extend([0xd5, 0x10 | ((n >> 3) & 1), 0xff, modrm_base + (n & 7)]);
-            Ok(v)
-        }
-        Ident::PseudoReg => Err("invalid use of pseudo-register".to_string()),
-        Ident::Operator => Err(format!("invalid use of operator \"{name}\"")),
-        Ident::UnaryOperator => Err("invalid expression".to_string()),
-        Ident::Constant => Err(absolute()),
-        Ident::Gpr(_) | Ident::OtherReg | Ident::Symbol => Err(mismatch()),
-    }
-}
-
-/// gas's diagnostic for a label definition whose name contains characters that can't be part of
-/// a symbol (e.g. `.L[rax]Wins_0:`).
-pub(super) fn bad_label_message(name: &str) -> String {
-    let head: String = name.chars().take_while(|c| super::symbol_char(*c)).collect();
-    if name.starts_with('.') {
-        format!("unknown pseudo-op: `{}'", head.to_ascii_lowercase())
-    } else {
-        format!("invalid character in label `{name}'")
-    }
-}
-
-/// gas's diagnostic for a symbol reference that isn't a valid symbol name (e.g. the
-/// `.L<param>Wins_0` labels of "who would win?" with a pointer parameter): gas parses as much of
-/// it as an Intel expression as it can (`sym`, `[...]` index terms, `+`/`-` with a number or
-/// symbol) and reports the rest as junk.
-pub(super) fn bad_reference_message(name: &str) -> String {
-    let sym_len = |s: &str| s.find(|c: char| !super::symbol_char(c)).unwrap_or(s.len());
-    let mut r = &name[sym_len(name)..];
-    loop {
-        r = r.trim_start();
-        if r.starts_with('[') {
-            match r.find(']') {
-                Some(i) => r = &r[i + 1..],
-                None => break,
-            }
-        } else if r.starts_with(['+', '-']) {
-            r = r[1..].trim_start();
-            if r.starts_with(|c: char| c.is_ascii_digit()) {
-                let hex = r.starts_with("0x") || r.starts_with("0X");
-                let skip = if hex { 2 } else { 0 };
-                let n = r[skip..]
-                    .find(|c: char| !(if hex { c.is_ascii_hexdigit() } else { c.is_ascii_digit() }))
-                    .map_or(r.len(), |i| i + skip);
-                r = &r[n..];
-            } else {
-                r = &r[sym_len(r)..];
-            }
-        } else {
-            break;
-        }
-    }
-    format!("junk `{r}' after expression")
-}
-
-/// The NOP sequences LLVM (Apple's `as`, default CPU penryn) pads code with: NOPs of at most 10
-/// bytes, longest first.
-fn llvm_nop_fill(out: &mut Vec<u8>, mut pad: u64) {
-    while pad > 0 {
-        let n = pad.min(10);
-        out.extend_from_slice(NOPS[n as usize - 1]);
-        pad -= n;
-    }
-}
-
-/// x86 NOPs of 1 to 11 bytes.
-const NOPS: [&[u8]; 11] = [
-        &[0x90],
-        &[0x66, 0x90],
-        &[0x0f, 0x1f, 0x00],
-        &[0x0f, 0x1f, 0x40, 0x00],
-        &[0x0f, 0x1f, 0x44, 0x00, 0x00],
-        &[0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00],
-        &[0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00],
-        &[0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
-        &[0x66, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
-        &[0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
-        &[0x66, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
-    ];
-
-/// The NOP sequences gas uses to pad code (`.align` in `.text`).
-fn nop_fill(out: &mut Vec<u8>, pad: u64) {
-    let mut n = pad;
-    // More than 7 maximal NOPs: jump over the padding instead.
-    if n / 11 > 7 {
-        if n - 2 <= 127 {
-            out.extend([0xeb, (n - 2) as u8]);
-            n -= 2;
-        } else {
-            out.push(0xe9);
-            out.extend(((n - 5) as u32).to_le_bytes());
-            n -= 5;
-        }
-    }
-    out.reserve(n as usize);
-    let rem = (n % 11) as usize;
-    if rem != 0 {
-        out.extend_from_slice(NOPS[rem - 1]);
-    }
-    for _ in 0..n / 11 {
-        out.extend_from_slice(NOPS[10]);
-    }
 }
 
 fn item_size(item: &Item, long: bool, off: u64) -> u64 {
@@ -380,39 +183,29 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
                 }
                 Item::Branch { kind, target } => {
                     let long = longs[si][i];
-                    let m = kind.fadec() | if long { FE_JMPL } else { 0 };
+                    let end = at + kind.len(long);
                     match sym_addr(*target) {
                         Some((_, addr)) if resolved(si, i, *target, Some(*kind)) => {
-                            let b = fadec::encode_branch(m, at, addr)
-                                .map_err(|_| format!("cannot encode `{}'", kind.mnemonic()))?;
-                            debug_assert_eq!(b.len() as u64, kind.len(long));
-                            data.extend_from_slice(&b);
+                            let rel = i32::try_from(addr as i64 - end as i64)
+                                .map_err(|_| "branch out of range".to_string())?;
+                            data.extend_from_slice(&x86::branch(*kind, long, rel));
                         }
                         _ => {
-                            let mut b = fadec::encode_branch(m, 0, 0)
-                                .map_err(|_| format!("cannot encode `{}'", kind.mnemonic()))?;
-                            let n = b.len();
-                            b[n - 4..].fill(0);
                             relocs.push(Reloc {
-                                offset: at + n as u64 - 4,
+                                offset: end - 4,
                                 kind: RelocKind::Branch32,
                                 symbol: *target,
                                 addend: -4,
                             });
-                            data.extend_from_slice(&b);
+                            data.extend_from_slice(&x86::branch(*kind, long, 0));
                         }
                     }
                 }
-                Item::Align { align } => {
-                    let pad = item_size(it, false, at);
-                    let _ = align;
-                    if si == 0 && em.target == Target::MacOS {
-                        llvm_nop_fill(&mut data, pad);
-                    } else if si == 0 {
-                        nop_fill(&mut data, pad);
-                    } else {
-                        data.resize(data.len() + pad as usize, 0);
-                    }
+                Item::Align { .. } => {
+                    // Only `-O-s` aligns, after the final `ret`: the padding never runs, so
+                    // `.text` is simply filled with single-byte NOPs.
+                    let pad = item_size(it, false, at) as usize;
+                    data.resize(data.len() + pad, if si == 0 { 0x90 } else { 0 });
                 }
             }
         }
@@ -429,7 +222,7 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
                 ));
             }
             let fill = if si == 0 { 0x90 } else { 0 };
-            while data.len() % 16 != 0 {
+            while !data.len().is_multiple_of(16) {
                 data.push(fill);
             }
         }
