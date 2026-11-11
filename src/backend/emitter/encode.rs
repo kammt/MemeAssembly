@@ -393,7 +393,7 @@ pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
     // parsing the operand, before template matching).
     let mut mems: Vec<FeMem> = Vec::new();
     let mut size_mod: Option<Size> = None;
-    // Address size of the first memory operand with a base register (`Some(true)` = 32-bit).
+    // Address size fixed by the first memory operand (`Some(true)` = 32-bit).
     let mut addr_size: Option<bool> = None;
     for o in ops {
         match o {
@@ -424,7 +424,9 @@ pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
                         return Err(format!("`{}' is not a valid base/index expression", mem_text(m)));
                     }
                 }
-                addr_size = addr_size.or(this);
+                // An absolute address isn't checked itself but fixes a 64-bit address size for
+                // the operands after it (`xor [69], [eax]`: "`[eax]' is not a valid ...").
+                addr_size = addr_size.or(this).or(Some(false));
                 mems.push(fm);
             }
             _ => {}
