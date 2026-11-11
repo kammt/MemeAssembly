@@ -348,6 +348,11 @@ struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
+    /// A form gas accepts but the Emitter doesn't implement (the translator never produces it).
+    fn unsupported(&self, n: usize) -> String {
+        let s = if n == 1 { "" } else { "s" };
+        format!("`{}' with {n} operand{s} is not supported by the Emitter", self.name)
+    }
     fn mismatch(&self) -> String {
         format!("operand type mismatch for `{}'", self.name)
     }
@@ -371,6 +376,19 @@ pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
     let name = mnemonic(op);
     let cx = Ctx { name };
 
+    // Operand counts no gas template accepts.
+    let arity_ok = match op {
+        Op::Cqo | Op::Hlt | Op::Int3 | Op::Syscall => ops.is_empty(),
+        Op::Ret | Op::Nop => ops.len() <= 1,
+        Op::Push | Op::Pop | Op::Rdrand => ops.len() == 1,
+        Op::Mov | Op::Movups | Op::Lea | Op::Add | Op::Sub | Op::And | Op::Xor | Op::Cmp | Op::Test => ops.len() == 2,
+        // (shifts, not/inc/dec/idiv and imul also have one-, two- or three-operand forms)
+        Op::Not | Op::Inc | Op::Dec | Op::Idiv | Op::Shl | Op::Shr | Op::Imul => (1..=3).contains(&ops.len()),
+    };
+    if !arity_ok {
+        return Err(format!("number of operands mismatch for `{name}'"));
+    }
+
     // Validate registers and lower memory operands first (gas reports bad base registers while
     // parsing the operand, before template matching).
     let mut mems: Vec<FeMem> = Vec::new();
@@ -383,11 +401,18 @@ pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
                 return Err(format!("bad register {r:?} for `{name}'"));
             }
             Operand::Mem(m) => {
-                if let Some(sz) = m.size {
-                    if size_mod.is_some_and(|p| p != sz) {
-                        return Err("conflicting operand size modifiers".into());
+                // `BYTE PTR` .. `QWORD PTR` set the mnemonic suffix where a template allows one
+                // (not for lea/movups; `XMMWORD PTR` never does); two different suffixes conflict.
+                // A byte suffix after another one is dropped for imul (its two-operand
+                // template has no byte form), so that pair ends as a type mismatch.
+                let suffix = m.size.filter(|s| *s != Size::Xmmword && !matches!(op, Op::Lea | Op::Movups));
+                if let Some(sz) = suffix {
+                    if !(op == Op::Imul && sz == Size::Byte && size_mod.is_some()) {
+                        if size_mod.is_some_and(|p| p != sz) {
+                            return Err("conflicting operand size modifiers".into());
+                        }
+                        size_mod = Some(sz);
                     }
-                    size_mod = Some(sz);
                 }
                 let fm = lower_mem(m)?;
                 let this = match m.base {
@@ -408,10 +433,12 @@ pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
     if mems.len() > 1 {
         // Two memory operands never match a template.
         let sized = |m: &FeMem| m.size.is_some_and(|s| s != Sz::X);
-        return Err(if op == Op::Movups && mems.iter().all(sized) {
-            cx.size_mismatch()
-        } else {
-            cx.mismatch()
+        let x = |m: &FeMem| m.size == Some(Sz::X);
+        return Err(match op {
+            Op::Movups if mems.iter().all(sized) => cx.size_mismatch(),
+            Op::Shl | Op::Shr if x(&mems[0]) => cx.size_mismatch(),
+            Op::Not | Op::Inc | Op::Dec | Op::Idiv if !x(&mems[0]) && x(&mems[1]) => cx.size_mismatch(),
+            _ => cx.mismatch(),
         });
     }
     let fm = mems.into_iter().next();
@@ -451,6 +478,10 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
     };
     match op {
         Op::Cqo => none_ops().map(|_| Insn::new(FE_CQO)),
+        // `ret imm16` and `nop r/m` exist but are never produced by the translator.
+        Op::Ret | Op::Nop if matches!(ops, [O::Imm(_)]) == (op == Op::Ret) && !ops.is_empty() => {
+            Err(cx.unsupported(1))
+        }
         Op::Ret => none_ops().map(|_| Insn::new(FE_RET)),
         Op::Nop => none_ops().map(|_| Insn::new(FE_NOP)),
         Op::Hlt => none_ops().map(|_| Insn::new(FE_HLT)),
@@ -477,9 +508,10 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                         return Err(cx.mismatch());
                     }
                     let sx = reg_sz(*x);
-                    if m.size.is_some_and(|s| s != sx) {
+                    if let Some(s) = m.size.filter(|s| *s != sx) {
                         let reg_first = matches!(a, O::Reg(_));
-                        return Err(if reg_first && op != Op::Mov { cx.reg_mismatch() } else { cx.mismatch() });
+                        let reg = reg_first && op != Op::Mov && s != Sz::X;
+                        return Err(if reg { cx.reg_mismatch() } else { cx.mismatch() });
                     }
                     let i = if matches!(a, O::Reg(_)) {
                         if op == Op::Test {
@@ -532,10 +564,15 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                     let m = fm.unwrap();
                     let sz = m.size.ok_or_else(|| cx.ambiguous())?;
                     if sz == Sz::X {
-                        return Err(cx.mismatch());
+                        return Err(cx.size_mismatch());
                     }
                     Ok(Insn::new(t.1[sz.idx()]).mem(m))
                 }
+                // `reg, XMMWORD PTR [..]` fails size matching against the NDD / accumulator forms.
+                [O::Reg(_), O::Mem(_)] if fm.unwrap().size == Some(Sz::X) => Err(cx.size_mismatch()),
+                // Two- and three-operand forms (APX NDD `not`/`inc`/`dec`, `idiv al, bl`) exist in
+                // gas but are never produced by the translator.
+                [O::Reg(r), O::Reg(_) | O::Mem(_), ..] if gpr(*r) => Err(cx.unsupported(ops.len())),
                 _ => Err(cx.mismatch()),
             }
         }
@@ -556,7 +593,18 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                     [FE_SHR8mr, FE_SHR16mr, FE_SHR32mr, FE_SHR64mr],
                 )
             };
-            let [a, count] = ops else { return Err(cx.mismatch()) };
+            if matches!(ops[0], O::Mem(_)) && fm.unwrap().size == Some(Sz::X) {
+                return Err(cx.size_mismatch());
+            }
+            let [a, count] = ops else {
+                return Err(match ops {
+                    [O::Mem(_)] if fm.unwrap().size.is_none() => cx.ambiguous(),
+                    // `shl rax` (shift by one) is valid gas but never produced by the translator.
+                    [O::Mem(_)] => cx.unsupported(1),
+                    [O::Reg(r)] if gpr(*r) => cx.unsupported(1),
+                    _ => cx.mismatch(),
+                });
+            };
             // Only `cl` or an immediate count. Without a size, a count that fits no imm8 template
             // is a type mismatch; otherwise the size is ambiguous.
             let count = match count {
@@ -568,7 +616,7 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                 O::Reg(r) if gpr(*r) => reg_sz(*r),
                 O::Mem(_) => match fm.unwrap().size {
                     Some(s) => s,
-                    None if count.is_none_or(|v| (-128..=255).contains(&v)) => return Err(cx.ambiguous()),
+                    None if count.is_none_or(|v| (0..=255).contains(&v)) => return Err(cx.ambiguous()),
                     None => return Err(cx.mismatch()),
                 },
                 _ => return Err(cx.mismatch()),
@@ -600,7 +648,7 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                 let sz = m.size.ok_or_else(|| cx.ambiguous())?;
                 let t = [FE_IMUL8m, FE_IMUL16m, FE_IMUL32m, FE_IMUL64m];
                 if sz == Sz::X {
-                    return Err(cx.mismatch());
+                    return Err(cx.size_mismatch());
                 }
                 Ok(Insn::new(t[sz.idx()]).mem(m))
             }
@@ -627,7 +675,7 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                 }
                 let sx = reg_sz(*x);
                 if let Some(s) = m.size.filter(|s| *s != sx) {
-                    return Err(if s == Sz::B { cx.mismatch() } else { cx.reg_mismatch() });
+                    return Err(if matches!(s, Sz::B | Sz::X) { cx.mismatch() } else { cx.reg_mismatch() });
                 }
                 let t = [0, FE_IMUL16rm, FE_IMUL32rm, FE_IMUL64rm];
                 Ok(Insn::new(t[sx.idx()]).reg(*x).mem(m))
@@ -641,6 +689,8 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                 let t = [0, FE_IMUL16rri, FE_IMUL32rri, FE_IMUL64rri];
                 Ok(Insn::new(t[sx.idx()]).reg(*x).reg(*x).imm(i))
             }
+            // `imul r, r/m, imm` and the APX NDD form are never produced by the translator.
+            [O::Reg(x), O::Reg(_) | O::Mem(_), _] if gpr(*x) => Err(cx.unsupported(3)),
             _ => Err(cx.mismatch()),
         },
 

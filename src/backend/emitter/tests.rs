@@ -389,6 +389,9 @@ fn statement(em: &mut Emitter, stmt: &str) -> Result<(), String> {
     if let Some(c) = cond_by_name(&mnl) {
         return em.jump(c, branch_target(rest));
     }
+    if let Some(c) = s.chars().next().filter(|c| c.is_ascii_digit()) {
+        return Err(format!("junk at end of line, first unrecognized character is `{c}'"));
+    }
     Err(format!("no such instruction: `{}'", s.to_ascii_lowercase()))
 }
 

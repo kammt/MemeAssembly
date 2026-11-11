@@ -691,9 +691,11 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
         }
     }
 
-    // TODO(backend interface): `-O-s` ends the text with
-    // `.align 536870912`. The Emitter has no alignment directive yet, so the padding is missing
-    // on this path until `Emitter::align` exists.
+    // `-O-s` ends the text with `.align 536870912` (NOP padding; on Windows `finish` fails like
+    // gas does, since COFF can't represent the section alignment).
+    if state.optimisation_level == OPT_S {
+        e.align(536_870_912)?;
+    }
 
     e.finish()
 }
