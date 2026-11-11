@@ -103,6 +103,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
     print_debug(ll, "Starting parameter validity check", &[]);
     let command = &COMMAND_LIST[cmd.opcode as usize];
     let used_parameters = command.used_parameters as usize;
+    let errors_before = state.compiler_errors;
 
     'params: for parameter_num in 0..used_parameters {
         let parameter = cstr(cmd.param(parameter_num)).to_vec();
@@ -137,6 +138,24 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                     print_nice_ascii();
                 }
                 cmd.param_types[parameter_num] = PARAM_DECIMAL;
+                // The C code silently used strtoll's saturated value (INT64_MAX / INT64_MIN)
+                if r.overflow {
+                    if state.compile_mode != CompileMode::Bully {
+                        print_error(
+                            state,
+                            input_file_name,
+                            cmd.line_num as u64,
+                            "invalid parameter provided: \"%s\" does not fit into 64 Bits",
+                            1,
+                            &[Arg::S(&parameter)],
+                        );
+                        cmd.param_types[parameter_num] = 0;
+                    } else {
+                        // The same replacement as for numbers that don't fit into a register
+                        cmd.parameters[parameter_num] =
+                            Some(((state.computed_index as u32) % 256).to_string().into_bytes());
+                    }
+                }
                 continue 'params;
             }
             print_debug(ll, "\t\tParameter is not a decimal number", &[]);
@@ -285,6 +304,15 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         }
     }
 
+    let bully = state.compile_mode == CompileMode::Bully;
+    if bully && cmd.is_pointer != 0 {
+        // Well then it's not a pointer :shrug: (before check 3, so that a former pointer gets
+        // the size of the other register)
+        if pointer_problem(cmd).is_some() {
+            cmd.is_pointer = 0;
+        }
+    }
+
     // We only compare parameters if there are at least two of them
     if used_parameters >= 2 {
         // 1: If a number and a register are used, the number must fit in the register
@@ -380,6 +408,18 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             }
         }
 
+        // ah/bh/ch/dh can't be encoded together with a register that needs a REX prefix: use
+        // another 8 bit register instead
+        if bully {
+            if let Some((high, _)) = high_byte_conflict(cmd) {
+                cmd.parameters[high] = Some(
+                    NON_HIGH_8_BIT[(state.computed_index % NON_HIGH_8_BIT.len() as u64) as usize]
+                        .as_bytes()
+                        .to_vec(),
+                );
+            }
+        }
+
         // 4: If there's a pointer parameter, the other parameter must be a register, otherwise the
         // operand size is unknown. Skipped in bully mode (handled by the translator).
         if state.compile_mode != CompileMode::Bully
@@ -396,6 +436,103 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             );
         }
     }
+
+    // `push` only takes sign-extended 32-bit immediates
+    let push_too_large = cmd.opcode == OP_PUSH
+        && cmd.param_types[0] == PARAM_DECIMAL
+        && !fits_sign_extended_32(strtoll(cmd.param(0)).value);
+    if bully {
+        if push_too_large {
+            // Shorten it like the "sign-extendable from 32 Bits" fix-up above
+            let cut = (state.computed_index % 32) as usize;
+            if let Some(p) = cmd.parameters[0].as_mut() {
+                p.truncate(cut);
+                while !fits_sign_extended_32(strtoll(p).value) {
+                    p.pop();
+                }
+            }
+        }
+        return;
+    }
+
+    // Combinations the C compiler accepted, but that can't be assembled. Only reported if the
+    // checks above found nothing wrong with this command.
+    if state.compiler_errors != errors_before {
+        return;
+    }
+    let line = cmd.line_num as u64;
+    if let Some(problem) = pointer_problem(cmd) {
+        let message = match problem {
+            PointerProblem::Base => "invalid parameter combination: a pointer must be a 64 or 32 bit register",
+            PointerProblem::Unsupported => "invalid parameter combination: this command cannot use a pointer here",
+        };
+        print_error(state, input_file_name, line, message, 0, &[]);
+    } else if cmd.is_pointer != 0
+        && pointer_use(cmd.opcode, cmd.is_pointer as usize - 1) == PointerUse::NeedsSize
+    {
+        print_error(state, input_file_name, line, "invalid parameter combination: operand size unknown", 0, &[]);
+    } else if let Some((high, other)) = high_byte_conflict(cmd) {
+        let (high, other) = (cmd.param(high).to_vec(), cmd.param(other).to_vec());
+        print_error(
+            state,
+            input_file_name,
+            line,
+            "invalid parameter combination: '%s' cannot be combined with '%s'",
+            2,
+            &[Arg::S(&high), Arg::S(&other)],
+        );
+    } else if push_too_large {
+        print_error(
+            state,
+            input_file_name,
+            line,
+            "invalid parameter combination: pushed decimal numbers must be sign-extendable from 32 Bits",
+            0,
+            &[],
+        );
+    }
+}
+
+/// 8 bit registers without ah, bh, ch and dh.
+const NON_HIGH_8_BIT: [&str; 16] = [
+    "al", "bl", "cl", "dl", "dil", "sil", "spl", "bpl", "r8b", "r9b", "r10b", "r11b", "r12b",
+    "r13b", "r14b", "r15b",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PointerProblem {
+    /// `[al]`, `[ax]`: only 64 and 32 bit registers can address memory
+    Base,
+    /// The translation pattern can't use a memory operand there (see [`PointerUse`])
+    Unsupported,
+}
+
+fn pointer_problem(cmd: &ParsedCommand) -> Option<PointerProblem> {
+    let index = (cmd.is_pointer as usize).checked_sub(1)?;
+    if !matches!(cmd.param_types[index], PARAM_REG64 | PARAM_REG32) {
+        return Some(PointerProblem::Base);
+    }
+    (pointer_use(cmd.opcode, index) == PointerUse::Unsupported).then_some(PointerProblem::Unsupported)
+}
+
+/// Registers whose encoding needs a REX prefix (r8-r15 in any size, spl, bpl, sil, dil).
+fn needs_rex(register: &[u8]) -> bool {
+    matches!(register, b"spl" | b"bpl" | b"sil" | b"dil")
+        || (register.first() == Some(&b'r') && register.get(1).is_some_and(|c| c.is_ascii_digit()))
+}
+
+/// A two-operand command combining ah/bh/ch/dh with a register that needs a REX prefix
+/// (including a pointer's base register): (index of the high byte register, the other index).
+fn high_byte_conflict(cmd: &ParsedCommand) -> Option<(usize, usize)> {
+    if COMMAND_LIST[cmd.opcode as usize].used_parameters != 2 {
+        return None;
+    }
+    let is_reg = |i: usize| param_is_reg(cmd.param_types[i]);
+    let high = (0..2).find(|&i| {
+        is_reg(i) && cmd.is_pointer as usize != i + 1 && matches!(cmd.param(i), b"ah" | b"bh" | b"ch" | b"dh")
+    })?;
+    let other = 1 - high;
+    (is_reg(other) && needs_rex(cmd.param(other))).then_some((high, other))
 }
 
 /// Whether a 64 bit immediate can be encoded as a sign-extended 32 bit immediate.

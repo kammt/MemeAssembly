@@ -283,10 +283,75 @@ fn strip_os_error(s: &str) -> String {
     }
 }
 
-/// `asctime()` of the current time (UTC, as std has no time zone database), including the
-/// trailing newline.
+/// The C library's `struct tm`: nine `int`s, followed by `tm_gmtoff`/`tm_zone` on glibc and
+/// macOS (reserved here so `localtime_r` can write them).
+#[repr(C)]
+struct Tm {
+    tm_sec: i32,
+    tm_min: i32,
+    tm_hour: i32,
+    tm_mday: i32,
+    tm_mon: i32,
+    tm_year: i32,
+    tm_wday: i32,
+    tm_yday: i32,
+    tm_isdst: i32,
+    _extra: [usize; 2],
+}
+
+#[cfg(unix)]
+extern "C" {
+    fn localtime_r(timep: *const i64, result: *mut Tm) -> *mut Tm;
+}
+
+#[cfg(windows)]
+extern "C" {
+    fn _localtime64_s(result: *mut Tm, timep: *const i64) -> i32;
+}
+
+/// `localtime()` of `t` as (year, month 1-12, day, hour, minute, second, weekday 0 = Sunday),
+/// or `None` if the C library can't convert it.
+fn local_time(t: i64) -> Option<(i64, i64, i64, i64, i64, i64, i64)> {
+    let mut tm = Tm {
+        tm_sec: 0,
+        tm_min: 0,
+        tm_hour: 0,
+        tm_mday: 0,
+        tm_mon: 0,
+        tm_year: 0,
+        tm_wday: 0,
+        tm_yday: 0,
+        tm_isdst: 0,
+        _extra: [0; 2],
+    };
+    // SAFETY: `tm` is a valid, writable `struct tm` (with room for the glibc/BSD extension
+    // fields) and `t` a valid `time_t` (64 bit on all supported targets).
+    #[cfg(unix)]
+    let ok = unsafe { !localtime_r(&t, &mut tm).is_null() };
+    #[cfg(windows)]
+    let ok = unsafe { _localtime64_s(&mut tm, &t) == 0 };
+    #[cfg(not(any(unix, windows)))]
+    let ok = false;
+    ok.then(|| {
+        (
+            tm.tm_year as i64 + 1900,
+            tm.tm_mon as i64 + 1,
+            tm.tm_mday as i64,
+            tm.tm_hour as i64,
+            tm.tm_min as i64,
+            tm.tm_sec as i64,
+            tm.tm_wday as i64,
+        )
+    })
+}
+
+/// `asctime(localtime())` of the current time, including the trailing newline (UTC if the C
+/// library can't convert the time).
 pub fn asctime_now() -> String {
     let t = time_now();
+    if let Some((year, month, d, h, m, s, wday)) = local_time(t) {
+        return format_asctime(year, month, d, h, m, s, wday as usize);
+    }
     let days = t.div_euclid(86400);
     let secs = t.rem_euclid(86400);
     let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
@@ -301,13 +366,17 @@ pub fn asctime_now() -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + if month <= 2 { 1 } else { 0 };
+    format_asctime(year, month, d, h, m, s, wday)
+}
+
+fn format_asctime(year: i64, month: i64, d: i64, h: i64, m: i64, s: i64, wday: usize) -> String {
     const WDAY: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const MON: [&str; 12] =
         ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     format!(
         "{} {}{:3} {:02}:{:02}:{:02} {}\n",
-        WDAY[wday],
-        MON[(month - 1) as usize],
+        WDAY[wday % 7],
+        MON[((month - 1).rem_euclid(12)) as usize],
         d,
         h,
         m,

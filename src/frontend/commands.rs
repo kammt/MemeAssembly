@@ -117,17 +117,20 @@ pub static COMMAND_LIST: [Command; NUMBER_OF_COMMANDS] = [
         2,
         [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64],
         None,
+        // The C pattern ran `cqo` before loading the dividend into rax (sign-extending the old
+        // rax). The dividend is now pushed first and read back from the stack, so every
+        // combination with rax/rdx/rsp as either operand works.
         "mov QWORD PTR [rip + .Ltmp64], {0}\n\t\
+         push {1}\n\t\
          push rdx\n\t\
+         push rax\n\t\
+         mov rax, QWORD PTR [rsp + 16]\n\t\
          cqo\n\t\
-         push rax\n\t\
-         mov rax, {1}\n\t\
          idiv QWORD PTR [rip + .Ltmp64]\n\t\
-         push rax\n\t\
-         mov rax, [rsp + 8]\n\t\
-         pop {1}\n\t\
-         add rsp, 8\n\t\
-         pop rdx\n\t",
+         mov QWORD PTR [rsp + 16], rax\n\t\
+         pop rax\n\t\
+         pop rdx\n\t\
+         pop {1}\n\t",
     ).encode(enc::divide),
     cmd(
         "{p} UNLIMITED POWER {p}",
@@ -135,19 +138,32 @@ pub static COMMAND_LIST: [Command; NUMBER_OF_COMMANDS] = [
         2,
         [PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR],
         None,
+        // Square-and-multiply. The C pattern looped ~2^64 times for the exponents 1 and < 0.
+        // Negative exponents: 1 for a base of 1, ±1 for -1 (by parity), 0 otherwise.
         "mov QWORD PTR [rip + .Ltmp64], {1}\n\t\
+         push {0}\n\t\
+         mov {0}, 1\n\t\
          cmp QWORD PTR [rip + .Ltmp64], 0\n\t\
-         jne 2f\n\t\
+         jge 2f\n\t\
+         and QWORD PTR [rip + .Ltmp64], 1\n\t\
+         cmp QWORD PTR [rsp], 1\n\t\
+         je 2f\n\t\
+         cmp QWORD PTR [rsp], -1\n\t\
+         je 2f\n\t\
          xor {0}, {0}\n\t\
-         inc {0}\n\t\
-         jmp 4f\n\t\
-         2: push {0}\n\t\
-         dec QWORD PTR [rip + .Ltmp64]\n\t\
-         3: imul {0}, [rsp]\n\t\
-         dec QWORD PTR [rip + .Ltmp64]\n\t\
-         jnz 3b\n\t\
-         add rsp, 8\n\t\
-         4:\n\t",
+         jmp 3f\n\t\
+         2: test QWORD PTR [rip + .Ltmp64], 1\n\t\
+         jz 1f\n\t\
+         imul {0}, QWORD PTR [rsp]\n\t\
+         1: shr QWORD PTR [rip + .Ltmp64], 1\n\t\
+         jz 3f\n\t\
+         push rax\n\t\
+         mov rax, QWORD PTR [rsp + 8]\n\t\
+         imul rax, rax\n\t\
+         mov QWORD PTR [rsp + 8], rax\n\t\
+         pop rax\n\t\
+         jmp 2b\n\t\
+         3: add rsp, 8\n\t",
     ).encode(enc::power),
     // Jumps and Jump Markers
     cmd("upgrade", N, 0, [0, 0], Some(Analysis::JumpMarkers), ".LUpgradeMarker_{F}:").encode(enc::upgrade_label),
@@ -248,13 +264,65 @@ impl ParsedCommand {
         self.parameters[i].as_deref().unwrap_or(b"")
     }
 
-    /// In bully mode, a pointer operand gets a (random) operand size only if the other operand
-    /// does not determine it, i.e. is not a register. Only called for two-parameter commands.
+    /// In bully mode, a pointer operand gets a (random) operand size if nothing else determines
+    /// it: for commands whose other operand gives the size, only if that operand is not a
+    /// register; always for the one-operand commands that need a size.
     ///
     /// The C code checked `paramTypes[index + 1 % 2]` (= `paramTypes[index + 1]`, reading past
     /// the array for the second parameter); this is the intended `(index + 1) % 2`.
     pub fn bully_pointer_needs_size(&self, index: usize) -> bool {
-        !param_is_reg(self.param_types[(index + 1) % 2])
+        match pointer_use(self.opcode, index) {
+            PointerUse::Sized => !param_is_reg(self.param_types[(index + 1) % 2]),
+            PointerUse::NeedsSize => true,
+            PointerUse::Implicit | PointerUse::Unsupported => false,
+        }
+    }
+}
+
+/// How a translation pattern uses parameter `index` when it is a pointer (`[reg]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerUse {
+    /// The other operand (a register) gives the operand size, e.g. `mov [rax], bl`.
+    Sized,
+    /// The instruction implies the size (`push [rax]`, `pop [rax]`).
+    Implicit,
+    /// A one-operand instruction (`not [rax]`) or one with an immediate (`add [rax], 1`): the
+    /// size is ambiguous.
+    NeedsSize,
+    /// Not encodable: memory-to-memory, a memory destination for `imul`/`rdrand`, a pointer in
+    /// a label name, ...
+    Unsupported,
+}
+
+// Opcodes (indices into COMMAND_LIST) referred to by the analyser and translator.
+pub const OP_CALL: u8 = 4;
+pub const OP_PUSH: u8 = 5;
+pub const OP_POP: u8 = 6;
+pub const OP_AND: u8 = 7;
+pub const OP_NOT: u8 = 8;
+pub const OP_MOV: u8 = 10;
+pub const OP_UPVOTE: u8 = 11;
+pub const OP_DOWNVOTE: u8 = 12;
+pub const OP_PARRY: u8 = 13;
+pub const OP_ADD: u8 = 14;
+pub const OP_SHL: u8 = 15;
+pub const OP_SHR: u8 = 16;
+pub const OP_IMUL: u8 = 17;
+pub const OP_DIVIDE: u8 = 18;
+pub const OP_FIND_DIFFERENCE: u8 = 28;
+pub const OP_OVER_9000: u8 = 37;
+
+pub fn pointer_use(opcode: u8, index: usize) -> PointerUse {
+    match (opcode, index) {
+        (OP_AND | OP_MOV | OP_PARRY | OP_ADD | OP_FIND_DIFFERENCE, _) => PointerUse::Sized,
+        // imul: only the source can be memory
+        (OP_IMUL, 1) => PointerUse::Sized,
+        // the dividend of the division is pushed and popped
+        (OP_PUSH | OP_POP, 0) | (OP_DIVIDE, 1) => PointerUse::Implicit,
+        (OP_NOT | OP_UPVOTE | OP_DOWNVOTE | OP_SHL | OP_SHR | OP_OVER_9000, 0) => {
+            PointerUse::NeedsSize
+        }
+        _ => PointerUse::Unsupported,
     }
 }
 
@@ -382,6 +450,37 @@ impl CompileState {
             b"_main"
         } else {
             b"main"
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opcode_constants_match_command_list() {
+        let expect = [
+            (OP_CALL, "call {0}"),
+            (OP_PUSH, "push {0}"),
+            (OP_POP, "pop {0}"),
+            (OP_AND, "and {0}, {1}"),
+            (OP_NOT, "not {0}"),
+            (OP_MOV, "mov {0}, {1}"),
+            (OP_UPVOTE, "add {0}, 1"),
+            (OP_DOWNVOTE, "sub {0}, 1"),
+            (OP_PARRY, "sub {1}, {0}"),
+            (OP_ADD, "add {0}, {1}"),
+            (OP_SHL, "shl {0}, 1"),
+            (OP_SHR, "shr {0}, 1"),
+            (OP_IMUL, "imul {0}, {1}"),
+            (OP_DIVIDE, "mov QWORD PTR [rip + .Ltmp64], {0}"),
+            (OP_FIND_DIFFERENCE, "cmp {0}, {1}\n\tje .LSamePicture"),
+            (OP_OVER_9000, "cmp {0}, 9000"),
+        ];
+        for (op, start) in expect {
+            let t = COMMAND_LIST[op as usize].translation_pattern;
+            assert!(t.starts_with(start), "opcode {op}: {t:?}");
         }
     }
 }

@@ -12,9 +12,11 @@
 
 use super::analyser::main_function_exists;
 use super::commands::*;
-use super::libc::strtoll;
 use super::log::{print_debug, VERSION_STRING};
-use super::translator::{debug_file_path, param_text};
+use super::translator::{
+    bully_main_is_empty, bully_pointer_size, debug_file_path, gas_misreads_symbol,
+    over_9000_always_halts, param_text,
+};
 use crate::backend::emitter::{
     Base, BranchTarget, Cond, Emitter, Mem, Op, Operand, Reg, SectionKind, Size,
 };
@@ -104,27 +106,20 @@ impl CmdArgs<'_> {
         let cmd = self.cmd;
         let parameter = cmd.param(i);
         if cmd.is_pointer as usize == i + 1 {
-            let size = if self.bully_operand_size(i) {
-                const SIZES: [Size; 4] = [Size::Byte, Size::Word, Size::Dword, Size::Qword];
-                Some(SIZES[(self.state.computed_index % 4) as usize])
-            } else {
-                None
-            };
+            let size = bully_pointer_size(self.state, cmd).map(|bytes| match bytes {
+                1 => Size::Byte,
+                2 => Size::Word,
+                4 => Size::Dword,
+                _ => Size::Qword,
+            });
             return Ok(mem_reg(size, register(parameter)?, 0));
         }
         match cmd.param_types[i] {
-            PARAM_DECIMAL => Ok(imm(strtoll(parameter).value)),
-            PARAM_CHAR => char_value(parameter).map(imm),
+            // Read back from the `0x..` text (possibly truncated to a bully operand size)
+            PARAM_DECIMAL => gas_integer(&self.text(i)).map(imm),
+            PARAM_CHAR => char_value(&self.text(i)).map(imm),
             _ => register(parameter).map(Operand::Reg),
         }
-    }
-
-    /// Same condition as in `translator::param_text`.
-    fn bully_operand_size(&self, i: usize) -> bool {
-        let command = &COMMAND_LIST[self.cmd.opcode as usize];
-        self.state.compile_mode == CompileMode::Bully
-            && command.used_parameters == 2
-            && self.cmd.bully_pointer_needs_size(i)
     }
 
     /// A symbol name containing `{i}` as gas would read it.
@@ -242,8 +237,19 @@ pub fn gas_symbol(text: &[u8]) -> Result<String, String> {
 
 // ---- encode functions of the command table (same order as COMMAND_LIST) ----
 
+/// Local alias of a function whose name gas misreads as a `call` operand (`$`, `rax`, `byte`).
+/// The `-S` text calls these as quoted symbols (`call "$"`); the emitter has no quoted symbol
+/// names, so the direct path calls this alias defined at the same address instead.
+fn quoted_function_alias(name: &[u8]) -> Option<String> {
+    gas_misreads_symbol(name).then(|| format!(".Lfn${}", String::from_utf8_lossy(name)))
+}
+
 pub fn func_def(e: &mut Enc, a: &CmdArgs) -> EncResult {
-    e.label(&a.sym("", 0, "")?)
+    e.label(&a.sym("", 0, "")?)?;
+    if let Some(alias) = quoted_function_alias(a.cmd.param(0)) {
+        e.label(&alias)?;
+    }
+    Ok(())
 }
 pub fn ret(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Ret, &[])
@@ -257,6 +263,9 @@ pub fn ret_zero(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Ret, &[])
 }
 pub fn call(e: &mut Enc, a: &CmdArgs) -> EncResult {
+    if let Some(alias) = quoted_function_alias(a.cmd.param(0)) {
+        return e.call(&alias);
+    }
     let name = a.sym("", 0, "")?;
     e.call(&name)
 }
@@ -301,36 +310,49 @@ pub fn imul(e: &mut Enc, a: &CmdArgs) -> EncResult {
 }
 pub fn divide(e: &mut Enc, a: &CmdArgs) -> EncResult {
     let tmp = || rip(Some(Size::Qword), ".Ltmp64");
+    let stack = |disp| mem_reg(Some(Size::Qword), RSP_REG, disp);
     e.i(Op::Mov, &[tmp(), a.op(0)?])?;
+    e.i(Op::Push, &[a.op(1)?])?;
     e.i(Op::Push, &[RDX])?;
+    e.i(Op::Push, &[RAX])?;
+    e.i(Op::Mov, &[RAX, stack(16)])?;
     e.i(Op::Cqo, &[])?;
-    e.i(Op::Push, &[RAX])?;
-    e.i(Op::Mov, &[RAX, a.op(1)?])?;
     e.i(Op::Idiv, &[tmp()])?;
-    e.i(Op::Push, &[RAX])?;
-    e.i(Op::Mov, &[RAX, mem_reg(None, RSP_REG, 8)])?;
-    e.i(Op::Pop, &[a.op(1)?])?;
-    e.i(Op::Add, &[RSP, imm(8)])?;
-    e.i(Op::Pop, &[RDX])
+    e.i(Op::Mov, &[stack(16), RAX])?;
+    e.i(Op::Pop, &[RAX])?;
+    e.i(Op::Pop, &[RDX])?;
+    e.i(Op::Pop, &[a.op(1)?])
 }
 pub fn power(e: &mut Enc, a: &CmdArgs) -> EncResult {
     let tmp = || rip(Some(Size::Qword), ".Ltmp64");
+    let stack = |disp| mem_reg(Some(Size::Qword), RSP_REG, disp);
     e.i(Op::Mov, &[tmp(), a.op(1)?])?;
-    e.i(Op::Cmp, &[tmp(), imm(0)])?;
-    e.jmp_local(Some(Cond::Ne), 2, true)?;
-    e.i(Op::Xor, &[a.op(0)?, a.op(0)?])?;
-    e.i(Op::Inc, &[a.op(0)?])?;
-    e.jmp_local(None, 4, true)?;
-    e.e.local_label(2);
     e.i(Op::Push, &[a.op(0)?])?;
-    e.i(Op::Dec, &[tmp()])?;
+    e.i(Op::Mov, &[a.op(0)?, imm(1)])?;
+    e.i(Op::Cmp, &[tmp(), imm(0)])?;
+    e.jmp_local(Some(Cond::Ge), 2, true)?;
+    e.i(Op::And, &[tmp(), imm(1)])?;
+    e.i(Op::Cmp, &[stack(0), imm(1)])?;
+    e.jmp_local(Some(Cond::E), 2, true)?;
+    e.i(Op::Cmp, &[stack(0), imm(-1)])?;
+    e.jmp_local(Some(Cond::E), 2, true)?;
+    e.i(Op::Xor, &[a.op(0)?, a.op(0)?])?;
+    e.jmp_local(None, 3, true)?;
+    e.e.local_label(2);
+    e.i(Op::Test, &[tmp(), imm(1)])?;
+    e.jmp_local(Some(Cond::Z), 1, true)?;
+    e.i(Op::Imul, &[a.op(0)?, stack(0)])?;
+    e.e.local_label(1);
+    e.i(Op::Shr, &[tmp(), imm(1)])?;
+    e.jmp_local(Some(Cond::Z), 3, true)?;
+    e.i(Op::Push, &[RAX])?;
+    e.i(Op::Mov, &[RAX, stack(8)])?;
+    e.i(Op::Imul, &[RAX, RAX])?;
+    e.i(Op::Mov, &[stack(8), RAX])?;
+    e.i(Op::Pop, &[RAX])?;
+    e.jmp_local(None, 2, false)?;
     e.e.local_label(3);
-    e.i(Op::Imul, &[a.op(0)?, mem_reg(None, RSP_REG, 0)])?;
-    e.i(Op::Dec, &[tmp()])?;
-    e.jmp_local(Some(Cond::Nz), 3, false)?;
-    e.i(Op::Add, &[RSP, imm(8)])?;
-    e.e.local_label(4);
-    Ok(())
+    e.i(Op::Add, &[RSP, imm(8)])
 }
 pub fn upgrade_label(e: &mut Enc, _: &CmdArgs) -> EncResult {
     let name = format!(".LUpgradeMarker_{}", e.f());
@@ -415,6 +437,9 @@ pub fn oh_no(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Nop, &[])
 }
 pub fn over_9000(e: &mut Enc, a: &CmdArgs) -> EncResult {
+    if over_9000_always_halts(a.state, a.cmd) {
+        return e.i(Op::Hlt, &[]);
+    }
     e.i(Op::Cmp, &[a.op(0)?, imm(9000)])?;
     e.jmp_local(Some(Cond::G), 1, true)?;
     e.i(Op::Hlt, &[])?;
@@ -493,10 +518,10 @@ fn kill_parent(e: &mut Emitter, target: Target) -> EncResult {
 /// `writechar` / `readchar` via the Windows API.
 fn windows_io_function(e: &mut Emitter, name: &str, std_handle: i64, api: &str) -> EncResult {
     e.label(name)?;
-    for r in [RCX, RAX, RDX, R8, R9] {
+    for r in [RCX, RAX, RDX, R8, R9, R10, R11] {
         e.insn(Op::Push, &[r])?;
     }
-    e.insn(Op::Sub, &[RSP, imm(32)])?;
+    e.insn(Op::Sub, &[RSP, imm(48)])?;
     e.insn(Op::Mov, &[RCX, imm(std_handle)])?;
     e.call(BranchTarget::Symbol("GetStdHandle".to_string()))?;
     e.insn(Op::Mov, &[RCX, RAX])?;
@@ -505,8 +530,8 @@ fn windows_io_function(e: &mut Emitter, name: &str, std_handle: i64, api: &str) 
     e.insn(Op::Lea, &[R9, rip(None, ".Ltmp64")])?;
     e.insn(Op::Mov, &[mem_reg(Some(Size::Qword), RSP_REG, 32), imm(0)])?;
     e.call(BranchTarget::Symbol(api.to_string()))?;
-    e.insn(Op::Add, &[RSP, imm(32)])?;
-    for r in [R9, R8, RDX, RAX, RCX] {
+    e.insn(Op::Add, &[RSP, imm(48)])?;
+    for r in [R11, R10, R9, R8, RDX, RAX, RCX] {
         e.insn(Op::Pop, &[r])?;
     }
     e.insn(Op::Ret, &[])
@@ -639,6 +664,10 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
         e.label(&main_name)?;
         if target != Target::Windows {
             martyrdom_code(&mut e, target)?;
+        }
+        if bully_main_is_empty(state) {
+            e.insn(Op::Xor, &[RAX, RAX])?;
+            e.insn(Op::Ret, &[])?;
         }
     }
 
