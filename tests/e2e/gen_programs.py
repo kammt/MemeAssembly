@@ -744,15 +744,26 @@ for name, line in [
     ("idiv_mem_mem", "look at what rsp do you know de wey needs to mimic a fraction of rax"),
     ("power_mem_mem", "rax UNLIMITED POWER rbx do you know de wey"),
 ]:
+    correct = {"kind": "no_toolchain_error"}
+    if name == "wait_thats_illegal":  # fix #1: the -S text changes too
+        correct = {"kind": "per_kind", "default": correct,
+                   "lin-asm": {"kind": "asm", "present": [r"xor r13, r13"]},
+                   "win-asm": {"kind": "asm", "present": [r"xor r13, r13"]}}
+    # the fix (analyser error / bully fix-up / valid encoding) necessarily changes the -S output as well
     add(f"asmerr/{name}", func("main", [line]), "asm-errors", kinds=AK, ref_bug={
         "desc": f"reference emits assembly that gas rejects for '{line}' (gcc fails)",
-        "bug_kinds": ["lin-exe", "lin-obj", "win-obj"],
-        "correct": {"kind": "no_toolchain_error"}})
+        "bug_kinds": ["lin-exe", "lin-obj", "win-obj", "lin-asm", "win-asm"],
+        "correct": correct})
 
 # --------------------------------------------------------------------------------------------
 # bully/: errors "fixed" by -fcompile-mode bully (deterministic pseudo-randomness)
 # --------------------------------------------------------------------------------------------
 BF = ["-fcompile-mode", "bully"]
+# reference bug #5 (docs/rust-rewrite-changes.md): only the executable path injects a main, so -S/-O are unaffected
+WIN_NO_MAIN = {"desc": "bully mode, no main, Windows executable: the injected main contains the martyrdom code "
+                       "referencing killParent/.LsigStruct (never emitted on Windows), so linking always fails",
+               "bug_kinds": ["win-exe", "win-run"],
+               "correct": {"kind": "per_kind", "win-exe": {"kind": "compile_ok"}, "win-run": {"kind": "linux_runs"}}}
 
 
 def bully(name, text, **kw):
@@ -798,11 +809,13 @@ bully("undefined_markers", func("main", say("s") + ["fuck go back", "where banan
                                                     "corporate needs you to find the difference between rax and 1",
                                                     "who would win? rax or rbx", "rax wins"] + say("e\n")))
 bully("undefined_call", func("main", say("c") + [call("nowhere")] + say("\n")))
-bully("no_main", func("first", say("first\n"), ret=WIN) + "\n" + func("second", say("second\n"), ret=RET))
+bully("no_main", func("first", say("first\n"), ret=WIN) + "\n" + func("second", say("second\n"), ret=RET),
+      ref_bug=WIN_NO_MAIN)
 bully("no_return", FUN + "main\n    rax is brilliant, but I like 7\n" + "\n".join("    " + l for l in say("nr\n")) + "\n")
 bully("no_return_then_def", FUN + "main\n    what can I say except x\n    rax is brilliant, but I like 3\n" + func("g", say("g\n"), ret=RET))
 bully("orphans", "what can I say except o\n" + func("main", say("m\n")) + "what can I say except z\nupvote rax\n")
-bully("orphans_only", "what can I say except o\nwhat can I say except \\n\nrax is brilliant, but I like 5\n")
+bully("orphans_only", "what can I say except o\nwhat can I say except \\n\nrax is brilliant, but I like 5\n",
+      ref_bug=WIN_NO_MAIN)
 bully("mixed", func("main", say("x") + ["stonks al", "blub", "upvote 5", "rax is brilliant, but I like eax",
                                         "fuck go back", "upgrades, people. Upgrades 7"] + say("y\n")) + "\n" + func("main", []))
 bully("with_g_note", func("main", say("g\n")), flags=BF + ["-g"])
@@ -816,7 +829,7 @@ add("bully/dot_path", None, "bully", flags=BF, cwd="tests/e2e/programs/bully/dot
 # bugs/: inputs on which the reference compiler is buggy (crash/UB/unassemblable output).
 # run.py records what the reference does; if the new compiler behaves like the reference on a
 # "bug kind" the check is OLDBUG, if it satisfies "correct" it is FIXED.
-#   correct.kind: no_toolchain_error | compile_ok | terminates (no compiler crash/hang) | runs (oracle program/flags give the correct
+#   correct.kind: per_kind ({"<check kind>": spec, "default": spec}) | no_toolchain_error | compile_ok | terminates (no compiler crash/hang) | runs (oracle program/flags give the correct
 #   runtime behaviour) | asm (regexes present/absent in -S) | martyrdom | unspecified
 # --------------------------------------------------------------------------------------------
 
@@ -878,7 +891,7 @@ bug("bully_operand_size", runprog(["stonks 0", "rax is brilliant, but I like rsp
                                    "parry 5 you filthy casual rax do you know de wey", "not stonks rbx"] + show("rbx")),
     "bully mode operand-size check uses paramTypes[index + 1 % 2] (= index+1), so a pointer in the 2nd parameter "
     "gets no size prefix and gas fails with 'ambiguous operand size'",
-    ["lin-exe", "lin-obj", "win-obj", "lin-asm"],
+    ["lin-exe", "lin-obj", "win-obj", "lin-asm", "win-asm"],
     {"kind": "any_of", "of": [{"kind": "no_toolchain_error"},
                               {"kind": "asm", "present": [r"(?i)sub\s+(byte|word|dword|qword) ptr \[rax\], (0x)?5\b"]}]},
     kinds=["lin-exe", "lin-asm", "lin-obj", "win-asm", "win-obj"], flags=BF, timeout=3, exit_code_unspecified=True,
@@ -913,11 +926,8 @@ bug("win_print_clobbers_regs", func("main", ["r8 is brilliant, but I like 65", "
     "Windows: writechar zeroes the saved r9 (5th WriteFile argument stored at [rsp+32] after 'sub rsp, 32') and does "
     "not preserve r10/r11; prints must not modify registers (Linux prints 'xABCDEF')", ["win-run"], {"kind": "linux_runs"},
     kinds=["lin-exe", "win-asm", "win-exe"])
-bug("bully_no_main_windows", func("first", say("first\n"), ret=WIN),
-    "bully mode, no main, Windows: the injected main contains the martyrdom code referencing killParent/.LsigStruct "
-    "(never emitted on Windows), so linking always fails", ["win-exe", "win-obj", "win-asm"],
-    {"kind": "any_of", "of": [{"kind": "compile_ok"}, {"kind": "asm", "absent": [r"killParent|LsigStruct"]}]},
-    kinds=["win-asm", "win-obj", "win-exe"], flags=BF, timeout=3)
+bug("bully_no_main_windows", func("first", say("first\n"), ret=WIN), WIN_NO_MAIN["desc"], WIN_NO_MAIN["bug_kinds"],
+    WIN_NO_MAIN["correct"], kinds=["win-asm", "win-obj", "win-exe"], flags=BF, timeout=3)
 add("bugs/pb_empty_file", None, "bugs", kinds=["lin-asm", "lin-exe"], flags=BF, timeout=3, files={
     "empty.memeasm": "",
     "pb.memeasm": func("main", ["perfectly balanced as all things should be"] + say("ab\n"))},

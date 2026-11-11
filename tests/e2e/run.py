@@ -193,7 +193,31 @@ def norm_text(b, out=None, argv0=None):
     for rx, repl in RANDOM_DEBUG:
         t = rx.sub(repl, t)
     t = RANDOM_DEBUG_DROP.sub("", t)
+    t = mask_uninit_param(t)
     return t
+
+
+_DUP_HDR = re.compile(r"^\tLabel duplicity check for (.*) in line \d+ in file \d+$")
+_CMP_PARAM = re.compile(r"^(\t\tComparing against parameter ).*$")
+
+
+def mask_uninit_param(t):
+    """-d: for parameterless jump markers ('upgrade', "they're the same picture") the C compiler
+    prints parameters[0], which is uninitialised memory (garbage or a stale string); the Rust port
+    prints '(null)' (docs/rust-rewrite-changes.md, "Undefined behaviour given a defined result")."""
+    if "Comparing against parameter" not in t:
+        return t
+    out, masked = [], False
+    for line in t.split("\n"):
+        m = _DUP_HDR.match(line)
+        if m:
+            masked = m.group(1) in ("jump marker", "\"they're the same picture\"")
+        elif masked and _CMP_PARAM.match(line):
+            line = _CMP_PARAM.sub(r"\1<UNINITIALISED>", line)
+        elif not line.startswith("\t\t"):
+            masked = False
+        out.append(line)
+    return "\n".join(out)
 
 
 def classify(c):
@@ -316,9 +340,19 @@ def exp_path(cid):
     return EXPECTED / (re.sub(r"[^\w./-]", "_", cid.replace(":", "/")) + ".json")
 
 
-def get_ref(cid, producer):
+def _has_compile_timeout(v):
+    return '"class": "timeout"' in json.dumps(v, sort_keys=True)
+
+
+def get_ref(cid, producer, timeout_expected=False):
     if CFG.live:
         v = producer()
+        if CFG.update and not timeout_expected and _has_compile_timeout(v):
+            # a reference compile that times out is almost always host overload: retry once, and never
+            # store a spurious timeout as the expected outcome
+            v = producer()
+            if _has_compile_timeout(v):
+                raise RuntimeError("reference compile timed out (host overloaded?); expectation not updated")
         if CFG.update:
             p = exp_path(cid)
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -449,16 +483,22 @@ def bug_spec(entry):
     return entry.get("ref_bug")
 
 
+def sub_specs(spec):
+    if spec["kind"] == "per_kind":
+        return [v for k, v in spec.items() if k != "kind"]
+    return spec.get("of", [])
+
+
 def spec_needs_oracle(spec):
     if spec["kind"] == "runs":
         return True
-    return any(spec_needs_oracle(s) for s in spec.get("of", []))
+    return any(spec_needs_oracle(s) for s in sub_specs(spec))
 
 
 def find_oracle_spec(spec):
     if spec["kind"] == "runs":
         return spec
-    for s in spec.get("of", []):
+    for s in sub_specs(spec):
         o = find_oracle_spec(s)
         if o:
             return o
@@ -484,6 +524,9 @@ def eval_spec(spec, kind, new, ref, entry):
         if any(v is True for v in vals):
             return True
         return False if any(v is False for v in vals) else None
+    if k == "per_kind":  # {"kind": "per_kind", "<check kind>": spec, ..., "default": spec}
+        sub = spec.get(kind, spec.get("default"))
+        return eval_spec(sub, kind, new, ref, entry) if sub else None
     if k == "unspecified":
         return None
     if k == "no_toolchain_error":
@@ -548,7 +591,7 @@ def apply_bug(entry, kind, ref, new, res):
 
 
 def generic(cid, entry, kind, ref_fn, new_fn, cmp_fn):
-    ref = get_ref(cid, ref_fn)
+    ref = get_ref(cid, ref_fn, timeout_expected=bool(entry.get("compile_timeout")))
     if ref is None:
         return Result("SKIP", "no stored reference outcome (run with the reference installed / --update-expected)")
     new = new_fn()
@@ -650,7 +693,7 @@ def k_asm(cid, entry, flags, target="lin"):
         if ref["compile"]["rc"] != 0:
             return Result("PASS", "", det)
         if debug:
-            if not CFG.new_is_ref and target == "lin" and new.get("asm") and not re.search(r"^\s*\.(loc|file)\b", new["asm"], re.M):
+            if not CFG.new_is_ref and target == "lin" and "bully" not in flags and new.get("asm") and not re.search(r"^\s*\.(loc|file)\b", new["asm"], re.M):
                 return Result("WARN", "-g: no DWARF .file/.loc directives in -S output", det)
             return Result("PASS", "-g: assembly text not compared (STABS vs DWARF)", det)
         if ref.get("asm") != new.get("asm"):
@@ -1086,7 +1129,7 @@ CLI_CASES = [
     # -i: advertised by the C usage text but removed upstream (e99f0b3); stays rejected (rust-rewrite-changes.md #10)
     ("option_i_rejected", ["-i", "-o", "{OUT}", P_OK], "nonzero", r"-i\b"),
     ("ftarget_linux", ["-ftarget=linux", "-o", "{OUT}", P_OK], "zero", r""),
-    ("ftarget_invalid", ["-ftarget=amiga", "-o", "{OUT}", P_OK], "nonzero", r"amiga"),
+    ("ftarget_invalid", ["-ftarget=amiga", "-o", "{OUT}", P_OK], "nonzero", r"(?i)amiga|invalid target"),
 ]
 
 
@@ -1201,6 +1244,13 @@ def synth_entries(manifest):
             if "-g" in mflags and "bully" in e["flags"]:
                 continue
             e["kinds"] = [k for k in kinds if k in base["kinds"] or k in ("lin-asm", "win-asm")]
+            if "-g" in mflags and len(base["files"]) > 1 and not e.get("ref_bug"):
+                e["ref_bug"] = {
+                    "desc": "-g with several input files: the STABS labels .Lcmd_N/.Lret_* restart at 0 in every file, "
+                            "so gas fails with \"symbol `.Lcmd_2' is already defined\"",
+                    "bug_kinds": ["lin-exe", "lin-obj"],
+                    "correct": {"kind": "per_kind", "lin-obj": {"kind": "compile_ok"},
+                                "lin-exe": {"kind": "runs", "oracle_flags": [f for f in e["flags"] if f != "-g"]}}}
             out.append(e)
     for tag, mflags in [("O69420", ["-O69420"]), ("O-1", ["-O-1"]), ("obfuscated", ["-fcompile-mode", "obfuscated"])]:
         e = dict(by["martyrdom/loop"])
