@@ -12,13 +12,16 @@ pub mod encoder;
 pub mod libc;
 pub mod log;
 pub mod parser;
+pub mod random;
 pub mod translator;
 
 use std::path::PathBuf;
 
 use crate::backend::{self, OutputKind};
 use commands::{CompileState, OutputMode};
-use log::{err, err_str, exit, print_error_ascii};
+use std::process::exit;
+
+use log::{err, err_str, print_error_ascii};
 
 /// Converts a C-style byte string (file name from argv) into a path.
 pub fn bytes_to_path(b: &[u8]) -> PathBuf {
@@ -58,7 +61,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         };
         let asm = translator::write_to_string(&state);
         use std::io::Write;
-        if let Err(e) = file.write_all(&log::text_mode(&asm)) {
+        if let Err(e) = file.write_all(&asm) {
             err_str(&format!("Failed to write output file: {}\n", libc::io_error_message(&e)));
             exit(1);
         }
