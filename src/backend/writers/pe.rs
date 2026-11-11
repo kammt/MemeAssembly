@@ -1,7 +1,8 @@
 //! PE32+ console executables, linked directly from the module (no mingw crt).
 //!
-//! Layout: headers, `.text` (module code, entry stub, import thunks), `.data`, `.idata`.
-//! The image has a fixed base and no base relocations (`IMAGE_FILE_RELOCS_STRIPPED`).
+//! Layout: headers, `.text` (module code, entry stub, import thunks), `.data`, `.idata`,
+//! `.reloc`. Like mingw's output the image is relocatable (ASLR: `DYNAMIC_BASE`,
+//! `HIGH_ENTROPY_VA`): every absolute 64-bit address gets a `DIR64` base relocation.
 //!
 //! Entry stub: like mingw's crt it obtains `argc`/`argv`/`envp` from msvcrt's
 //! `__getmainargs` (msvcrt.dll is imported by every mingw-built program, including the
@@ -22,12 +23,17 @@ const IMAGE_BASE: u64 = 0x1_4000_0000;
 const SECTION_ALIGN: u64 = 0x1000;
 const FILE_ALIGN: u64 = 0x200;
 
-const IMAGE_FILE_RELOCS_STRIPPED: u16 = 0x0001;
 const IMAGE_FILE_EXECUTABLE_IMAGE: u16 = 0x0002;
 const IMAGE_FILE_LARGE_ADDRESS_AWARE: u16 = 0x0020;
+const IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA: u16 = 0x0020;
+const IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE: u16 = 0x0040;
 const IMAGE_DLLCHARACTERISTICS_NX_COMPAT: u16 = 0x0100;
+const IMAGE_SCN_MEM_DISCARDABLE: u32 = 0x0200_0000;
+const IMAGE_REL_BASED_ABSOLUTE: u16 = 0;
+const IMAGE_REL_BASED_DIR64: u16 = 10;
 const IMAGE_SUBSYSTEM_WINDOWS_CUI: u16 = 3;
 const IMAGE_DIRECTORY_ENTRY_IMPORT: usize = 1;
+const IMAGE_DIRECTORY_ENTRY_BASERELOC: usize = 5;
 const IMAGE_DIRECTORY_ENTRY_IAT: usize = 12;
 
 const KERNEL32: &str = "KERNEL32.dll";
@@ -93,6 +99,32 @@ fn rel32(from_field: u64, to: u64) -> Result<[u8; 4], String> {
     i32::try_from(d).map(|v| v.to_le_bytes()).map_err(|_| "relocation truncated to fit in entry stub".to_string())
 }
 
+/// `.reloc` contents: one block per 4 KiB page with a `DIR64` entry per address (sorted RVAs),
+/// each block padded to 4 bytes with `ABSOLUTE` entries. Without addresses there is a single
+/// empty block for the first code page, so the section and directory still exist (as with ld).
+fn base_relocations(sites: &[u64], first_page: u64) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    loop {
+        let page = sites.get(i).map_or(first_page, |&rva| rva & !0xfff);
+        let block = out.len();
+        out.u32(page as u32);
+        out.u32(0); // SizeOfBlock, below
+        while let Some(&rva) = sites.get(i).filter(|&&rva| rva & !0xfff == page) {
+            out.u16(IMAGE_REL_BASED_DIR64 << 12 | (rva & 0xfff) as u16);
+            i += 1;
+        }
+        if out.len() % 4 != 0 {
+            out.u16(IMAGE_REL_BASED_ABSOLUTE << 12);
+        }
+        let size = (out.len() - block) as u32;
+        put_u32(&mut out, block + 4, size);
+        if i >= sites.len() {
+            return out;
+        }
+    }
+}
+
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let main = m
         .symbol_by_name("main")
@@ -148,7 +180,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
 
     // Section placement. Alignment beyond a page can't be honoured by the loader; the section
     // start is page aligned, which satisfies everything up to 4 KiB.
-    let headers_size = align_up(DOS_HEADER_SIZE + 4 + 20 + OPTIONAL_HEADER_SIZE + 40 * 3, FILE_ALIGN);
+    let headers_size = align_up(DOS_HEADER_SIZE + 4 + 20 + OPTIONAL_HEADER_SIZE + 40 * 4, FILE_ALIGN);
     let has_data = !data.data.is_empty();
     let text_rva = align_up(headers_size, SECTION_ALIGN);
     let data_rva = align_up(text_rva + text_size, SECTION_ALIGN);
@@ -222,7 +254,8 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     if !errors.is_empty() {
         return Err(errors.join("\n"));
     }
-    // (32-bit absolute relocations fail above: the image base is above 4 GiB, as with ld.)
+    // (32-bit absolute relocations fail above: the image base is above 4 GiB, as with ld.
+    // They couldn't be rebased either.)
     let linked = linked.expect("checked above");
 
     // Patch the stub and thunks.
@@ -260,7 +293,13 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     }
     let idata_size = idata.len() as u64;
     sections.push((".idata", idata_rva, idata, rw_data));
-    let image_size = align_up(idata_rva + idata_size, SECTION_ALIGN);
+    let reloc_rva = align_up(idata_rva + idata_size, SECTION_ALIGN);
+    let mut sites: Vec<u64> = linked.abs64_sites.iter().map(|&(s, off)| [text_rva, data_rva][s] + off).collect();
+    sites.sort_unstable();
+    let reloc = base_relocations(&sites, text_rva);
+    let reloc_size = reloc.len() as u64;
+    sections.push((".reloc", reloc_rva, reloc, IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_DISCARDABLE));
+    let image_size = align_up(reloc_rva + reloc_size, SECTION_ALIGN);
 
     // Headers.
     let mut out = Vec::new();
@@ -274,7 +313,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     out.u32(0);
     out.u32(0);
     out.u16(OPTIONAL_HEADER_SIZE as u16);
-    out.u16(IMAGE_FILE_RELOCS_STRIPPED | IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_LARGE_ADDRESS_AWARE);
+    out.u16(IMAGE_FILE_EXECUTABLE_IMAGE | IMAGE_FILE_LARGE_ADDRESS_AWARE);
     let raw_size = |len: usize| align_up(len as u64, FILE_ALIGN);
     let code_size = raw_size(sections[0].2.len());
     let init_data: u64 = sections[1..].iter().map(|s| raw_size(s.2.len())).sum();
@@ -301,7 +340,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let checksum_offset = out.len();
     out.u32(0); // CheckSum, filled in below
     out.u16(IMAGE_SUBSYSTEM_WINDOWS_CUI);
-    out.u16(IMAGE_DLLCHARACTERISTICS_NX_COMPAT);
+    out.u16(IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA | IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE | IMAGE_DLLCHARACTERISTICS_NX_COMPAT);
     out.u64(0x20_0000); // stack reserve
     out.u64(0x1000); // stack commit
     out.u64(0x10_0000); // heap reserve
@@ -310,6 +349,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     out.u32(16); // NumberOfRvaAndSizes
     let mut dirs = [(0u32, 0u32); 16];
     dirs[IMAGE_DIRECTORY_ENTRY_IMPORT] = ((idata_rva) as u32, idt_size as u32);
+    dirs[IMAGE_DIRECTORY_ENTRY_BASERELOC] = (reloc_rva as u32, reloc_size as u32);
     dirs[IMAGE_DIRECTORY_ENTRY_IAT] = ((idata_rva + iat_off) as u32, thunk_table_size as u32);
     for (rva, size) in dirs {
         out.u32(rva);
