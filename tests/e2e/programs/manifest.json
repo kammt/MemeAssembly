@@ -1508,10 +1508,27 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
-    "kind": "no_toolchain_error"
+    "kind": "per_kind",
+    "default": {
+     "kind": "no_toolchain_error"
+    },
+    "lin-asm": {
+     "kind": "asm",
+     "present": [
+      "xor r13, r13"
+     ]
+    },
+    "win-asm": {
+     "kind": "asm",
+     "present": [
+      "xor r13, r13"
+     ]
+    }
    }
   }
  },
@@ -1533,7 +1550,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1558,7 +1577,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1583,7 +1604,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1608,7 +1631,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1633,7 +1658,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1658,7 +1685,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1683,7 +1712,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1708,7 +1739,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1733,7 +1766,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1758,7 +1793,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1783,7 +1820,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1808,7 +1847,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -1833,7 +1874,9 @@
    "bug_kinds": [
     "lin-exe",
     "lin-obj",
-    "win-obj"
+    "win-obj",
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "no_toolchain_error"
@@ -2137,6 +2180,22 @@
   "files": [
    "tests/e2e/programs/bully/no_main.memeasm"
   ],
+  "ref_bug": {
+   "desc": "bully mode, no main, Windows executable: the injected main contains the martyrdom code referencing killParent/.LsigStruct (never emitted on Windows), so linking always fails",
+   "bug_kinds": [
+    "win-exe",
+    "win-run"
+   ],
+   "correct": {
+    "kind": "per_kind",
+    "win-exe": {
+     "kind": "compile_ok"
+    },
+    "win-run": {
+     "kind": "linux_runs"
+    }
+   }
+  },
   "timeout": 3,
   "flags": [
    "-fcompile-mode",
@@ -2217,6 +2276,22 @@
   "files": [
    "tests/e2e/programs/bully/orphans_only.memeasm"
   ],
+  "ref_bug": {
+   "desc": "bully mode, no main, Windows executable: the injected main contains the martyrdom code referencing killParent/.LsigStruct (never emitted on Windows), so linking always fails",
+   "bug_kinds": [
+    "win-exe",
+    "win-run"
+   ],
+   "correct": {
+    "kind": "per_kind",
+    "win-exe": {
+     "kind": "compile_ok"
+    },
+    "win-run": {
+     "kind": "linux_runs"
+    }
+   }
+  },
   "timeout": 3,
   "flags": [
    "-fcompile-mode",
@@ -2499,7 +2574,8 @@
     "lin-exe",
     "lin-obj",
     "win-obj",
-    "lin-asm"
+    "lin-asm",
+    "win-asm"
    ],
    "correct": {
     "kind": "any_of",
@@ -2705,25 +2781,19 @@
    "tests/e2e/programs/bugs/bully_no_main_windows.memeasm"
   ],
   "ref_bug": {
-   "desc": "bully mode, no main, Windows: the injected main contains the martyrdom code referencing killParent/.LsigStruct (never emitted on Windows), so linking always fails",
+   "desc": "bully mode, no main, Windows executable: the injected main contains the martyrdom code referencing killParent/.LsigStruct (never emitted on Windows), so linking always fails",
    "bug_kinds": [
     "win-exe",
-    "win-obj",
-    "win-asm"
+    "win-run"
    ],
    "correct": {
-    "kind": "any_of",
-    "of": [
-     {
-      "kind": "compile_ok"
-     },
-     {
-      "kind": "asm",
-      "absent": [
-       "killParent|LsigStruct"
-      ]
-     }
-    ]
+    "kind": "per_kind",
+    "win-exe": {
+     "kind": "compile_ok"
+    },
+    "win-run": {
+     "kind": "linux_runs"
+    }
    }
   },
   "flags": [
