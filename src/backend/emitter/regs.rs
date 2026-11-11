@@ -49,6 +49,7 @@ pub fn parse(name: &str) -> Option<Reg> {
     None
 }
 
+#[cfg(test)]
 pub fn name(r: Reg) -> String {
     match r {
         Reg::R64(i) => R64[i as usize].into(),
@@ -60,81 +61,46 @@ pub fn name(r: Reg) -> String {
     }
 }
 
-/// How gas interprets a bare identifier used as a `call`/`jmp` operand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Ident {
-    /// An ordinary symbol.
-    Symbol,
-    /// A register usable as an indirect branch target (64-bit GPR, or 16-bit GPR with 0x66).
-    Gpr(Reg),
-    /// APX extended GPR r16..r31 (64-bit form) – encodable by gas only with a REX2 prefix.
-    ApxGpr(u8, bool),
-    /// Any other register name gas knows (eax, al, xmm0, st, cr0, es, k0, ...).
-    OtherReg,
-    /// `flat` (a pseudo register in Intel syntax).
-    PseudoReg,
-    /// Intel-syntax operator words (`and`, `or`, `xor`, `mod`, `shl`, `shr`, `eq`, ...).
-    Operator,
-    /// `not` (unary operator, gas then fails to parse an expression).
-    UnaryOperator,
-    /// Intel-syntax size/type keywords that gas evaluates to constants (`byte`, `near`, ...).
-    Constant,
-}
-
-pub fn classify(name: &str) -> Ident {
+/// Whether gas reads the bare identifier `name` as a symbol when it is a `call`/`jmp` operand
+/// (and not as a register, the `flat` pseudo register, an operator like `and`/`not` or a
+/// constant like `byte`/`near`). Mirrors `gas_misreads_symbol` in the translator, which passes
+/// such names as [`super::BranchTarget::Quoted`].
+pub fn is_symbol(name: &str) -> bool {
     let l = name.to_ascii_lowercase();
-    if let Some(r) = parse(&l) {
-        return match r {
-            Reg::R64(_) | Reg::R16(_) => Ident::Gpr(r),
-            _ => Ident::OtherReg,
-        };
-    }
-    // APX registers r16..r31 (+ d/w/b forms).
-    if let Some(rest) = l.strip_prefix('r') {
-        let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-        let suffix = &rest[digits.len()..];
-        if !digits.is_empty() && !digits.starts_with('0') {
-            if let Ok(n) = digits.parse::<u8>() {
-                if (16..32).contains(&n) {
-                    match suffix {
-                        "" => return Ident::ApxGpr(n, false),
-                        "w" => return Ident::ApxGpr(n, true),
-                        "d" | "b" => return Ident::OtherReg,
-                        _ => {}
-                    }
-                }
-            }
-        }
-    }
-    let numbered = |prefix: &str, max: u32| -> bool {
+    // `<prefix>N` with min <= N <= max, without leading zeros
+    let numbered = |prefix: &str, min: u32, max: u32| {
         l.strip_prefix(prefix).is_some_and(|n| {
             !n.is_empty()
                 && (n.len() == 1 || !n.starts_with('0'))
                 && n.chars().all(|c| c.is_ascii_digit())
-                && n.parse::<u32>().is_ok_and(|v| v <= max)
+                && n.parse::<u32>().is_ok_and(|v| (min..=max).contains(&v))
         })
     };
-    if numbered("xmm", 31)
-        || numbered("ymm", 31)
-        || numbered("zmm", 31)
-        || numbered("tmm", 7)
-        || numbered("mm", 7)
-        || numbered("k", 7)
-        || numbered("cr", 15)
-        || numbered("dr", 15)
-    {
-        return Ident::OtherReg;
-    }
-    match l.as_str() {
-        // (`st0`, `bnd0`, `tr0`, `rflags`, ... are plain symbols to gas in this mode.)
-        "st" | "es" | "cs" | "ss" | "ds" | "fs" | "gs" | "rip" | "eip" => Ident::OtherReg,
-        "flat" => Ident::PseudoReg,
-        "and" | "or" | "xor" | "mod" | "shl" | "shr" | "eq" | "ne" | "lt" | "le" | "gt" | "ge" => {
-            Ident::Operator
-        }
-        "not" => Ident::UnaryOperator,
-        "byte" | "word" | "dword" | "fword" | "qword" | "mmword" | "tbyte" | "oword" | "xmmword"
-        | "ymmword" | "zmmword" | "offset" | "short" | "near" | "far" => Ident::Constant,
-        _ => Ident::Symbol,
-    }
+    // APX registers r16..r31 (+ w/d/b forms)
+    let apx = ["", "w", "d", "b"].iter().any(|suffix| {
+        let base = l.strip_suffix(suffix).unwrap_or("");
+        base.strip_prefix('r').is_some_and(|n| {
+            !n.is_empty()
+                && !n.starts_with('0')
+                && n.chars().all(|c| c.is_ascii_digit())
+                && n.parse::<u32>().is_ok_and(|v| (16..=31).contains(&v))
+        })
+    });
+    !(parse(&l).is_some()
+        || apx
+        || numbered("xmm", 0, 31)
+        || numbered("ymm", 0, 31)
+        || numbered("zmm", 0, 31)
+        || numbered("tmm", 0, 7)
+        || numbered("mm", 0, 7)
+        || numbered("k", 0, 7)
+        || numbered("cr", 0, 15)
+        || numbered("dr", 0, 15)
+        || matches!(
+            l.as_str(),
+            "st" | "es" | "cs" | "ss" | "ds" | "fs" | "gs" | "rip" | "eip" | "flat"
+                | "and" | "or" | "xor" | "mod" | "shl" | "shr" | "eq" | "ne" | "lt" | "le" | "gt"
+                | "ge" | "not" | "byte" | "word" | "dword" | "fword" | "qword" | "mmword" | "tbyte"
+                | "oword" | "xmmword" | "ymmword" | "zmmword" | "offset" | "short" | "near" | "far"
+        ))
 }

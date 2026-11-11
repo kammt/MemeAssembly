@@ -7,12 +7,9 @@ License:        GPLv3
 URL:            https://github.com/kammt/MemeAssembly
 Source0:        %{name}-%{version}.tar.gz
 
-# keep LTO flags away from the C code compiled by build.rs
-%global _lto_cflags %{nil}
-
 BuildRequires:  cargo
 BuildRequires:  rust
-# for the C code compiled by build.rs
+# rustc links with the system C compiler driver
 BuildRequires:  gcc
 BuildRequires:  make
 # memeasm writes executables itself; gcc is only needed to link object files created with -O

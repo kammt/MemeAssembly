@@ -172,6 +172,13 @@ command-line order. This covers:
     register is 0 instead of whatever the C runtime left behind. Programs that read
     uninitialised registers can behave differently.
   - Windows executables are relocatable and use ASLR, as mingw's defaults do.
+  - Instructions are encoded by a small x86-64 encoder in Rust (`backend/emitter/x86.rs`),
+    with the same instruction forms gas chooses. It is checked against a table of encodings
+    generated with gas (`tests/emitter_golden.py`) and was checked against the fadec encoder
+    it replaced.
+  - The `-O-s` alignment padding after the final `ret` is filled with single-byte NOPs
+    (`0x90`) instead of gas's multi-byte NOPs. The padding is never executed, so the
+    program behaves the same, but `.text` differs byte for byte from gas's output.
 - Write errors are no longer ignored: a `-S` output that cannot be written completely (e.g.
   `-o /dev/full`) gives `Failed to write output file: No space left on device` (exit 1), and
   a failed write to stdout gives `Failed to write to stdout: ...` (exit 1). As in C, a closed
