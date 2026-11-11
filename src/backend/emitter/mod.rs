@@ -198,19 +198,28 @@ impl Emitter {
     pub fn extern_symbol(&mut self, _name: &str) {}
 
     /// `name:` – errors on redefinition like gas ("symbol `x' is already defined").
+    ///
+    /// `name` is taken as gas would read it from the `-S` text: character constants are
+    /// converted to numbers first (`.L'a'Wins_0` is the label `.L97Wins_0`). gas tolerates a
+    /// second definition at exactly the same position.
     pub fn label(&mut self, name: &str) -> Result<(), String> {
+        let name = &char_constants(name);
         if !valid_symbol(name) {
             return Err(layout::bad_label_message(name));
         }
-        if matches!(name, ".text" | ".data" | ".bss") {
+        if matches!(name.as_str(), ".text" | ".data" | ".bss") && self.target != Target::Windows {
             return Err(format!("symbol `{name}' is already defined"));
         }
         let id = self.sym(name);
-        if self.syms[id].def.is_some() {
-            return Err(format!("symbol `{name}' is already defined"));
+        let here = (self.cur, self.sections[self.cur].len());
+        match self.syms[id].def {
+            Some(d) if d == here => Ok(()),
+            Some(_) => Err(format!("symbol `{name}' is already defined")),
+            None => {
+                self.syms[id].def = Some(here);
+                Ok(())
+            }
         }
-        self.syms[id].def = Some((self.cur, self.sections[self.cur].len()));
-        Ok(())
     }
     /// Numeric local label `n:` (may be redefined, refs bind to nearest per gas rules).
     pub fn local_label(&mut self, n: u32) {
@@ -252,13 +261,11 @@ impl Emitter {
     }
     /// `.align n` (additive extension; used for `-O-s`). In `.text` the padding is filled with
     /// the same NOP sequences gas uses, in `.data` with zeros. The section's alignment becomes at
-    /// least `n`. COFF (Windows) can't represent alignments above 8192; gas fails there too.
+    /// least `n`. COFF (Windows) can't represent alignments above 8192: like gas, `finish` then
+    /// fails ("nonrepresentable section on output").
     pub fn align(&mut self, n: u64) -> Result<(), String> {
         if !n.is_power_of_two() {
             return Err("alignment not a power of 2".into());
-        }
-        if self.target == Target::Windows && n > 8192 {
-            return Err(format!("alignment 2**{} not representable", n.trailing_zeros()));
         }
         self.aligns[self.cur] = self.aligns[self.cur].max(n);
         self.push(layout::Item::Align { align: n });
@@ -371,6 +378,7 @@ impl Emitter {
                 }
             }
             BranchTarget::Symbol(s) => {
+                let s = char_constants(&s);
                 if s == "$" || s == "." {
                     self.dot()
                 } else {
@@ -388,6 +396,54 @@ impl Emitter {
         self.push(layout::Item::Branch { kind, target });
         Ok(())
     }
+}
+
+/// Value of the escape `\\c` in a gas character constant.
+pub(super) fn escape_value(c: char) -> u32 {
+    match c {
+        'b' => 8,
+        'f' => 12,
+        'n' => 10,
+        'r' => 13,
+        't' => 9,
+        '\'' => 39,
+        '"' => 34,
+        c => c as u32,
+    }
+}
+
+/// Replace gas character constants (`'a'`, `'\\n'`, `' '`) by their decimal value, as gas does
+/// when reading the line.
+pub(super) fn char_constants(s: &str) -> String {
+    if !s.contains('\'') {
+        return s.to_string();
+    }
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != '\'' {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        i += 1;
+        if i >= chars.len() {
+            out.push('0');
+            break;
+        }
+        let mut v = chars[i] as u32;
+        if chars[i] == '\\' && i + 1 < chars.len() {
+            i += 1;
+            v = escape_value(chars[i]);
+        }
+        i += 1;
+        if i < chars.len() && chars[i] == '\'' {
+            i += 1;
+        }
+        out.push_str(&v.to_string());
+    }
+    out
 }
 
 /// Internal (never emitted) name of instance `inst` of numeric local label `n`.

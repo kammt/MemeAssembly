@@ -234,7 +234,8 @@ def parse_emit(text, coff):
 
 
 GAS_ERR = re.compile(r"^(?:[^:]*):(\d+): (?:Error|Fatal error): (.*)$")
-GAS_ERR0 = re.compile(r"^(?:[^:]*): (?:Error|Fatal error): (.*)$")
+GAS_ERR0 = re.compile(r"^(?:[^:]*): (?:Error|Fatal error): (?:\S+\.o: )?(.*)$")
+GAS_BFD = re.compile(r"^\S*-as: \S+\.o: (.*)$")
 
 
 def run_gas(path):
@@ -249,7 +250,7 @@ def run_gas(path):
         if m:
             errors.append((int(m.group(1)), m.group(2)))
             continue
-        m = GAS_ERR0.match(line)
+        m = GAS_ERR0.match(line) or GAS_BFD.match(line)
         if m:
             errors.append((0, m.group(1)))
     if p.returncode != 0 or errors:
@@ -348,7 +349,8 @@ FUNC_NAMES = ["foo", "rax", "eax", "ax", "al", "r8", "r15", "r8w", "r16", "r31",
               "mm0", "k0", "ymm0", "es", "fs", "sil", "ah", "rip", "byte", "near", "far", "offset", "short",
               "dword", "and", "or", "xor", "not", "mod", "shl", "eq", "flat", "ptr", "$", "a$b", "_", "nop",
               "ret", "mov", "st0", "bnd0", "r8l", "L1", "a.b", ".Lfoo", "RAX", "Rax", "R8", "Byte", "AND",
-              "x87", "b", "f", "$foo", "jmp", "call", "dr0", "tmm0", "zmm0", "r8b", "spl", "eip"]
+              "x87", "b", "f", "$foo", "jmp", "call", "dr0", "tmm0", "zmm0", "r8b", "spl", "eip", "tr0", "st1",
+              "bnd1", "rflags", "k8", "mm8", "r16w", "R16", "Not", "Mod", "FLAT", "fword", "r31w", "r16d"]
 
 
 def fun(name):
@@ -360,53 +362,80 @@ def program(lines, name="main"):
                      ["    I see this as an absolute win", ""])
 
 
-def gen_programs(outdir, quick):
-    """Generated MemeAssembly programs: list of (name, source)."""
+def gen_programs(quick):
+    """Generated MemeAssembly programs: list of (name, units, bully). A unit is one command (one or
+    more lines); units the reference compiler rejects are filtered out before use."""
     progs = []
     for ti, (tmpl, types) in enumerate(TEMPLATES):
         lists = [values(t) for t in types]
         if quick:
             lists = [l[::5] for l in lists]
-        lines = []
+        units = []
         if len(lists) == 1:
             for a in lists[0]:
-                lines.append(tmpl.format(a))
+                units.append(tmpl.format(a))
                 if a in REGS:
-                    lines.append(tmpl.format(a + PTR))
+                    units.append(tmpl.format(a + PTR))
         else:
             for a in lists[0]:
                 for b in lists[1]:
-                    lines.append(tmpl.format(a, b))
+                    units.append(tmpl.format(a, b))
             # pointers on either side
             for a in lists[0]:
                 for b in lists[1]:
                     if a in REGS and (b in REGS[::3] or b in DECS[:6] or b in CHARS[:3]):
-                        lines.append(tmpl.format(a + PTR, b))
+                        units.append(tmpl.format(a + PTR, b))
                     if b in REGS and (a in REGS[::3] or a in DECS[:6] or a in CHARS[:3]):
-                        lines.append(tmpl.format(a, b + PTR))
-        # chunk to keep programs moderately sized
-        for ci in range(0, len(lines), 400):
-            progs.append(("t%02d_%03d" % (ti, ci // 400), program(lines[ci:ci + 400])))
-    progs.append(("fixed", program(FIXED)))
-    for i, n in enumerate(FUNC_NAMES):
-        src = program(["%s: whomst has summoned the almighty one" % n]) + program(["right back at ya, buckaroo"], n)
-        progs.append(("call%02d" % i, src))
+                        units.append(tmpl.format(a, b + PTR))
+        for ci in range(0, len(units), 400):
+            progs.append(("t%02d_%03d" % (ti, ci // 400), units[ci:ci + 400], False))
+    progs.append(("fixed", FIXED, False))
     # bully mode: wrong parameter types get replaced pseudo-randomly; pointers to anything.
     bully = []
     for tmpl, types in TEMPLATES:
-        n = tmpl.count("{0}") and (2 if "{1}" in tmpl else 1)
+        n = 2 if "{1}" in tmpl else 1
         for a in ["rax", "eax", "ax", "al", "ah", "5", "a", "uaua", "xyz", "[rbx]", "r8b", "-7", "\\n"]:
             for b in ["rbx", "ebx", "bx", "bl", "bh", "300", "z", "foo", "1x", "r9d"]:
-                if n == 1:
-                    bully.append(tmpl.format(a, b))
-                    bully.append(tmpl.format(a + PTR, b))
-                else:
-                    bully.append(tmpl.format(a, b))
-                    bully.append(tmpl.format(a + PTR, b))
+                bully.append(tmpl.format(a, b))
+                bully.append(tmpl.format(a + PTR, b))
+                if n == 2:
                     bully.append(tmpl.format(a, b + PTR))
     for ci in range(0, len(bully), 300):
-        progs.append(("bully_%03d" % (ci // 300), program(bully[ci:ci + 300])))
+        progs.append(("bully_%03d" % (ci // 300), bully[ci:ci + 300], True))
     return progs
+
+
+REF_ERR = re.compile(r"^[^:]*:(\d+): ")
+
+
+def filter_units(units, bully, path):
+    """Drop the units the reference compiler rejects; returns the final source (or None)."""
+    units = list(units)
+    for _ in range(8):
+        starts = []
+        line = 2
+        for u in units:
+            starts.append(line)
+            line += u.count("\n") + 1
+        with open(path, "w") as f:
+            f.write(program(units))
+        flags = ["-fcompile-mode", "bully"] if bully else []
+        p = subprocess.run([REF_LINUX] + flags + ["-S", "-o", os.devnull, path], capture_output=True, text=True,
+                           errors="replace")
+        if p.returncode == 0:
+            return units
+        bad = set()
+        for l in p.stdout.splitlines() + p.stderr.splitlines():
+            m = REF_ERR.match(l)
+            if m:
+                ln = int(m.group(1))
+                for i, st in enumerate(starts):
+                    if st <= ln < st + units[i].count("\n") + 1:
+                        bad.add(i)
+        if not bad:
+            return None
+        units = [u for i, u in enumerate(units) if i not in bad]
+    return None
 
 
 def strip_stabs(asm):
@@ -451,11 +480,27 @@ def gen_ref(corpus, quick, stats):
     mf = sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "multiple_files", "*.memeasm")))
     if mf:
         inputs.append(("multiple_files", mf))
-    for name, src in gen_programs(srcdir, quick):
+    def make(prog):
+        name, units, bully = prog
         p = os.path.join(srcdir, name + ".memeasm")
+        units = filter_units(units, bully, p)
+        return ("gen_" + name, [p], bully, len(units or []), units is not None)
+
+    with ThreadPoolExecutor(os.cpu_count()) as ex:
+        made = list(ex.map(make, gen_programs(quick)))
+    stats["memeasm_commands_generated"] = sum(m[3] for m in made)
+    bully_inputs = set()
+    for name, files, bully, n, ok in made:
+        if ok:
+            inputs.append((name, files))
+            if bully:
+                bully_inputs.add(name)
+    for i, fname in enumerate(FUNC_NAMES):
+        p = os.path.join(srcdir, "call%02d.memeasm" % i)
         with open(p, "w") as f:
-            f.write(src)
-        inputs.append(("gen_" + name, [p]))
+            f.write(program(["%s: whomst has summoned the almighty one" % fname]) +
+                    program(["right back at ya, buckaroo"], fname))
+        inputs.append(("gen_call%02d" % i, [p]))
     compilers = [("lin", REF_LINUX), ("win", REF_WIN)]
     mac = build_mac_ref(os.path.join(corpus, ".."))
     if mac:
@@ -465,6 +510,8 @@ def gen_ref(corpus, quick, stats):
         for name, files in inputs:
             for flags in FLAGSETS:
                 if name.startswith("gen_") and flags not in ([], ["-fcompile-mode", "bully"], ["-O-3"], ["-g"]):
+                    continue
+                if name in bully_inputs and "bully" not in flags:
                     continue
                 if flags == ["-O-2"] and name not in BIG_OK:
                     continue  # -O-2 aligns to 512 MiB; keep those objects few
@@ -484,7 +531,7 @@ def gen_ref(corpus, quick, stats):
 MEMS_BASE = ["[rax]", "[rbx]", "[rsp]", "[rbp]", "[r8]", "[r12]", "[r13]", "[r15]", "[eax]", "[esp]", "[ebp]",
              "[r13d]", "[ax]", "[al]", "[rsp + 8]", "[rsp + 32]", "[rip + .Ld]", "[rip + d0]", "[rip + und]",
              "[rip + .Ltxt]", "[69]", "[rip + gtxt]", "[rip + .Ld + 3]", "[rbp + 200]"]
-SIZES = ["", "BYTE PTR ", "WORD PTR ", "DWORD PTR ", "QWORD PTR "]
+SIZES = ["", "BYTE PTR ", "WORD PTR ", "DWORD PTR ", "QWORD PTR ", "XMMWORD PTR "]
 IMMS = ["0", "1", "0x1", "0x7F", "0x80", "0xFF", "0x100", "0x7FFF", "0x8000", "0xFFFF", "0x10000", "0x1FFFF",
         "0x7FFFFFFF", "0x80000000", "0xFFFFFFFF", "0x100000000", "0x1FFFFFFFF", "0x7FFFFFFFFFFFFFFF",
         "0x8000000000000000", "0xFFFFFFFFFFFFFF80", "0xFFFFFFFFFFFFFF7F", "0xFFFFFFFFFFFF8000",
@@ -557,7 +604,7 @@ def gen_branches(corpus):
     cases["neg_textlabel"] = ".text:\n"
     cases["neg_badlabels"] = "\n".join([
         ".L[rax]Wins_0:", "jl .L[rax]Wins_0", ".L-5Wins_0:", "jg .L-5Wins_0", ".LBYTE PTR [rax]Wins_0:",
-        "jl .LBYTE PTR [rax]Wins_0", "xor r13 r13", "0", "jmp .L+5Wins_0", ".L+5Wins_0:"]) + "\n"
+        "jl .LBYTE PTR [rax]Wins_0", "xor r13 r13", "\t0", "jmp .L+5Wins_0", ".L+5Wins_0:"]) + "\n"
     calls = []
     for n in FUNC_NAMES:
         calls.append("call %s" % n)

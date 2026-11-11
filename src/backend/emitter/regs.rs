@@ -68,7 +68,7 @@ pub enum Ident {
     /// A register usable as an indirect branch target (64-bit GPR, or 16-bit GPR with 0x66).
     Gpr(Reg),
     /// APX extended GPR r16..r31 (64-bit form) – encodable by gas only with a REX2 prefix.
-    ApxGpr(u8),
+    ApxGpr(u8, bool),
     /// Any other register name gas knows (eax, al, xmm0, st, cr0, es, k0, ...).
     OtherReg,
     /// `flat` (a pseudo register in Intel syntax).
@@ -97,8 +97,9 @@ pub fn classify(name: &str) -> Ident {
             if let Ok(n) = digits.parse::<u8>() {
                 if (16..32).contains(&n) {
                     match suffix {
-                        "" => return Ident::ApxGpr(n),
-                        "d" | "w" | "b" => return Ident::OtherReg,
+                        "" => return Ident::ApxGpr(n, false),
+                        "w" => return Ident::ApxGpr(n, true),
+                        "d" | "b" => return Ident::OtherReg,
                         _ => {}
                     }
                 }
@@ -121,14 +122,12 @@ pub fn classify(name: &str) -> Ident {
         || numbered("k", 7)
         || numbered("cr", 15)
         || numbered("dr", 15)
-        || numbered("st", 7) && l != "st"
-        || numbered("bnd", 3)
-        || numbered("tr", 7)
     {
         return Ident::OtherReg;
     }
     match l.as_str() {
-        "st" | "es" | "cs" | "ss" | "ds" | "fs" | "gs" | "rip" | "eip" | "rflags" => Ident::OtherReg,
+        // (`st0`, `bnd0`, `tr0`, `rflags`, ... are plain symbols to gas in this mode.)
+        "st" | "es" | "cs" | "ss" | "ds" | "fs" | "gs" | "rip" | "eip" => Ident::OtherReg,
         "flat" => Ident::PseudoReg,
         "and" | "or" | "xor" | "mod" | "shl" | "shr" | "eq" | "ne" | "lt" | "le" | "gt" | "ge" => {
             Ident::Operator

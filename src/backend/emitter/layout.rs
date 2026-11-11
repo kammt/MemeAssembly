@@ -82,14 +82,18 @@ impl BranchKind {
 pub(super) fn indirect_branch(kind: BranchKind, id: Ident, name: &str) -> Result<Vec<u8>, String> {
     let mn = kind.mnemonic();
     let mismatch = || format!("operand type mismatch for `{mn}'");
+    // gas emits a PC-relative relocation against the absolute section for these (`call byte`
+    // calls address 1); ObjModule relocations always name a symbol, so this is rejected.
+    let absolute = || format!("`{mn} {name}': branch to an absolute address is not supported");
     let modrm_base: u8 = match kind {
         BranchKind::Call => 0xd0,
         BranchKind::Jmp => 0xe0,
         BranchKind::Jcc(_) => {
             return Err(match id {
                 Ident::PseudoReg => "invalid use of pseudo-register".to_string(),
-                Ident::Operator => format!("invalid use of operator \"{}\"", name.to_ascii_lowercase()),
-                Ident::UnaryOperator => "missing operand; zero assumed".to_string(),
+                Ident::Operator => format!("invalid use of operator \"{name}\""),
+                Ident::UnaryOperator => "invalid expression".to_string(),
+                Ident::Constant => absolute(),
                 _ => mismatch(),
             })
         }
@@ -107,13 +111,16 @@ pub(super) fn indirect_branch(kind: BranchKind, id: Ident, name: &str) -> Result
             v.extend([0xff, modrm_base + (n & 7)]);
             Ok(v)
         }
-        Ident::ApxGpr(n) => Ok(vec![0xd5, 0x10 | ((n >> 3) & 1), 0xff, modrm_base + (n & 7)]),
+        // APX r16..r31: REX2 prefix (d5, B4 = bit 4 of the register number, B3 = bit 3).
+        Ident::ApxGpr(n, w16) => {
+            let mut v = if w16 { vec![0x66] } else { Vec::new() };
+            v.extend([0xd5, 0x10 | ((n >> 3) & 1), 0xff, modrm_base + (n & 7)]);
+            Ok(v)
+        }
         Ident::PseudoReg => Err("invalid use of pseudo-register".to_string()),
-        Ident::Operator => Err(format!("invalid use of operator \"{}\"", name.to_ascii_lowercase())),
-        Ident::UnaryOperator => Err("missing operand; zero assumed".to_string()),
-        Ident::Constant => Err(format!(
-            "`{mn} {name}': branch to an absolute address is not supported"
-        )),
+        Ident::Operator => Err(format!("invalid use of operator \"{name}\"")),
+        Ident::UnaryOperator => Err("invalid expression".to_string()),
+        Ident::Constant => Err(absolute()),
         Ident::Gpr(_) | Ident::OtherReg | Ident::Symbol => Err(mismatch()),
     }
 }
@@ -129,12 +136,37 @@ pub(super) fn bad_label_message(name: &str) -> String {
     }
 }
 
-/// gas's diagnostic for a symbol reference that isn't a valid symbol name.
+/// gas's diagnostic for a symbol reference that isn't a valid symbol name (e.g. the
+/// `.L<param>Wins_0` labels of "who would win?" with a pointer parameter): gas parses as much of
+/// it as an Intel expression as it can (`sym`, `[...]` index terms, `+`/`-` with a number or
+/// symbol) and reports the rest as junk.
 pub(super) fn bad_reference_message(name: &str) -> String {
-    let head_len = name.chars().take_while(|c| super::symbol_char(*c)).count();
-    let rest = &name[head_len..];
-    let junk = rest.find(']').map(|i| &rest[i + 1..]).unwrap_or(rest);
-    format!("junk `{junk}' after expression")
+    let sym_len = |s: &str| s.find(|c: char| !super::symbol_char(c)).unwrap_or(s.len());
+    let mut r = &name[sym_len(name)..];
+    loop {
+        r = r.trim_start();
+        if r.starts_with('[') {
+            match r.find(']') {
+                Some(i) => r = &r[i + 1..],
+                None => break,
+            }
+        } else if r.starts_with(['+', '-']) {
+            r = r[1..].trim_start();
+            if r.starts_with(|c: char| c.is_ascii_digit()) {
+                let hex = r.starts_with("0x") || r.starts_with("0X");
+                let skip = if hex { 2 } else { 0 };
+                let n = r[skip..]
+                    .find(|c: char| !(if hex { c.is_ascii_hexdigit() } else { c.is_ascii_digit() }))
+                    .map_or(r.len(), |i| i + skip);
+                r = &r[n..];
+            } else {
+                r = &r[sym_len(r)..];
+            }
+        } else {
+            break;
+        }
+    }
+    format!("junk `{r}' after expression")
 }
 
 /// The NOP sequences gas uses to pad code (`.align` in `.text`).
@@ -322,6 +354,13 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
             // gas for PE/COFF aligns .text/.data to 16 bytes and pads their size accordingly
             // (.text with NOPs, .data with zeros).
             align = align.max(16);
+            if align > 8192 {
+                let name = if si == 0 { ".text" } else { ".data" };
+                return Err(format!(
+                    "section {name}: alignment 2**{} not representable\nnonrepresentable section on output",
+                    align.trailing_zeros()
+                ));
+            }
             let fill = if si == 0 { 0x90 } else { 0 };
             while data.len() % 16 != 0 {
                 data.push(fill);

@@ -15,19 +15,6 @@ use std::fmt::Write as _;
 // ------------------------------------------------------------------------------------------
 
 /// gas `process_escape` for character constants.
-fn escape_value(c: char) -> u32 {
-    match c {
-        'b' => 8,
-        'f' => 12,
-        'n' => 10,
-        'r' => 13,
-        't' => 9,
-        '\'' => 39,
-        '"' => 34,
-        c => c as u32,
-    }
-}
-
 /// Emulates gas's input scrubber for one line: removes comments, converts `'c'` character
 /// constants to decimal numbers and splits `;`-separated statements.
 fn scrub(line: &str) -> Vec<String> {
@@ -64,21 +51,22 @@ fn scrub(line: &str) -> Vec<String> {
                 i += 1;
             }
             '\'' => {
-                i += 1;
-                if i >= chars.len() {
-                    cur.push_str("0");
+                // Character constant: up to the closing quote (or one char / one escape).
+                let mut j = i + 1;
+                if j < chars.len() && chars[j] == '\\' {
+                    j += 1;
+                }
+                j += 1;
+                if j < chars.len() && chars[j] == '\'' {
+                    j += 1;
+                }
+                let j = j.min(chars.len());
+                let lit: String = chars[i..j].iter().collect();
+                cur.push_str(&char_constants(&lit));
+                i = j;
+                if j == chars.len() && lit.len() == 1 {
                     break;
                 }
-                let mut v = chars[i] as u32;
-                if chars[i] == '\\' && i + 1 < chars.len() {
-                    i += 1;
-                    v = escape_value(chars[i]);
-                }
-                i += 1;
-                if i < chars.len() && chars[i] == '\'' {
-                    i += 1;
-                }
-                let _ = write!(cur, "{v}");
             }
             _ => {
                 cur.push(c);
@@ -637,7 +625,7 @@ fn relaxation() {
 fn errors() {
     assert_eq!(err_of("add [rax], 1"), "ambiguous operand size for `add'");
     assert_eq!(err_of("mov ah, sil"), "can't encode register 'ah' in an instruction requiring REX/REX2 prefix");
-    assert_eq!(err_of("x:\nx:"), "symbol `x' is already defined");
+    assert_eq!(err_of("x:\nnop\nx:"), "symbol `x' is already defined");
     assert_eq!(err_of("jmp 3b"), "backward ref to unknown label \"3:\"");
     assert_eq!(err_of("xor r13 r13"), "junk `r13' after expression");
 }
@@ -649,4 +637,47 @@ fn nop_padding() {
     let t = text_of("ret\n.align 256");
     assert_eq!(&t[..6], &hex("c3 e9 fa 00 00 00")[..]);
     assert_eq!(t.len(), 256);
+}
+
+#[test]
+fn raw_label_text() {
+    // The frontend passes label text exactly as it prints it with -S.
+    let mut em = Emitter::new(Target::Linux);
+    em.label(".L'a'Wins_0").unwrap();
+    em.jump(Some(Cond::G), BranchTarget::Symbol(".L97Wins_0".into())).unwrap();
+    em.jump(None, BranchTarget::Symbol(".L' 'Wins_0".into())).unwrap();
+    em.label(".L32Wins_0").unwrap();
+    em.label(".L' 'Wins_0").unwrap(); // same position: tolerated like gas
+    em.insn(Op::Nop, &[]).unwrap();
+    assert_eq!(em.label(".L32Wins_0").unwrap_err(), "symbol `.L32Wins_0' is already defined");
+    assert_eq!(
+        em.jump(Some(Cond::L), BranchTarget::Symbol(".LBYTE PTR [rax]Wins_0".into())).unwrap_err(),
+        "junk `PTR [rax]Wins_0' after expression"
+    );
+    assert_eq!(
+        em.jump(None, BranchTarget::Symbol(".L-5Wins_0".into())).unwrap_err(),
+        "junk `Wins_0' after expression"
+    );
+    let m = em.finish().unwrap();
+    assert_eq!(m.sections[0].data, hex("7f fe eb 00 90"));
+}
+
+#[test]
+fn shifts_and_sizes() {
+    assert_eq!(text_of("shl al, 255"), hex("c0 e0 ff"));
+    assert_eq!(text_of("shl al, 0x10000"), hex("c0 e0 00"));
+    assert_eq!(text_of("shl rax, 255"), hex("48 c1 e0 ff"));
+    assert_eq!(text_of("shl rax, cl"), hex("48 d3 e0"));
+    assert_eq!(text_of("shr BYTE PTR [rax], 1"), hex("d0 28"));
+    assert_eq!(err_of("shl eax, -1"), "operand type mismatch for `shl'");
+    assert_eq!(err_of("shl [rax], cl"), "ambiguous operand size for `shl'");
+    assert_eq!(err_of("shl [rax], 256"), "operand type mismatch for `shl'");
+    assert_eq!(err_of("imul al, 5"), "operand size mismatch for `imul'");
+    assert_eq!(err_of("imul rax, al"), "operand type mismatch for `imul'");
+    assert_eq!(err_of("imul rax, WORD PTR [rbx]"), "register type mismatch for `imul'");
+    assert_eq!(err_of("add rax, WORD PTR [rbx]"), "register type mismatch for `add'");
+    assert_eq!(err_of("test WORD PTR [rbx], rax"), "operand type mismatch for `test'");
+    assert_eq!(err_of("mov BYTE PTR [rax], DWORD PTR [ax]"), "conflicting operand size modifiers");
+    assert_eq!(err_of("mov [rax], [eax + 8]"), "`[eax+8]' is not a valid base/index expression");
+    assert_eq!(err_of("movups WORD PTR [rax], WORD PTR [rax]"), "operand size mismatch for `movups'");
 }

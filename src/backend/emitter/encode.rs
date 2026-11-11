@@ -113,16 +113,16 @@ fn mem_text(m: &Mem) -> String {
             if m.disp == 0 {
                 regs::name(*r)
             } else if m.disp < 0 {
-                format!("{} - {}", regs::name(*r), m.disp.unsigned_abs())
+                format!("{}-{}", regs::name(*r), m.disp.unsigned_abs())
             } else {
-                format!("{} + {}", regs::name(*r), m.disp)
+                format!("{}+{}", regs::name(*r), m.disp)
             }
         }
         Base::Rip(s) => {
             if m.disp == 0 {
-                format!("rip + {s}")
+                format!("rip+{s}")
             } else {
-                format!("rip + {s} + {}", m.disp)
+                format!("rip+{s}{:+}", m.disp)
             }
         }
         Base::Abs => format!("{}", m.disp),
@@ -373,18 +373,46 @@ pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
 
     // Validate registers and lower memory operands first (gas reports bad base registers while
     // parsing the operand, before template matching).
-    let mut mems = Vec::new();
+    let mut mems: Vec<FeMem> = Vec::new();
+    let mut size_mod: Option<Size> = None;
+    // Address size of the first memory operand with a base register (`Some(true)` = 32-bit).
+    let mut addr_size: Option<bool> = None;
     for o in ops {
         match o {
             Operand::Reg(r) if !valid_reg(*r) => {
                 return Err(format!("bad register {r:?} for `{name}'"));
             }
-            Operand::Mem(m) => mems.push(lower_mem(m)?),
+            Operand::Mem(m) => {
+                if let Some(sz) = m.size {
+                    if size_mod.is_some_and(|p| p != sz) {
+                        return Err("conflicting operand size modifiers".into());
+                    }
+                    size_mod = Some(sz);
+                }
+                let fm = lower_mem(m)?;
+                let this = match m.base {
+                    Base::Abs => None,
+                    _ => Some(fm.addr32),
+                };
+                if let (Some(a), Some(b)) = (addr_size, this) {
+                    if a != b {
+                        return Err(format!("`{}' is not a valid base/index expression", mem_text(m)));
+                    }
+                }
+                addr_size = addr_size.or(this);
+                mems.push(fm);
+            }
             _ => {}
         }
     }
     if mems.len() > 1 {
-        return Err(format!("too many memory references for `{name}'"));
+        // Two memory operands never match a template.
+        let sized = |m: &FeMem| m.size.is_some_and(|s| s != Sz::X);
+        return Err(if op == Op::Movups && mems.iter().all(sized) {
+            cx.size_mismatch()
+        } else {
+            cx.mismatch()
+        });
     }
     let fm = mems.into_iter().next();
 
@@ -450,7 +478,8 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                     }
                     let sx = reg_sz(*x);
                     if m.size.is_some_and(|s| s != sx) {
-                        return Err(if op == Op::Test { cx.reg_mismatch() } else { cx.mismatch() });
+                        let reg_first = matches!(a, O::Reg(_));
+                        return Err(if reg_first && op != Op::Mov { cx.reg_mismatch() } else { cx.mismatch() });
                     }
                     let i = if matches!(a, O::Reg(_)) {
                         if op == Op::Test {
@@ -512,26 +541,53 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
         }
 
         Op::Shl | Op::Shr => {
-            let (ri, mi): (M4, M4) = if op == Op::Shl {
-                ([FE_SHL8ri, FE_SHL16ri, FE_SHL32ri, FE_SHL64ri], [FE_SHL8mi, FE_SHL16mi, FE_SHL32mi, FE_SHL64mi])
+            let (ri, mi, rc, mc): (M4, M4, M4, M4) = if op == Op::Shl {
+                (
+                    [FE_SHL8ri, FE_SHL16ri, FE_SHL32ri, FE_SHL64ri],
+                    [FE_SHL8mi, FE_SHL16mi, FE_SHL32mi, FE_SHL64mi],
+                    [FE_SHL8rr, FE_SHL16rr, FE_SHL32rr, FE_SHL64rr],
+                    [FE_SHL8mr, FE_SHL16mr, FE_SHL32mr, FE_SHL64mr],
+                )
             } else {
-                ([FE_SHR8ri, FE_SHR16ri, FE_SHR32ri, FE_SHR64ri], [FE_SHR8mi, FE_SHR16mi, FE_SHR32mi, FE_SHR64mi])
+                (
+                    [FE_SHR8ri, FE_SHR16ri, FE_SHR32ri, FE_SHR64ri],
+                    [FE_SHR8mi, FE_SHR16mi, FE_SHR32mi, FE_SHR64mi],
+                    [FE_SHR8rr, FE_SHR16rr, FE_SHR32rr, FE_SHR64rr],
+                    [FE_SHR8mr, FE_SHR16mr, FE_SHR32mr, FE_SHR64mr],
+                )
             };
-            let [a, O::Imm(v)] = ops else { return Err(cx.mismatch()) };
+            let [a, count] = ops else { return Err(cx.mismatch()) };
+            // Only `cl` or an immediate count. Without a size, a count that fits no imm8 template
+            // is a type mismatch; otherwise the size is ambiguous.
+            let count = match count {
+                O::Reg(Reg::R8(1)) => None,
+                O::Imm(v) => Some(*v),
+                _ => return Err(cx.mismatch()),
+            };
             let sz = match a {
                 O::Reg(r) if gpr(*r) => reg_sz(*r),
-                O::Mem(_) => fm.unwrap().size.ok_or_else(|| cx.ambiguous())?,
+                O::Mem(_) => match fm.unwrap().size {
+                    Some(s) => s,
+                    None if count.is_none_or(|v| (-128..=255).contains(&v)) => return Err(cx.ambiguous()),
+                    None => return Err(cx.mismatch()),
+                },
                 _ => return Err(cx.mismatch()),
             };
             if sz == Sz::X {
                 return Err(cx.mismatch());
             }
-            let count = shift_count(sz, *v).ok_or_else(|| cx.mismatch())?;
-            let i = match a {
-                O::Reg(r) => Insn::new(ri[sz.idx()]).reg(*r),
-                _ => Insn::new(mi[sz.idx()]).mem(fm.unwrap()),
+            let x = sz.idx();
+            let insn = |r: M4, m: M4| match a {
+                O::Reg(reg) => Insn::new(r[x]).reg(*reg),
+                _ => Insn::new(m[x]).mem(fm.unwrap()),
             };
-            Ok(i.raw(count))
+            match count {
+                None => Ok(insn(rc, mc).reg(Reg::R8(1))),
+                // Byte operations truncate any count; the others need 0..=255 as written.
+                // fadec picks the D0/D1 form for a count of 1, like gas.
+                Some(v) if sz == Sz::B || (0..=255).contains(&v) => Ok(insn(ri, mi).raw(v as u8 as i8 as i64)),
+                Some(_) => Err(cx.mismatch()),
+            }
         }
 
         Op::Imul => match ops {
@@ -548,13 +604,15 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                 }
                 Ok(Insn::new(t[sz.idx()]).mem(m))
             }
+            // Two-operand imul has no byte form: gas rejects it during size matching.
+            [O::Reg(x), _] if gpr(*x) && reg_sz(*x) == Sz::B => Err(cx.size_mismatch()),
             [O::Reg(x), O::Reg(y)] => {
                 if !gpr(*x) || !gpr(*y) {
                     return Err(cx.mismatch());
                 }
                 let (sx, sy) = (reg_sz(*x), reg_sz(*y));
-                if sx == Sz::B || sy == Sz::B {
-                    return Err(if sx == sy { cx.size_mismatch() } else { cx.reg_mismatch() });
+                if sy == Sz::B {
+                    return Err(cx.mismatch());
                 }
                 if sx != sy {
                     return Err(cx.reg_mismatch());
@@ -568,11 +626,8 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                     return Err(cx.mismatch());
                 }
                 let sx = reg_sz(*x);
-                if sx == Sz::B {
-                    return Err(cx.mismatch());
-                }
-                if m.size.is_some_and(|s| s != sx) {
-                    return Err(cx.mismatch());
+                if let Some(s) = m.size.filter(|s| *s != sx) {
+                    return Err(if s == Sz::B { cx.mismatch() } else { cx.reg_mismatch() });
                 }
                 let t = [0, FE_IMUL16rm, FE_IMUL32rm, FE_IMUL64rm];
                 Ok(Insn::new(t[sx.idx()]).reg(*x).mem(m))
@@ -582,9 +637,6 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                     return Err(cx.mismatch());
                 }
                 let sx = reg_sz(*x);
-                if sx == Sz::B {
-                    return Err(cx.mismatch());
-                }
                 let i = imm_operand(sx, *v, true).ok_or_else(|| cx.mismatch())?;
                 let t = [0, FE_IMUL16rri, FE_IMUL32rri, FE_IMUL64rri];
                 Ok(Insn::new(t[sx.idx()]).reg(*x).reg(*x).imm(i))
@@ -632,6 +684,7 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
         }
 
         Op::Lea => match ops {
+            [O::Reg(x), _] if gpr(*x) && reg_sz(*x) == Sz::B => Err(cx.size_mismatch()),
             [O::Reg(x), O::Mem(_)] if gpr(*x) => {
                 let t = [0, FE_LEA16rm, FE_LEA32rm, FE_LEA64rm];
                 let sx = reg_sz(*x);
@@ -671,18 +724,5 @@ fn select(op: Op, ops: &[Operand], fm: Option<&FeMem>, cx: &Ctx) -> Result<Insn,
                 _ => Err(cx.mismatch()),
             }
         }
-    }
-}
-
-/// Shift count as gas accepts it: 1 selects the D1 form; other counts need an imm8.
-fn shift_count(sz: Sz, v: i64) -> Option<i64> {
-    let x = normalize_imm(sz, v)?;
-    if sz == Sz::B {
-        return Some(v as u8 as i64);
-    }
-    if (0..=255).contains(&x) || fits_i8(x) {
-        Some(x as u8 as i8 as i64)
-    } else {
-        None
     }
 }
