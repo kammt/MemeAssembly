@@ -1,7 +1,8 @@
-//! Replaces the original `popen("gcc ... -x assembler -")`: assembles the generated Intel-syntax
-//! assembly text with fadec and writes object files / executables directly.
+//! Replaces the original `popen("gcc ... -x assembler -")`: the translator drives
+//! [`emitter::Emitter`] (instructions encoded directly with fadec, no assembly text involved),
+//! and [`writers`] turn the resulting [`module::ObjModule`] into object files / executables.
 
-pub mod assembler;
+pub mod emitter;
 pub mod fadec;
 pub mod module;
 pub mod writers;
@@ -9,6 +10,7 @@ pub mod writers;
 use std::path::Path;
 
 use crate::target::Target;
+use module::ObjModule;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputKind {
@@ -18,21 +20,15 @@ pub enum OutputKind {
     Executable,
 }
 
-/// Assemble `asm` (exactly the text that `-S` would write) and write `kind` for `target`
-/// to `output`. Errors are human readable messages (the gas-like diagnostic).
-pub fn emit(asm: &str, target: Target, kind: OutputKind, output: &Path) -> Result<(), String> {
-    let module = assembler::assemble(asm, target)?;
-    let bytes = writers::write(&module, target, kind)?;
-    write_output(output, &bytes, kind)
-}
-
-fn write_output(output: &Path, bytes: &[u8], kind: OutputKind) -> Result<(), String> {
-    std::fs::write(output, bytes).map_err(|e| format!("cannot write {}: {e}", output.display()))?;
+/// Write `module` as `kind` for `target` to `output`. Errors are human readable messages
+/// (link errors like ld's "undefined reference to `foo'").
+pub fn emit(module: &ObjModule, target: Target, kind: OutputKind, output: &Path) -> Result<(), String> {
+    let bytes = writers::write(module, target, kind)?;
+    std::fs::write(output, &bytes).map_err(|e| format!("cannot write {}: {e}", output.display()))?;
     #[cfg(unix)]
     if kind == OutputKind::Executable {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(output, std::fs::Permissions::from_mode(0o755));
     }
-    let _ = kind;
     Ok(())
 }

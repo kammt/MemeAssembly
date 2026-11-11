@@ -1,9 +1,10 @@
-//! Format-independent result of assembling: what `assembler` produces and `writers` consume.
+//! Format-independent result of code generation: what `emitter::Emitter::finish` produces and
+//! `writers` consume.
 //!
 //! Conventions (both sides MUST follow these):
 //! * `sections[0]` is `.text`, `sections[1]` is `.data`. Further sections are not used.
 //! * All branches/RIP-relative references whose target is in the *same section* and defined in
-//!   this module are fully resolved by the assembler – no relocation is emitted for them.
+//!   this module are fully resolved by the emitter – no relocation is emitted for them.
 //! * Every other reference produces a [`Reloc`]. Its value is computed the ELF way:
 //!   `S + A - P` for PC-relative kinds (`P` = address of the 4-byte field itself) and `S + A`
 //!   for absolute kinds. The bytes at the field are left as zero; writers that need
@@ -13,7 +14,7 @@
 //!   object symbol tables (gas doesn't); relocations against them are rewritten to
 //!   section-symbol + offset.
 //! * Platform name mangling (the leading `_` on macOS) is already done in the assembly text by
-//!   the frontend; writers emit names verbatim.
+//!   the frontend (it passes `_main` etc. to the emitter); writers emit names verbatim.
 
 pub type SymbolId = usize;
 
@@ -40,7 +41,7 @@ pub enum RelocKind {
     /// 32-bit PC-relative branch/call target: R_X86_64_PLT32 / IMAGE_REL_AMD64_REL32 /
     /// X86_64_RELOC_BRANCH.
     Branch32,
-    /// 32-bit absolute (used by STABS values): R_X86_64_32 / IMAGE_REL_AMD64_ADDR32.
+    /// 32-bit absolute: R_X86_64_32 / IMAGE_REL_AMD64_ADDR32.
     Abs32,
     /// 64-bit absolute (`.quad sym`): R_X86_64_64 / IMAGE_REL_AMD64_ADDR64 / X86_64_RELOC_UNSIGNED.
     Abs64,
@@ -72,31 +73,47 @@ pub struct Symbol {
     pub temporary: bool,
 }
 
-/// Value of a STABS entry.
+/// One row of the line table: the instruction at `.text` offset `offset` came from `line` of
+/// `DebugInfo::files[file]`. Rows are sorted by offset.
 #[derive(Debug, Clone)]
-pub enum StabValue {
-    Const(u32),
-    /// Address of a symbol (needs an Abs32 relocation in `.stab` for relocatable output).
-    Symbol(SymbolId),
+pub struct LineRow {
+    pub offset: u64,
+    pub file: usize,
+    pub line: u32,
 }
 
-/// One `.stabs`/`.stabn` directive, in source order. `string` is `None` for `.stabn`.
+/// A MemeAssembly function as a DWARF `DW_TAG_subprogram`: `.text` range `[low, high)`.
 #[derive(Debug, Clone)]
-pub struct Stab {
-    pub string: Option<String>,
-    pub n_type: u8,
-    pub n_other: u8,
-    pub n_desc: u16,
-    pub value: StabValue,
+pub struct DebugFunction {
+    pub name: String,
+    pub file: usize,
+    pub line: u32,
+    pub low: u64,
+    pub high: u64,
+}
+
+/// Source-level debug information for `-g` (replaces the original STABS). Writers turn it into
+/// DWARF sections (`.debug_info`, `.debug_abbrev`, `.debug_line`, `.debug_aranges`, plus
+/// `.debug_str`/`.debug_line_str` if the chosen DWARF version needs them) with the relocations
+/// the object format requires; executables get them resolved.
+#[derive(Debug, Clone, Default)]
+pub struct DebugInfo {
+    /// Source files as written in the debug info (absolute paths).
+    pub files: Vec<String>,
+    /// DW_AT_comp_dir (current working directory at compile time).
+    pub comp_dir: String,
+    /// DW_AT_producer, e.g. "MemeAssembly compiler v1.6".
+    pub producer: String,
+    pub lines: Vec<LineRow>,
+    pub functions: Vec<DebugFunction>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct ObjModule {
     pub sections: Vec<Section>,
     pub symbols: Vec<Symbol>,
-    /// STABS debug entries (only present with `-g`). Writers emit `.stab`/`.stabstr` the way
-    /// gas does (including the leading header entry) for ELF; other formats ignore them.
-    pub stabs: Vec<Stab>,
+    /// `-g` debug information; `None` without `-g`.
+    pub debug: Option<DebugInfo>,
 }
 
 impl ObjModule {
