@@ -1,38 +1,46 @@
-use std::path::Path;
 use std::process::Command;
 
 use super::*;
-use crate::backend::writers::{elf, write};
+use crate::backend::module::DebugInfo;
+use crate::backend::writers::write;
 use crate::backend::OutputKind;
 use crate::target::Target;
 
+/// Plain fixtures plus the `-g` ones (named `<name>_g`).
 fn linux_fixtures() -> Vec<(String, PathBuf)> {
     let mut v = fixtures("linux");
-    v.extend(fixtures("linux_g").into_iter().map(|(n, p)| (format!("{n}_g"), p)));
+    v.extend(debug_fixtures());
     v
 }
 
-/// Our ELF objects are byte-for-byte what GNU as writes for the same source.
+fn debug_fixtures() -> Vec<(String, PathBuf)> {
+    fixtures("linux_g").into_iter().map(|(n, p)| (format!("{n}_g"), p)).collect()
+}
+
+/// Our ELF objects are byte-for-byte what GNU as writes for the same source. (The `-g`
+/// fixtures are excluded: gas writes their STABS, we write DWARF.)
 #[test]
 fn elf_objects_match_gas() {
     let dir = scratch("elf_objects_match_gas");
     let mut checked = 0;
-    for (name, src) in linux_fixtures() {
-        let Some(gas) = gas_elf(&src, &dir.join(format!("{name}.gas.o"))) else { return };
+    for (name, src) in fixtures("linux") {
+        let gas_path = gas_obj_path(&src, &dir);
+        let Some(gas) = gas_elf(&src, &gas_path) else { return };
         let module = elf_import::import(&gas);
+        assert!(module.debug.is_none());
         let ours = write(&module, Target::Linux, OutputKind::Object).unwrap();
         if ours != gas {
             let p = dir.join(format!("{name}.ours.o"));
             std::fs::write(&p, &ours).unwrap();
-            panic!("{name}: object differs from gas; compare `readelf -aW` of {} and {}", p.display(), dir.join(format!("{name}.gas.o")).display());
+            panic!("{name}: object differs from gas; compare `readelf -aW` of {} and {}", p.display(), gas_path.display());
         }
         checked += 1;
     }
-    assert!(checked >= 20, "only {checked} fixtures checked");
+    assert!(checked >= 12, "only {checked} fixtures checked");
 }
 
 /// `readelf` has no complaints, and the object links (static, like the original) and runs
-/// identically when linked by GNU ld.
+/// when linked by GNU ld.
 #[test]
 fn elf_objects_link_with_ld() {
     let dir = scratch("elf_objects_link_with_ld");
@@ -42,7 +50,7 @@ fn elf_objects_link_with_ld() {
         let Some(m) = module_for(&src, &dir) else { return };
         let obj = dir.join(format!("{name}.o"));
         write_file(&obj, &write(&m, Target::Linux, OutputKind::Object).unwrap());
-        let out = run_ok(Command::new(&readelf).arg("-aW").arg(&obj));
+        let out = run_ok(Command::new(&readelf).arg("-aW").arg("--debug-dump").arg(&obj));
         assert!(out.stderr.is_empty(), "{name}: readelf: {}", String::from_utf8_lossy(&out.stderr));
         let base = name.trim_end_matches("_g");
         let Some((args, input)) = program_input(base) else { continue };
@@ -50,9 +58,8 @@ fn elf_objects_link_with_ld() {
         run_ok(Command::new(&gcc).args(["-static", "-no-pie", "-z", "execstack", "-o"]).arg(&exe).arg(&obj));
         let Some(mut c) = linux_runner(&exe) else { return };
         c.args(&args);
-        let (code, stdout) = run_with_input(c, input);
+        let (_, stdout) = run_with_input(c, input);
         assert!(!stdout.is_empty() || name.contains("o69420"), "{name}: no output from the ld-linked program");
-        let _ = code;
     }
 }
 
@@ -69,7 +76,7 @@ fn elf_executables_match_reference() {
         let exe = dir.join(&name);
         write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
         let reference = dir.join(format!("{name}.ref"));
-        run_ok(Command::new(&gcc).args(["-static", "-no-pie", "-z", "execstack", "-o"]).arg(&reference).arg(dir.join(format!("{name}.gas.o"))));
+        run_ok(Command::new(&gcc).args(["-static", "-no-pie", "-z", "execstack", "-o"]).arg(&reference).arg(gas_obj_path(&src, &dir)));
         let Some(mut ours) = linux_runner(&exe) else { return };
         let Some(mut theirs) = linux_runner(&reference) else { return };
         ours.args(&args);
@@ -114,45 +121,149 @@ fn elf_executable_headers_are_sane() {
     assert!(text.contains("EXEC (Executable file)"));
     assert!(text.contains("GNU_STACK") && text.contains(" RWE "), "{text}");
     assert!(text.contains(" main") && text.contains(" _start") && text.contains(" writechar"));
-    assert!(text.contains(".stab ") && text.contains(".stabstr"));
+    for s in [".debug_info", ".debug_abbrev", ".debug_line ", ".debug_aranges", ".debug_str", ".debug_line_str"] {
+        assert!(text.contains(s), "missing {s}: {text}");
+    }
+    assert!(!text.contains(".rela"), "{text}");
 }
 
-/// The STABS of a `-g` executable carry final addresses: the `main:F1` entries point at
-/// `main` and line entries at addresses inside `.text`.
+/// `(line, address)` rows of the decoded line table (`objdump --dwarf=decodedline`), without
+/// the end-of-sequence row.
+fn decoded_lines(objdump: &Path, file: &Path) -> Vec<(u32, u64)> {
+    let out = run_ok(Command::new(objdump).arg("--dwarf=decodedline").arg(file));
+    assert!(out.stderr.is_empty(), "objdump: {}", String::from_utf8_lossy(&out.stderr));
+    String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            let line = f.get(1)?.parse().ok()?;
+            let addr = u64::from_str_radix(f.get(2)?.trim_start_matches("0x"), 16).ok()?;
+            Some((line, addr))
+        })
+        .collect()
+}
+
+fn expected_lines(d: &DebugInfo, base: u64) -> Vec<(u32, u64)> {
+    d.lines.iter().map(|r| (r.line, base + r.offset)).collect()
+}
+
+/// `llvm-dwarfdump --verify` accepts our DWARF and the decoded line table is the module's,
+/// both in objects (relocations applied by the tools) and in objects linked by GNU ld.
 #[test]
-fn elf_executable_stabs_are_resolved() {
-    let dir = scratch("elf_executable_stabs");
+fn elf_dwarf_objects_verify_and_decode() {
+    let dir = scratch("elf_dwarf_objects");
+    let Some(dwarfdump) = need(llvm("llvm-dwarfdump"), "llvm-dwarfdump") else { return };
+    let Some(objdump) = need(tool(&["x86_64-linux-gnu-objdump"]), "x86_64-linux-gnu-objdump") else { return };
+    let Some(gcc) = need(tool(&["x86_64-linux-gnu-gcc"]), "x86_64-linux-gnu-gcc") else { return };
+    let Some(nm) = need(tool(&["x86_64-linux-gnu-nm"]), "x86_64-linux-gnu-nm") else { return };
+    let mut checked = 0;
+    for (name, src) in debug_fixtures() {
+        let Some(m) = module_for(&src, &dir) else { return };
+        let d = m.debug.as_ref().expect("-g fixture has debug info");
+        assert!(d.lines.len() > 3 && !d.functions.is_empty(), "{name}: {d:?}");
+        let obj = dir.join(format!("{name}.o"));
+        write_file(&obj, &write(&m, Target::Linux, OutputKind::Object).unwrap());
+        run_ok(Command::new(&dwarfdump).arg("--verify").arg(&obj));
+        assert_eq!(decoded_lines(&objdump, &obj), expected_lines(d, 0), "{name}: object line table");
+
+        // Linked by ld: .text starts after crt code, so look up the module's base via main.
+        let exe = dir.join(format!("{name}.ld"));
+        run_ok(Command::new(&gcc).args(["-static", "-no-pie", "-z", "execstack", "-nostartfiles", "-nostdlib", "-e", "0", "-o"]).arg(&exe).arg(&obj));
+        run_ok(Command::new(&dwarfdump).arg("--verify").arg(&exe));
+        let f = &d.functions[0];
+        let syms = stdout(Command::new(&nm).arg(&exe));
+        let addr = syms.lines().find(|l| l.ends_with(&format!(" {}", f.name))).map(|l| u64::from_str_radix(&l[..16], 16).unwrap());
+        if let Some(addr) = addr {
+            assert_eq!(decoded_lines(&objdump, &exe), expected_lines(d, addr - f.low), "{name}: ld-linked line table");
+        }
+        checked += 1;
+    }
+    assert!(checked >= 9, "only {checked} fixtures checked");
+}
+
+/// Our executables carry DWARF with final addresses: the line table and every subprogram's
+/// `DW_AT_low_pc` match the symbol table.
+#[test]
+fn elf_dwarf_executables_are_resolved() {
+    let dir = scratch("elf_dwarf_executables");
+    let Some(dwarfdump) = need(llvm("llvm-dwarfdump"), "llvm-dwarfdump") else { return };
     let Some(objdump) = need(tool(&["x86_64-linux-gnu-objdump"]), "x86_64-linux-gnu-objdump") else { return };
     let Some(nm) = need(tool(&["x86_64-linux-gnu-nm"]), "x86_64-linux-gnu-nm") else { return };
-    let Some(m) = module_for(&fixture_dir().join("helloworld.linux_g.s"), &dir) else { return };
-    let exe = dir.join("hello");
-    write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
-    let syms = stdout(Command::new(&nm).arg(&exe));
-    let main = syms.lines().find(|l| l.ends_with(" main")).unwrap();
-    let main = u64::from_str_radix(main.split(' ').next().unwrap(), 16).unwrap();
-    let stabs = stdout(Command::new(&objdump).arg("-G").arg(&exe));
-    let mut funs = 0;
-    let mut lines = 0;
-    for l in stabs.lines() {
-        let f: Vec<&str> = l.split_whitespace().collect();
-        if f.len() < 6 {
-            continue;
-        }
-        let value = u64::from_str_radix(f[4], 16).unwrap_or(0);
-        match f[1] {
-            "FUN" => {
-                assert_eq!(value, main, "{l}");
-                funs += 1;
-            }
-            "SLINE" => {
-                assert!(value > main && value < main + 0x1000, "{l}");
-                lines += 1;
-            }
-            "HdrSym" => assert_eq!(f[3], "61", "{l}"),
-            _ => {}
+    for (name, src) in debug_fixtures() {
+        let Some(m) = module_for(&src, &dir) else { return };
+        let d = m.debug.as_ref().unwrap();
+        let exe = dir.join(&name);
+        let bytes = match write(&m, Target::Linux, OutputKind::Executable) {
+            Ok(b) => b,
+            Err(e) if e.contains("undefined reference to `main'") => continue, // library-style
+            Err(e) => panic!("{name}: {e}"),
+        };
+        write_file(&exe, &bytes);
+        run_ok(Command::new(&dwarfdump).arg("--verify").arg(&exe));
+        let syms = stdout(Command::new(&nm).arg(&exe));
+        let addr_of = |sym: &str| {
+            syms.lines()
+                .find(|l| l.ends_with(&format!(" {sym}")))
+                .map(|l| u64::from_str_radix(&l[..16], 16).unwrap())
+                .unwrap_or_else(|| panic!("{name}: no symbol {sym}"))
+        };
+        let f0 = &d.functions[0];
+        let text_addr = addr_of(&f0.name) - f0.low;
+        assert_eq!(decoded_lines(&objdump, &exe), expected_lines(d, text_addr), "{name}");
+        let info = stdout(Command::new(&dwarfdump).arg("--debug-info").arg(&exe));
+        for f in &d.functions {
+            let want = format!("DW_AT_low_pc\t({:#018x})", text_addr + f.low);
+            let entry = info.split("DW_TAG_subprogram").find(|e| e.contains(&format!("(\"{}\")", f.name))).unwrap_or_else(|| panic!("{name}: no DIE for {}", f.name));
+            assert!(entry.contains(&want), "{name}: {} should have {want}: {entry}", f.name);
         }
     }
-    assert!(funs > 10 && lines > 10, "{stabs}");
+}
+
+/// Runs `exe` under qemu's gdbstub and gdb with a breakpoint at `location`; returns gdb's
+/// output after `continue` + `bt`.
+fn gdb_session(dir: &Path, exe: &Path, location: &str) -> Option<String> {
+    let gdb = need(tool(&["gdb-multiarch"]).or_else(|| host_x86_64().then(|| tool(&["gdb"])).flatten()), "gdb-multiarch")?;
+    let qemu = need(tool(&["qemu-x86_64"]), "qemu-x86_64")?;
+    let _ = dir;
+    let port = 20000 + (std::process::id() + location.len() as u32 * 7) % 20000;
+    let mut q = Command::new(qemu).arg("-g").arg(port.to_string()).arg(exe).stdin(Stdio::null()).stdout(Stdio::null()).spawn().unwrap();
+    let mut cmd = Command::new(gdb);
+    cmd.args(["-nx", "-batch"]).arg(exe);
+    for c in [format!("target remote :{port}"), format!("break {location}"), "continue".into(), "bt".into(), "kill".into()] {
+        cmd.arg("-ex").arg(c);
+    }
+    let out = run(&mut cmd);
+    let _ = q.kill();
+    let _ = q.wait();
+    Some(format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+}
+
+/// gdb (against qemu's gdbstub) can set a breakpoint by `file:line` and shows the MemeAssembly
+/// function names and source lines in the backtrace.
+#[test]
+fn elf_dwarf_gdb_breakpoint() {
+    let dir = scratch("elf_dwarf_gdb");
+    // A real program: break on its third source line.
+    let src = fixture_dir().join("helloworld.linux_g.s");
+    let Some(m) = module_for(&src, &dir) else { return };
+    let d = m.debug.as_ref().unwrap();
+    let row = &d.lines[2];
+    let exe = dir.join("helloworld");
+    write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
+    let Some(text) = gdb_session(&dir, &exe, &format!("HelloWorld.memeasm:{}", row.line)) else { return };
+    let want = format!("Breakpoint 1, main () at {}:{}", d.files[0], row.line);
+    assert!(text.contains(&want), "expected `{want}`:\n{text}");
+    assert!(text.contains("#0  main () at "), "{text}");
+
+    // Two functions: the backtrace from `writechar` shows `main` as the caller.
+    let m = samples::hello_world_linux_debug();
+    let exe = dir.join("hand_built");
+    write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
+    let Some(text) = gdb_session(&dir, &exe, "hello.memeasm:7") else { return };
+    assert!(text.contains("Breakpoint 1, writechar () at /src/hello.memeasm:7"), "{text}");
+    assert!(text.contains("#0  writechar () at /src/hello.memeasm:7"), "{text}");
+    assert!(text.contains(" in main () at /src/hello.memeasm:"), "{text}");
 }
 
 #[test]
@@ -187,6 +298,24 @@ fn elf_hand_built_hello_world() {
     let (code, out) = run_with_input(linux_runner(&p).unwrap(), b"");
     assert_eq!(String::from_utf8_lossy(&out), "Hi\n");
     assert_eq!(code, 7);
-    let _ = elf::write_object;
-    let _ = Path::new("");
+}
+
+/// Hand-built debug info: the writer accepts it, and with the tools present it verifies.
+#[test]
+fn elf_hand_built_debug_info() {
+    let m = samples::hello_world_linux_debug();
+    let obj = write(&m, Target::Linux, OutputKind::Object).unwrap();
+    let exe = write(&m, Target::Linux, OutputKind::Executable).unwrap();
+    let dir = scratch("elf_hand_built_debug");
+    let (po, pe) = (dir.join("hello.o"), dir.join("hello"));
+    write_file(&po, &obj);
+    write_file(&pe, &exe);
+    let Some(dwarfdump) = need(llvm("llvm-dwarfdump"), "llvm-dwarfdump") else { return };
+    for p in [&po, &pe] {
+        run_ok(Command::new(&dwarfdump).arg("--verify").arg(p));
+        let info = stdout(Command::new(&dwarfdump).arg("--debug-info").arg(p));
+        for want in ["DW_LANG_Mips_Assembler", "(\"main\")", "(\"writechar\")", "DW_AT_decl_line\t(7)", "(\"/src/hello.memeasm\")", "(\"/src\")", "(\"hand-built\")"] {
+            assert!(info.contains(want), "{}: missing {want}: {info}", p.display());
+        }
+    }
 }

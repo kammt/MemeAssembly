@@ -17,6 +17,7 @@ use super::OutputKind;
 use crate::target::Target;
 
 mod coff;
+mod dwarf;
 mod elf;
 mod link;
 mod macho;
@@ -68,10 +69,21 @@ fn validate(m: &ObjModule) -> Result<(), String> {
             }
         }
     }
-    for st in &m.stabs {
-        if let super::module::StabValue::Symbol(id) = st.value {
-            if id >= m.symbols.len() {
-                return internal(format!("stab referencing symbol #{id}"));
+    if let Some(d) = &m.debug {
+        let text_len = m.sections[0].data.len() as u64;
+        if d.files.is_empty() && (!d.lines.is_empty() || !d.functions.is_empty()) {
+            return internal("debug info without source files".into());
+        }
+        let mut prev = 0;
+        for r in &d.lines {
+            if r.file >= d.files.len() || r.offset < prev || r.offset > text_len {
+                return internal(format!("bad line row {r:?}"));
+            }
+            prev = r.offset;
+        }
+        for f in &d.functions {
+            if f.file >= d.files.len() || f.low > f.high || f.high > text_len {
+                return internal(format!("bad debug function {f:?}"));
             }
         }
     }

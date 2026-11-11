@@ -131,6 +131,30 @@ pub fn hello_world_linux() -> ObjModule {
     hello("main", |b| unix_writechar(b, 1))
 }
 
+/// [`hello_world_linux`] with `-g` information: `main` on line 1 (one row per instruction,
+/// lines 1..), `writechar` on line 7.
+pub fn hello_world_linux_debug() -> ObjModule {
+    let mut m = hello_world_linux();
+    let at = |m: &ObjModule, s: &str| m.symbols[m.symbol_by_name(s).unwrap()].definition.unwrap().1;
+    let (main, wc, end) = (at(&m, "main"), at(&m, "writechar"), m.sections[0].data.len() as u64);
+    let mut lines: Vec<LineRow> = Vec::new();
+    for (i, off) in [main, main + 4, main + 11].into_iter().enumerate() {
+        lines.push(LineRow { offset: off, file: 0, line: 1 + i as u32 });
+    }
+    lines.push(LineRow { offset: wc, file: 0, line: 7 });
+    m.debug = Some(DebugInfo {
+        files: vec!["/src/hello.memeasm".into()],
+        comp_dir: "/src".into(),
+        producer: "hand-built".into(),
+        lines,
+        functions: vec![
+            DebugFunction { name: "main".into(), file: 0, line: 1, low: main, high: wc },
+            DebugFunction { name: "writechar".into(), file: 0, line: 7, low: wc, high: end },
+        ],
+    });
+    m
+}
+
 pub fn hello_world_macos() -> ObjModule {
     hello("_main", |b| unix_writechar(b, 0x2000004))
 }

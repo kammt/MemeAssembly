@@ -1,6 +1,6 @@
 //! The part of a static linker shared by the executable writers: given final addresses for
 //! the module's sections, resolve symbols and apply every relocation.
-use super::super::module::{ObjModule, RelocKind, StabValue, SymbolId};
+use super::super::module::{ObjModule, RelocKind, SymbolId};
 use super::{field_size, is_pcrel, put_u32, put_u64, section_name};
 
 /// Final address of a symbol, or `None` if it is undefined and `resolve_undefined` doesn't
@@ -72,45 +72,6 @@ pub fn relocate(
     }
     if errors.is_empty() {
         Ok(Linked { sections, abs64_sites })
-    } else {
-        Err(errors.join("\n"))
-    }
-}
-
-/// Resolved values of the STABS entries (absolute addresses for symbol values).
-pub fn stab_values(
-    m: &ObjModule,
-    section_addrs: &[u64; 2],
-    resolve_undefined: &dyn Fn(&str) -> Option<u64>,
-) -> Result<Vec<u32>, String> {
-    let mut errors = Vec::new();
-    let mut out = Vec::with_capacity(m.stabs.len());
-    for (i, st) in m.stabs.iter().enumerate() {
-        out.push(match st.value {
-            StabValue::Const(v) => v,
-            StabValue::Symbol(id) => match symbol_address(m, id, section_addrs, resolve_undefined) {
-                Some(a) if a <= u32::MAX as u64 => a as u32,
-                Some(_) => {
-                    errors.push(format!(
-                        "(.stab+{:#x}): relocation truncated to fit: R_X86_64_32 against `{}'",
-                        12 * (i + 1) + 8,
-                        m.symbols[id].name
-                    ));
-                    0
-                }
-                None => {
-                    errors.push(format!(
-                        "(.stab+{:#x}): undefined reference to `{}'",
-                        12 * (i + 1) + 8,
-                        m.symbols[id].name
-                    ));
-                    0
-                }
-            },
-        });
-    }
-    if errors.is_empty() {
-        Ok(out)
     } else {
         Err(errors.join("\n"))
     }

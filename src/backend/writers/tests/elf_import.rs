@@ -133,37 +133,48 @@ pub fn import(b: &[u8]) -> ObjModule {
         }
     }
 
+    // `-g` fixtures of the original compiler carry STABS; turn their line/function entries into
+    // the equivalent `DebugInfo` (what the Rust frontend produces for DWARF).
     if let (Some(stab_i), Some(stabstr_i)) = (find(".stab"), find(".stabstr")) {
-        let stab = &shs[stab_i];
-        let stabstr = &shs[stabstr_i];
+        let (stab, stabstr) = (&shs[stab_i], &shs[stabstr_i]);
         let rel: std::collections::HashMap<u64, (usize, i64)> =
-            relocs(".rela.stab").into_iter().map(|(off, ty, symi, a)| {
-                assert_eq!(ty, 10);
-                (off, (symi, a))
-            }).collect();
-        let n = u16_at(b, stab.off + 6) as usize;
-        assert_eq!(stab.size, 12 * (n + 1));
-        for k in 1..=n {
+            relocs(".rela.stab").into_iter().map(|(off, _, symi, a)| (off, (symi, a))).collect();
+        let text_len = m.sections[0].data.len() as u64;
+        let mut d = DebugInfo { comp_dir: "/tmp/memeasm-fixture".into(), producer: "MemeAssembly test".into(), ..Default::default() };
+        let mut funcs: Vec<(String, u64)> = Vec::new();
+        for k in 1..stab.size / 12 {
             let e = stab.off + 12 * k;
-            let strx = u32_at(b, e) as usize;
-            let value = match rel.get(&(12 * k as u64 + 8)) {
-                None => StabValue::Const(u32_at(b, e + 8)),
-                Some(&(symi, a)) => match map[symi] {
-                    Some(id) => {
-                        assert_eq!(a, 0);
-                        StabValue::Symbol(id)
-                    }
-                    None => StabValue::Symbol(temp(&mut m, section_of_sym[symi].unwrap(), a as u64)),
-                },
+            let n_type = b[e + 4];
+            let desc = u16_at(b, e + 6);
+            // Resolved .text offset of the value field.
+            let Some(&(symi, a)) = rel.get(&(12 * k as u64 + 8)) else { continue };
+            let value = match map[symi] {
+                Some(id) => m.symbols[id].definition.map(|(_, off)| off as i64 + a),
+                None => (section_of_sym[symi] == Some(0)).then_some(a),
             };
-            m.stabs.push(Stab {
-                string: if strx == 0 { if b[e + 4] == 100 { Some(String::new()) } else { None } } else { Some(cstr(b, stabstr.off + strx)) },
-                n_type: b[e + 4],
-                n_other: b[e + 5],
-                n_desc: u16_at(b, e + 6),
-                value,
-            });
+            let Some(value) = value else { continue };
+            let string = cstr(b, stabstr.off + u32_at(b, e) as usize);
+            match n_type {
+                100 if d.files.is_empty() && !string.is_empty() => d.files.push(string),
+                68 => d.lines.push(LineRow { offset: value as u64, file: 0, line: desc as u32 }),
+                36 => {
+                    let name = string.split(':').next().unwrap().to_string();
+                    if !funcs.iter().any(|f| f.0 == name) {
+                        funcs.push((name, value as u64));
+                    }
+                }
+                _ => {}
+            }
         }
+        d.lines.sort_by_key(|r| r.offset);
+        d.lines.dedup_by_key(|r| r.offset);
+        funcs.sort_by_key(|f| f.1);
+        for (i, (name, low)) in funcs.iter().enumerate() {
+            let high = funcs.get(i + 1).map_or(text_len, |f| f.1);
+            let line = d.lines.iter().find(|r| r.offset >= *low).map_or(1, |r| r.line);
+            d.functions.push(DebugFunction { name: name.clone(), file: 0, line, low: *low, high });
+        }
+        m.debug = Some(d);
     }
     m
 }

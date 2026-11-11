@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use super::super::fadec::*;
-use super::super::module::{Binding, ObjModule, RelocKind, StabValue, SymbolId};
+use super::super::module::{Binding, ObjModule, RelocKind, SymbolId};
+use super::dwarf::{self, DebugSection, RelTarget};
 use super::link;
 use super::{align_up, is_global, Asm, Le, SuffixStrTab};
 
@@ -15,6 +16,8 @@ const SHT_NOBITS: u32 = 8;
 const SHF_WRITE: u64 = 1;
 const SHF_ALLOC: u64 = 2;
 const SHF_EXECINSTR: u64 = 4;
+const SHF_MERGE: u64 = 0x10;
+const SHF_STRINGS: u64 = 0x20;
 const SHF_INFO_LINK: u64 = 0x40;
 
 const R_X86_64_64: u32 = 1;
@@ -27,10 +30,6 @@ const STB_GLOBAL: u8 = 1;
 const STT_NOTYPE: u8 = 0;
 const STT_FUNC: u8 = 2;
 const STT_SECTION: u8 = 3;
-
-/// File name gas records in the STABS header entry. The original compiler piped the assembly
-/// into `gcc -x assembler -`, so this is what its objects contain.
-const STAB_INPUT_NAME: &str = "{standard input}";
 
 /// Base address of non-PIE x86-64 executables (ld's default `-Ttext-segment`).
 const EXEC_BASE: u64 = 0x400000;
@@ -95,43 +94,6 @@ fn sym_bytes(syms: &[ElfSym], names: &HashMap<String, u32>) -> Vec<u8> {
         b.u64(0);
     }
     b
-}
-
-/// Builds `.stab` (with the gas header entry) and `.stabstr`. `value_of` supplies the value
-/// field of each entry (0 for relocated entries in objects, addresses in executables).
-fn build_stabs(m: &ObjModule, value_of: &dyn Fn(usize) -> u32) -> (Vec<u8>, Vec<u8>) {
-    let mut strtab = vec![0u8];
-    strtab.extend_from_slice(STAB_INPUT_NAME.as_bytes());
-    strtab.push(0);
-    let mut entries = Vec::with_capacity(12 * (m.stabs.len() + 1));
-    // Header entry: n_strx = file name, n_desc = number of entries, n_value = strtab size;
-    // patched below once the table is complete.
-    entries.extend_from_slice(&[0; 12]);
-    for (i, st) in m.stabs.iter().enumerate() {
-        // gas does not merge stab strings; empty strings use index 0.
-        let strx = match &st.string {
-            Some(s) if !s.is_empty() => {
-                let x = strtab.len() as u32;
-                strtab.extend_from_slice(s.as_bytes());
-                strtab.push(0);
-                x
-            }
-            _ => 0,
-        };
-        entries.u32(strx);
-        entries.u8(st.n_type);
-        entries.u8(st.n_other);
-        entries.u16(st.n_desc);
-        entries.u32(value_of(i));
-    }
-    let mut hdr = Vec::with_capacity(12);
-    hdr.u32(1);
-    hdr.u8(0);
-    hdr.u8(0);
-    hdr.u16(m.stabs.len() as u16);
-    hdr.u32(strtab.len() as u32);
-    entries[..12].copy_from_slice(&hdr);
-    (entries, strtab)
 }
 
 /// Lays out and serializes an ELF file. `sections[0]` must be the NULL section placeholder;
@@ -244,7 +206,10 @@ fn null_section() -> Shdr {
 /// Target of an ELF relocation after gas' symbol adjustment.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Target {
+    /// Section symbol of `.text`/`.data`.
     Section(usize),
+    /// Section symbol of a debug section (index into the DWARF section list).
+    Debug(usize),
     Symbol(SymbolId),
 }
 
@@ -266,8 +231,19 @@ fn adjust(m: &ObjModule, sym: SymbolId, kind: RelocKind, addend: i64) -> (Target
     }
 }
 
+/// Section header for a DWARF section (`data` already resolved or with zero fields).
+fn debug_shdr(s: &DebugSection, data: Vec<u8>) -> Shdr {
+    if s.is_strings() {
+        let mut h = Shdr::new(s.name, SHT_PROGBITS, SHF_MERGE | SHF_STRINGS, data, 1);
+        h.entsize = 1;
+        h
+    } else {
+        Shdr::new(s.name, SHT_PROGBITS, 0, data, 1)
+    }
+}
+
 pub fn write_object(m: &ObjModule) -> Vec<u8> {
-    // Collect relocations (per module section, and for .stab).
+    // Relocations of .text/.data after gas' symbol adjustment.
     let mut text_data_relocs: [Vec<(u64, Target, u32, i64)>; 2] = [Vec::new(), Vec::new()];
     for (si, sec) in m.sections.iter().enumerate() {
         for r in &sec.relocs {
@@ -275,39 +251,54 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
             text_data_relocs[si].push((r.offset, t, ty, a));
         }
     }
-    let mut stab_relocs = Vec::new();
-    for (i, st) in m.stabs.iter().enumerate() {
-        if let StabValue::Symbol(id) = st.value {
-            let (t, ty, a) = adjust(m, id, RelocKind::Abs32, 0);
-            stab_relocs.push((12 * (i as u64 + 1) + 8, t, ty, a));
-        }
-    }
+    // DWARF (`-g`): addresses are `.text` + offset, section offsets are against the debug
+    // sections' own section symbols, as gas emits them.
+    let debug = m.debug.as_ref().map(|d| dwarf::build(d, m.sections[0].data.len() as u64)).unwrap_or_default();
+    let debug_index = |name: &str| debug.iter().position(|s| s.name == name).expect("known debug section");
+    let debug_relocs: Vec<Vec<(u64, Target, u32, i64)>> = debug
+        .iter()
+        .map(|s| {
+            s.relocs
+                .iter()
+                .map(|r| match r.target {
+                    RelTarget::Text => (r.offset, Target::Section(0), R_X86_64_64, r.addend),
+                    RelTarget::Section(n) => (r.offset, Target::Debug(debug_index(n)), R_X86_64_32, r.addend),
+                })
+                .collect()
+        })
+        .collect();
 
-    // Symbol table: NULL, section symbols in use, other locals, globals.
-    let mut used_sections = [false; 2];
-    let mut referenced = vec![false; m.symbols.len()];
-    for (_, t, _, _) in text_data_relocs.iter().flatten().chain(stab_relocs.iter()) {
-        match *t {
-            Target::Section(s) => used_sections[s] = true,
-            Target::Symbol(id) => referenced[id] = true,
-        }
-    }
-    // ELF section indices: .text=1, [.rela.text], .data, [.rela.data], .bss, ...
+    // ELF section indices: .text=1, [.rela.text], .data, [.rela.data], .bss, then each debug
+    // section followed by its relocations.
     let text_idx = 1u16;
     let data_idx = text_idx + 1 + !text_data_relocs[0].is_empty() as u16;
     let sec_idx = [text_idx, data_idx];
+    let mut next = data_idx + 1 + !text_data_relocs[1].is_empty() as u16 + 1;
+    let mut debug_idx = Vec::new();
+    for r in &debug_relocs {
+        debug_idx.push(next);
+        next += 1 + !r.is_empty() as u16;
+    }
 
+    // Symbol table: NULL, section symbols of .text/.data in use, other locals, debug section
+    // symbols in use, globals.
+    let mut used_sections = [false; 2];
+    let mut used_debug = vec![false; debug.len()];
+    let mut referenced = vec![false; m.symbols.len()];
+    for (_, t, _, _) in text_data_relocs.iter().chain(debug_relocs.iter()).flatten() {
+        match *t {
+            Target::Section(s) => used_sections[s] = true,
+            Target::Debug(s) => used_debug[s] = true,
+            Target::Symbol(id) => referenced[id] = true,
+        }
+    }
+    let section_symbol = |shndx: u16| ElfSym { name: String::new(), info: (STB_LOCAL << 4) | STT_SECTION, shndx, value: 0 };
     let mut syms = vec![ElfSym { name: String::new(), info: 0, shndx: 0, value: 0 }];
     let mut section_sym = [0u32; 2];
     for s in 0..2 {
         if used_sections[s] {
             section_sym[s] = syms.len() as u32;
-            syms.push(ElfSym {
-                name: String::new(),
-                info: (STB_LOCAL << 4) | STT_SECTION,
-                shndx: sec_idx[s],
-                value: 0,
-            });
+            syms.push(section_symbol(sec_idx[s]));
         }
     }
     let mut sym_index: HashMap<SymbolId, u32> = HashMap::new();
@@ -315,6 +306,13 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
         if let (Some((sec, off)), false, Binding::Local) = (s.definition, s.temporary, s.binding) {
             sym_index.insert(id, syms.len() as u32);
             syms.push(ElfSym { name: s.name.clone(), info: (STB_LOCAL << 4) | STT_NOTYPE, shndx: sec_idx[sec], value: off });
+        }
+    }
+    let mut debug_sym = vec![0u32; debug.len()];
+    for (i, used) in used_debug.iter().enumerate() {
+        if *used {
+            debug_sym[i] = syms.len() as u32;
+            syms.push(section_symbol(debug_idx[i]));
         }
     }
     let first_global = syms.len() as u32;
@@ -340,6 +338,7 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
         for &(off, t, ty, a) in relocs {
             let symi = match t {
                 Target::Section(s) => section_sym[s],
+                Target::Debug(s) => debug_sym[s],
                 Target::Symbol(id) => sym_index[&id],
             };
             b.u64(off);
@@ -348,6 +347,14 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
         }
         b
     };
+    let rela = |sections: &mut Vec<Shdr>, name: &str, relocs: &[(u64, Target, u32, i64)]| {
+        if !relocs.is_empty() {
+            let mut r = Shdr::new(&format!(".rela{name}"), SHT_RELA, SHF_INFO_LINK, rela_bytes(relocs), 8);
+            r.info = (sections.len() - 1) as u32;
+            r.entsize = 24;
+            sections.push(r);
+        }
+    };
 
     // Section headers.
     let mut sections = vec![null_section()];
@@ -355,31 +362,13 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
     let flags = [SHF_ALLOC | SHF_EXECINSTR, SHF_ALLOC | SHF_WRITE];
     for s in 0..2 {
         sections.push(Shdr::new(names[s], SHT_PROGBITS, flags[s], m.sections[s].data.clone(), m.sections[s].align));
-        if !text_data_relocs[s].is_empty() {
-            let mut r = Shdr::new(&format!(".rela{}", names[s]), SHT_RELA, SHF_INFO_LINK, rela_bytes(&text_data_relocs[s]), 8);
-            r.info = (sections.len() - 1) as u32;
-            r.entsize = 24;
-            sections.push(r);
-        }
+        rela(&mut sections, names[s], &text_data_relocs[s]);
     }
     sections.push(Shdr::new(".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE, Vec::new(), 1));
-    if !m.stabs.is_empty() {
-        let (stab, stabstr) = build_stabs(m, &|i| match m.stabs[i].value {
-            StabValue::Const(v) => v,
-            StabValue::Symbol(_) => 0,
-        });
-        let mut s = Shdr::new(".stab", SHT_PROGBITS, 0, stab, 4);
-        s.entsize = 12;
-        sections.push(s);
-        let stab_idx = sections.len() - 1;
-        if !stab_relocs.is_empty() {
-            let mut r = Shdr::new(".rela.stab", SHT_RELA, SHF_INFO_LINK, rela_bytes(&stab_relocs), 8);
-            r.info = stab_idx as u32;
-            r.entsize = 24;
-            sections.push(r);
-        }
-        sections.push(Shdr::new(".stabstr", SHT_STRTAB, 0, stabstr, 1));
-        sections[stab_idx].link = (sections.len() - 1) as u32;
+    for (i, s) in debug.iter().enumerate() {
+        debug_assert_eq!(sections.len(), debug_idx[i] as usize);
+        sections.push(debug_shdr(s, s.data.clone()));
+        rela(&mut sections, s.name, &debug_relocs[i]);
     }
     let mut symtab = Shdr::new(".symtab", SHT_SYMTAB, 0, sym_bytes(&syms, &str_off), 8);
     symtab.entsize = 24;
@@ -471,8 +460,6 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     stub[call_field..call_field + 4].copy_from_slice(&rel.to_le_bytes());
     text_bytes.extend_from_slice(&stub);
 
-    let stab_values = if m.stabs.is_empty() { Vec::new() } else { link::stab_values(m, &addrs, &none)? };
-
     // Program headers.
     let mut ph = Vec::new();
     let mut phdr = |ty: u32, flags: u32, off: u64, vaddr: u64, filesz: u64, memsz: u64, align: u64| {
@@ -513,13 +500,11 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         data_shndx = 2;
     }
     let file_end = if has_data { data_off + data.data.len() as u64 } else { text_off + text_size };
-    if !m.stabs.is_empty() {
-        let (stab, stabstr) = build_stabs(m, &|i| stab_values[i]);
-        let mut s = Shdr::new(".stab", SHT_PROGBITS, 0, stab, 4);
-        s.entsize = 12;
-        s.link = sections.len() as u32 + 1;
-        sections.push(s);
-        sections.push(Shdr::new(".stabstr", SHT_STRTAB, 0, stabstr, 1));
+    // DWARF with final addresses (the CU covers the module's code, not the entry stub).
+    if let Some(d) = &m.debug {
+        for s in dwarf::build(d, text.data.len() as u64) {
+            sections.push(debug_shdr(&s, s.resolved(text_addr)));
+        }
     }
 
     // Symbol table: locals (non-temporary), then globals including `_start`.

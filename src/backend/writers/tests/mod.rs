@@ -113,10 +113,15 @@ pub fn gas_elf(src: &Path, out: &Path) -> Option<Vec<u8>> {
 }
 
 /// The module the real assembler should produce for `src` (via gas + [`elf_import`]).
+/// The gas object is kept at [`gas_obj_path`]. For `-g` fixtures the module gets the
+/// `DebugInfo` equivalent of the original compiler's STABS.
 pub fn module_for(src: &Path, dir: &Path) -> Option<ObjModule> {
-    let name = src.file_stem().unwrap().to_str().unwrap();
-    let obj = gas_elf(src, &dir.join(format!("{name}.gas.o")))?;
+    let obj = gas_elf(src, &gas_obj_path(src, dir))?;
     Some(elf_import::import(&obj))
+}
+
+pub fn gas_obj_path(src: &Path, dir: &Path) -> PathBuf {
+    dir.join(format!("{}.gas.o", src.file_stem().unwrap().to_str().unwrap()))
 }
 
 pub fn host_x86_64() -> bool {
