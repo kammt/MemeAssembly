@@ -197,7 +197,7 @@ pub static COMMAND_LIST: [Command; NUMBER_OF_COMMANDS] = [
     cmd("guess I'll die", N, 0, [0, 0], None, "mov rax, [69]").encode(enc::die),
     cmd("confused stonks", N, 0, [0, 0], Some(Analysis::ConfusedStonks), "jmp .LConfusedStonks_{F}").encode(enc::confused_stonks),
     cmd("perfectly balanced as all things should be", N, 0, [0, 0], Some(Analysis::PerfectlyBalanced), "").encode(enc::perfectly_balanced),
-    cmd("wait, that's illegal", N, 0, [0, 0], None, "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13 r13").encode(enc::illegal),
+    cmd("wait, that's illegal", N, 0, [0, 0], None, "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13, r13").encode(enc::illegal),
     cmd("oh no! anyway", N, 0, [0, 0], None, "nop").encode(enc::oh_no),
     cmd("it's over 9000 {p}", N, 1, [PARAM_REG, 0], None, "cmp {0}, 9000\n\tjg 1f\n\thlt\n\t1:").encode(enc::over_9000),
     cmd("refuses to elaborate and leaves", N, 0, [0, 0], None, "mov rbp, rsp\n\tpop rsp").encode(enc::refuses_to_elaborate),
@@ -248,13 +248,13 @@ impl ParsedCommand {
         self.parameters[i].as_deref().unwrap_or(b"")
     }
 
-    /// `paramTypes[i]` including the out-of-bounds read of `paramTypes[2]`, which lands on
-    /// `isPointer` in the C struct layout.
-    pub fn param_type_c(&self, i: usize) -> u8 {
-        match i {
-            0 | 1 => self.param_types[i],
-            _ => self.is_pointer,
-        }
+    /// In bully mode, a pointer operand gets a (random) operand size only if the other operand
+    /// does not determine it, i.e. is not a register. Only called for two-parameter commands.
+    ///
+    /// The C code checked `paramTypes[index + 1 % 2]` (= `paramTypes[index + 1]`, reading past
+    /// the array for the second parameter); this is the intended `(index + 1) % 2`.
+    pub fn bully_pointer_needs_size(&self, index: usize) -> bool {
+        !param_is_reg(self.param_types[(index + 1) % 2])
     }
 }
 
@@ -304,13 +304,14 @@ pub enum LogLevel {
     Debug,
 }
 
-/// `optimisationLevel` values. Note that in the C enum `o_s` follows `o_3 = -3` and therefore
-/// has the value -2, i.e. it is the same as `o_2`.
+/// `optimisationLevel` values. In the C enum `o_s` followed `o_3 = -3` and therefore had the
+/// value -2 (the same as `o_2`), so `-O-2` and `-O-s` both did both things. Here they are
+/// distinct, as the help page describes them (see docs/rust-rewrite-changes.md).
 pub const OPT_NONE: i64 = 0;
 pub const OPT_1: i64 = -1;
 pub const OPT_2: i64 = -2;
 pub const OPT_3: i64 = -3;
-pub const OPT_S: i64 = OPT_3 + 1;
+pub const OPT_S: i64 = -4;
 pub const OPT_69420: i64 = 69420;
 
 /// Location of a command: file index, function index, command index within the function.

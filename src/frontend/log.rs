@@ -311,9 +311,3 @@ pub fn print_internal_compiler_error(fmt: &str, report: bool, args: &[Arg]) {
     }
     err(&m);
 }
-
-/// Emulates the C program dying from a signal: buffered stdout is lost, no cleanup happens.
-pub fn crash() -> ! {
-    STDOUT.lock().unwrap_or_else(|e| e.into_inner()).clear();
-    std::process::abort()
-}

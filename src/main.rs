@@ -7,9 +7,9 @@ mod target;
 use std::ffi::OsString;
 use std::io::Read;
 
-use clap::{CommandFactory, FromArgMatches};
+use clap::Parser;
 
-use frontend::cli::{normalize, Cli};
+use frontend::cli::{events, normalize, Cli, Event};
 use frontend::commands::{CompileMode, CompileState, LogLevel, OutputMode, OPT_S};
 use frontend::libc::{erange_message, strtol};
 use frontend::log::{err, err_str, exit, out_str, print_debug, print_information_header, print_note, Arg};
@@ -42,42 +42,6 @@ fn print_help_page(program_name: &str, target: Target) {
         Target::Windows => "windows",
     };
     out_str(&format!(" -ftarget=<linux|macos|windows> - Change the target operating system (default: {host})\n"));
-}
-
-/// The options whose relative order matters (memeasm.c handled them one by one in argv order).
-enum Event {
-    Help,
-    Version,
-    OptLevel(String),
-    CompileMode(String),
-    Target(String),
-    DebugInfo,
-    Assembly,
-    Object,
-}
-
-/// Collects the order-dependent options with their position on the command line.
-fn events(matches: &clap::ArgMatches, cli: &Cli) -> Vec<Event> {
-    // Count flags have a default value, which must not count as an occurrence.
-    let indices = |id: &str| -> Vec<usize> {
-        if matches.value_source(id) != Some(clap::parser::ValueSource::CommandLine) {
-            return Vec::new();
-        }
-        matches.indices_of(id).map(|i| i.collect()).unwrap_or_default()
-    };
-    let mut list: Vec<(usize, Event)> = Vec::new();
-    list.extend(indices("help").into_iter().map(|i| (i, Event::Help)));
-    list.extend(indices("version").into_iter().map(|i| (i, Event::Version)));
-    list.extend(indices("debug_info").into_iter().map(|i| (i, Event::DebugInfo)));
-    list.extend(indices("assembly").into_iter().map(|i| (i, Event::Assembly)));
-    list.extend(indices("object").into_iter().map(|i| (i, Event::Object)));
-    list.extend(indices("opt_level").into_iter().zip(&cli.opt_level).map(|(i, v)| (i, Event::OptLevel(v.clone()))));
-    list.extend(
-        indices("compile_mode").into_iter().zip(&cli.compile_mode).map(|(i, v)| (i, Event::CompileMode(v.clone()))),
-    );
-    list.extend(indices("target").into_iter().zip(&cli.target).map(|(i, v)| (i, Event::Target(v.clone()))));
-    list.sort_by_key(|(i, _)| *i);
-    list.into_iter().map(|(_, e)| e).collect()
 }
 
 /// `-O<level>`: `Ok(level)` or the error message of memeasm.c.
@@ -142,21 +106,15 @@ fn main() {
     let program_name = args.first().map(os_to_bytes).unwrap_or_default();
     let program_name_str = String::from_utf8_lossy(&program_name).into_owned();
 
-    let matches = match Cli::command().try_get_matches_from(normalize(args)) {
-        Ok(m) => m,
-        Err(e) => {
-            let _ = e.print();
-            exit(1);
-        }
-    };
-    let cli = match Cli::from_arg_matches(&matches) {
+    let args = normalize(args);
+    let cli = match Cli::try_parse_from(&args) {
         Ok(cli) => cli,
         Err(e) => {
             let _ = e.print();
             exit(1);
         }
     };
-    let events = events(&matches, &cli);
+    let events = events(&args);
     let target = final_target(&events);
 
     let mut state = CompileState::new(target);

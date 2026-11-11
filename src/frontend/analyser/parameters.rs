@@ -338,10 +338,14 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                     );
                 } else {
                     // We just make the number shorter than 32 bits :bigBrain:
+                    // The C code wrote a NUL at index `computedIndex % 32`, out of bounds when the
+                    // number is shorter, and kept numbers that were still too large (which gas
+                    // then rejected). Drop further digits until the number really fits.
                     let cut = (state.computed_index % 32) as usize;
                     if let Some(p) = cmd.parameters[decimal_index].as_mut() {
-                        if cut < p.len() {
-                            p.truncate(cut);
+                        p.truncate(cut);
+                        while !fits_sign_extended_32(strtoll(p).value) {
+                            p.pop();
                         }
                     }
                     // Also, change computedIndex. Just because
@@ -392,4 +396,9 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             );
         }
     }
+}
+
+/// Whether a 64 bit immediate can be encoded as a sign-extended 32 bit immediate.
+fn fits_sign_extended_32(number: i64) -> bool {
+    i32::try_from(number).is_ok()
 }

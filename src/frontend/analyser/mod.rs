@@ -134,6 +134,13 @@ fn choose_lines_to_be_deleted(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut 
         lines_to_be_kept /= 2;
     }
     let lines_to_be_deleted = loc - lines_to_be_kept;
+    // In bully mode, lines may already be excluded from translation (e.g. duplicate jump
+    // markers). The C loop then never found enough lines and hung; stop once every line is gone.
+    let deletable: usize = state
+        .files
+        .iter()
+        .map(|f| f.parsed_commands.iter().take(f.loc).filter(|c| c.translate).count())
+        .sum();
 
     print_debug(ll, "\tamount of lines to be deleted: %lu", &[Arg::U(lines_to_be_deleted as u64)]);
     if lines_to_be_deleted > 0 {
@@ -142,12 +149,13 @@ fn choose_lines_to_be_deleted(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut 
         let mut rng = CRand::new(RandAlgorithm::host(), time_now() as u32);
         let file_count = state.files.len() as u32;
         let mut selected_lines = 0;
-        while selected_lines < lines_to_be_deleted {
+        while selected_lines < lines_to_be_deleted.min(deletable) {
             let random_file = (rng.rand() as u32 % file_count) as usize;
             let file_loc = state.files[random_file].loc;
             if file_loc == 0 {
-                // `rand() % 0` followed by an access to a NULL array: the C program crashes here.
-                super::log::crash();
+                // A file without code (possible in bully mode) has no line to delete; the C code
+                // computed `rand() % 0` and crashed here. Pick another file instead.
+                continue;
             }
             let random_line = rng.rand() as usize % file_loc;
             print_debug(

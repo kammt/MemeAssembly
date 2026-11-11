@@ -211,6 +211,47 @@ pub fn normalize(args: Vec<OsString>) -> Vec<OsString> {
     out
 }
 
+/// The options whose relative order matters (memeasm.c handled them one by one in argv order).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Event {
+    Help,
+    Version,
+    OptLevel(String),
+    CompileMode(String),
+    Target(String),
+    DebugInfo,
+    Assembly,
+    Object,
+}
+
+/// The order-dependent options of a [`normalize`]d command line that clap accepted, in order.
+/// After normalisation every option is a separate `-x` or `--name[=value]` argument.
+pub fn events(normalized: &[OsString]) -> Vec<Event> {
+    let mut list = Vec::new();
+    for arg in normalized.iter().skip(1) {
+        let Some(arg) = arg.to_str() else { continue };
+        if arg == "--" {
+            break;
+        }
+        let (name, value) = match arg.split_once('=') {
+            Some((n, v)) => (n, v.to_string()),
+            None => (arg, String::new()),
+        };
+        list.push(match name {
+            "-h" | "--help" => Event::Help,
+            "-v" | "--version" => Event::Version,
+            "-g" => Event::DebugInfo,
+            "-S" => Event::Assembly,
+            "--object" => Event::Object,
+            "--opt-level" => Event::OptLevel(value),
+            "--fcompile-mode" | "--compile-mode" => Event::CompileMode(value),
+            "--ftarget" | "--target" => Event::Target(value),
+            _ => continue,
+        });
+    }
+    list
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +306,22 @@ mod tests {
         assert_eq!(cli.opt_level, ["-1"]);
         assert_eq!(cli.compile_mode, ["bully"]);
         assert_eq!((cli.assembly, cli.debug_info, cli.object), (1, 1, 0));
+    }
+
+    #[test]
+    fn events_in_command_line_order() {
+        let mut v: Vec<OsString> = vec!["memeasm".into()];
+        v.extend(["-g", "-o", "-g", "-O", "x", "-gS", "-ftarget", "windows", "-O-1", "--", "-h"].map(OsString::from));
+        assert_eq!(
+            events(&normalize(v)),
+            [
+                Event::DebugInfo,
+                Event::Object,
+                Event::DebugInfo,
+                Event::Assembly,
+                Event::Target("windows".into()),
+                Event::OptLevel("-1".into()),
+            ]
+        );
     }
 }

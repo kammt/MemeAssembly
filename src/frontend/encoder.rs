@@ -40,6 +40,7 @@ const R9: Operand = Operand::Reg(Reg::R64(9));
 const R10: Operand = Operand::Reg(Reg::R64(10));
 const R11: Operand = Operand::Reg(Reg::R64(11));
 const R12: Operand = Operand::Reg(Reg::R64(12));
+const R13: Operand = Operand::Reg(Reg::R64(13));
 const EAX: Operand = Operand::Reg(Reg::R32(0));
 const XMM0: Operand = Operand::Reg(Reg::Xmm(0));
 
@@ -118,12 +119,12 @@ impl CmdArgs<'_> {
         }
     }
 
-    /// Same condition as in `translator::param_text` (incl. the `index + 1 % 2` quirk).
+    /// Same condition as in `translator::param_text`.
     fn bully_operand_size(&self, i: usize) -> bool {
         let command = &COMMAND_LIST[self.cmd.opcode as usize];
         self.state.compile_mode == CompileMode::Bully
             && command.used_parameters == 2
-            && !param_is_reg(self.cmd.param_type_c(i + 1))
+            && self.cmd.bully_pointer_needs_size(i)
     }
 
     /// A symbol name containing `{i}` as gas would read it.
@@ -407,9 +408,8 @@ pub fn illegal(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Xor, &[RBX, RBX])?;
     e.i(Op::Xor, &[RBP, RBP])?;
     e.i(Op::Xor, &[R12, R12])?;
-    // The C translation pattern says `xor r13 r13` (missing comma), which gas rejects. Kept
-    // so that this command fails exactly like it does with the reference compiler.
-    Err(junk(b"r13"))
+    // The C translation pattern said `xor r13 r13` (missing comma), which gas rejected.
+    e.i(Op::Xor, &[R13, R13])
 }
 pub fn oh_no(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Nop, &[])
@@ -485,7 +485,7 @@ fn kill_parent(e: &mut Emitter, target: Target) -> EncResult {
     e.insn(Op::Mov, &[RAX, imm(if linux { 62 } else { 0x2000025 })])?;
     e.insn(Op::Syscall, &[])?;
     e.insn(Op::Mov, &[RDI, imm(0)])?;
-    e.insn(Op::Mov, &[RAX, imm(60)])?;
+    e.insn(Op::Mov, &[RAX, imm(if linux { 60 } else { 0x2000001 })])?;
     e.insn(Op::Syscall, &[])?;
     e.insn(Op::Ret, &[])
 }
@@ -633,9 +633,13 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
         && state.output_mode == OutputMode::Executable
         && !main_function_exists(state)
     {
-        e.global("main");
-        e.label("main")?;
-        martyrdom_code(&mut e, target)?;
+        // See translator.rs: `_main` on macOS, no martyrdom code on Windows.
+        let main_name = String::from_utf8_lossy(state.main_function_name()).into_owned();
+        e.global(&main_name);
+        e.label(&main_name)?;
+        if target != Target::Windows {
+            martyrdom_code(&mut e, target)?;
+        }
     }
 
     let main_name = state.main_function_name();

@@ -86,11 +86,10 @@ pub(super) fn param_text(state: &CompileState, cmd: &ParsedCommand, index: usize
     let mut text = Vec::new();
     if cmd.is_pointer as usize == index + 1 {
         // In bully mode, the "operand size unknown" check of parameters.c is skipped, so the
-        // operand size is chosen here. Note the C precedence quirk `index + 1 % 2`
-        // (== index + 1), kept as is.
+        // operand size is chosen here.
         if state.compile_mode == CompileMode::Bully
             && command.used_parameters == 2
-            && !param_is_reg(cmd.param_type_c(index + 1))
+            && cmd.bully_pointer_needs_size(index)
         {
             const OPERAND_SIZES: [&str; 4] = ["BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR"];
             text.extend_from_slice(OPERAND_SIZES[(state.computed_index % 4) as usize].as_bytes());
@@ -209,7 +208,10 @@ pub fn write_to_string(state: &CompileState) -> Vec<u8> {
         w.s(if linux { "    mov rax, 110\n" } else { "    mov rax, 0x2000027\n" });
         w.s("    syscall\n\n    mov rdi, rax\n    mov rsi, 9\n");
         w.s(if linux { "    mov rax, 62\n" } else { "    mov rax, 0x2000025\n" });
-        w.s("    syscall\n\n    mov rdi, 0\n    mov rax, 60\n    syscall\n    ret\n\n");
+        w.s("    syscall\n\n    mov rdi, 0\n");
+        // exit(0). The C code used the Linux syscall number 60 on macOS as well.
+        w.s(if linux { "    mov rax, 60\n" } else { "    mov rax, 0x2000001\n" });
+        w.s("    syscall\n    ret\n\n");
     }
 
     // In bully mode, a missing main function is "fixed" by making the code at the start main
@@ -217,9 +219,17 @@ pub fn write_to_string(state: &CompileState) -> Vec<u8> {
         && state.output_mode == OutputMode::Executable
         && !main_function_exists(state)
     {
-        w.s("\n.global main\n\t");
-        w.s("\nmain:\n\t");
-        w.s(&martyrdom_code(target));
+        // The C code always named it `main` (macOS needs `_main`) and also inserted the
+        // martyrdom code on Windows, where killParent/.LsigStruct do not exist.
+        let main_name = state.main_function_name();
+        w.s("\n.global ");
+        w.b(main_name);
+        w.s("\n\t\n");
+        w.b(main_name);
+        w.s(":\n\t");
+        if target != Target::Windows {
+            w.s(&martyrdom_code(target));
+        }
     }
 
     let main_name = state.main_function_name();
