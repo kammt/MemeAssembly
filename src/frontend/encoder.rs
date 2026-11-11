@@ -601,8 +601,7 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
     let mut e = Emitter::new(target);
 
     if state.use_debug_info {
-        let cwd = String::from_utf8_lossy(&super::translator::getcwd_bytes()).into_owned();
-        e.set_debug_meta(&cwd, &format!("MemeAssembly compiler {VERSION_STRING}"));
+        e.set_debug_meta(&super::translator::getcwd_bytes(), &format!("MemeAssembly compiler {VERSION_STRING}"));
     }
 
     // Define all functions as global
@@ -677,7 +676,7 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
     for (i, file) in state.files.iter().enumerate() {
         let debug_file = state
             .use_debug_info
-            .then(|| e.debug_file(&String::from_utf8_lossy(&debug_file_path(&file.file_name))));
+            .then(|| e.debug_file(&debug_file_path(&file.file_name)));
         last_debug_file = debug_file.or(last_debug_file);
 
         let mut line = 0usize;
@@ -728,9 +727,10 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
     }
 
     // `-O-s` ends the text with `.align 536870912` (NOP padding; on Windows `finish` fails like
-    // gas does, since COFF can't represent the section alignment).
+    // gas does, since COFF can't represent the section alignment). On macOS the -S text says
+    // `.p2align 29`; the Emitter's `align` takes the exponent there (Mach-O `.align` semantics).
     if state.optimisation_level == OPT_S {
-        e.align(536_870_912)?;
+        e.align(if target == Target::MacOS { 29 } else { 536_870_912 })?;
     }
 
     e.finish()

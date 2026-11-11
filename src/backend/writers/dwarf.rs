@@ -114,31 +114,31 @@ fn sleb(b: &mut Vec<u8>, mut v: i64) {
 /// A NUL-terminated string section with deduplication.
 struct Strings {
     data: Vec<u8>,
-    seen: HashMap<String, u32>,
+    seen: HashMap<Vec<u8>, u32>,
 }
 
 impl Strings {
     fn new() -> Strings {
         Strings { data: Vec::new(), seen: HashMap::new() }
     }
-    fn get(&mut self, s: &str) -> u32 {
+    fn get(&mut self, s: &[u8]) -> u32 {
         if let Some(&o) = self.seen.get(s) {
             return o;
         }
         let o = self.data.len() as u32;
-        self.data.extend_from_slice(s.as_bytes());
+        self.data.extend_from_slice(s);
         self.data.push(0);
-        self.seen.insert(s.to_string(), o);
+        self.seen.insert(s.to_vec(), o);
         o
     }
 }
 
 /// Splits an absolute path into (directory, file name).
-fn split_path(p: &str) -> (&str, &str) {
-    match p.rfind('/') {
-        Some(0) => ("/", &p[1..]),
+fn split_path(p: &[u8]) -> (&[u8], &[u8]) {
+    match p.iter().rposition(|&c| c == b'/') {
+        Some(0) => (b"/", &p[1..]),
         Some(i) => (&p[..i], &p[i + 1..]),
-        None => ("", p),
+        None => (b"", p),
     }
 }
 
@@ -150,19 +150,19 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
     // ---- .debug_line ----
     // Directory 0 is the compilation directory; file 0 is the primary source file and is
     // repeated as file 1 (like gcc/gas), so `DebugInfo::files[i]` is DWARF file `i + 1`.
-    let mut dirs: Vec<String> = vec![d.comp_dir.clone()];
-    let mut file_entries: Vec<(String, u64)> = Vec::new();
+    let mut dirs: Vec<Vec<u8>> = vec![d.comp_dir.clone()];
+    let mut file_entries: Vec<(Vec<u8>, u64)> = Vec::new();
     let primary = d.files.first().cloned().unwrap_or_default();
     for f in std::iter::once(&primary).chain(d.files.iter()) {
         let (dir, name) = split_path(f);
         let di = match dirs.iter().position(|x| x == dir) {
             Some(i) => i,
             None => {
-                dirs.push(dir.to_string());
+                dirs.push(dir.to_vec());
                 dirs.len() - 1
             }
         };
-        file_entries.push((name.to_string(), di as u64));
+        file_entries.push((name.to_vec(), di as u64));
     }
 
     let mut line = Vec::new();
@@ -305,12 +305,12 @@ pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
     sec(&mut info, &mut info_relocs, ".debug_line_str", name);
     let comp_dir = line_str.get(&d.comp_dir);
     sec(&mut info, &mut info_relocs, ".debug_line_str", comp_dir);
-    let producer = str_.get(&d.producer);
+    let producer = str_.get(d.producer.as_bytes());
     sec(&mut info, &mut info_relocs, ".debug_str", producer);
     info.u16(DW_LANG_MIPS_ASSEMBLER);
     for f in &d.functions {
         uleb(&mut info, 2);
-        let n = str_.get(&f.name);
+        let n = str_.get(f.name.as_bytes());
         sec(&mut info, &mut info_relocs, ".debug_str", n);
         uleb(&mut info, f.file as u64 + 1);
         uleb(&mut info, f.line as u64);

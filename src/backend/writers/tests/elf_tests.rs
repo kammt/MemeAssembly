@@ -268,7 +268,7 @@ fn elf_dwarf_gdb_breakpoint() {
     let exe = dir.join("helloworld");
     write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
     let Some(text) = gdb_session(&dir, &exe, &format!("HelloWorld.memeasm:{}", row.line)) else { return };
-    let want = format!("Breakpoint 1, main () at {}:{}", d.files[0], row.line);
+    let want = format!("Breakpoint 1, main () at {}:{}", String::from_utf8_lossy(&d.files[0]), row.line);
     assert!(text.contains(&want), "expected `{want}`:\n{text}");
     assert!(text.contains("#0  main () at "), "{text}");
 

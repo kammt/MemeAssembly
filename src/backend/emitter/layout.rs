@@ -169,9 +169,18 @@ pub(super) fn bad_reference_message(name: &str) -> String {
     format!("junk `{r}' after expression")
 }
 
-/// The NOP sequences gas uses to pad code (`.align` in `.text`).
-fn nop_fill(out: &mut Vec<u8>, pad: u64) {
-    const NOPS: [&[u8]; 11] = [
+/// The NOP sequences LLVM (Apple's `as`, default CPU penryn) pads code with: NOPs of at most 10
+/// bytes, longest first.
+fn llvm_nop_fill(out: &mut Vec<u8>, mut pad: u64) {
+    while pad > 0 {
+        let n = pad.min(10);
+        out.extend_from_slice(NOPS[n as usize - 1]);
+        pad -= n;
+    }
+}
+
+/// x86 NOPs of 1 to 11 bytes.
+const NOPS: [&[u8]; 11] = [
         &[0x90],
         &[0x66, 0x90],
         &[0x0f, 0x1f, 0x00],
@@ -184,6 +193,9 @@ fn nop_fill(out: &mut Vec<u8>, pad: u64) {
         &[0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
         &[0x66, 0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00],
     ];
+
+/// The NOP sequences gas uses to pad code (`.align` in `.text`).
+fn nop_fill(out: &mut Vec<u8>, pad: u64) {
     let mut n = pad;
     // More than 7 maximal NOPs: jump over the padding instead.
     if n / 11 > 7 {
@@ -225,6 +237,32 @@ fn offsets(items: &[Item], long: &[bool]) -> Vec<u64> {
     offs
 }
 
+/// Mach-O atoms: for every item of each section and for every defined symbol, the
+/// non-temporary symbol starting the atom it belongs to (`None` before the first one). A label
+/// starts a new atom right where it is defined, so a temporary label defined just before a
+/// non-temporary one at the same position still belongs to the previous atom, as in LLVM.
+fn atoms(em: &Emitter) -> (Vec<Vec<Option<usize>>>, Vec<Option<usize>>) {
+    let mut sym_atom = vec![None; em.syms.len()];
+    let mut pos_atom = Vec::new();
+    for (si, items) in em.sections.iter().enumerate() {
+        let mut defs = em.defs[si].iter().peekable();
+        let mut cur = None;
+        let mut atoms = Vec::with_capacity(items.len());
+        for i in 0..=items.len() {
+            while let Some(&(_, id)) = defs.next_if(|d| d.0 <= i) {
+                let s = &em.syms[id];
+                if !s.temporary || s.global {
+                    cur = Some(id);
+                }
+                sym_atom[id] = cur;
+            }
+            atoms.push(cur);
+        }
+        pos_atom.push(atoms);
+    }
+    (pos_atom, sym_atom)
+}
+
 pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
     // Undefined numeric local labels (gas reports them at the end of assembly).
     let mut errors = Vec::new();
@@ -243,16 +281,39 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
         return Err(errors.join("\n"));
     }
 
-    // Relaxation: every branch starts short when its target is in the same section; grow to
-    // rel32 until all displacements fit (sizes only ever grow, so this terminates).
+    // Which references the assembler resolves itself; all others become relocations. Only
+    // references to symbols defined in the same section can be resolved, and per object format:
+    // * ELF (gas): references to global symbols keep their relocation (`call` → PLT32,
+    //   `[rip + sym]` → PC32), so they stay interposable; gas does resolve (and relax) `jmp` and
+    //   `jcc` to them. References to local symbols are resolved.
+    // * Mach-O (LLVM, i.e. Apple's `as`): only references within one atom (the code from a
+    //   non-temporary symbol up to the next one) are resolved; other references get external
+    //   relocations (the writer rebases those to temporary labels onto their atom).
+    // * COFF (mingw gas): all same-section references are resolved.
+    let (pos_atom, sym_atom) = atoms(&em);
+    let resolved = |si: usize, item: usize, target: usize, kind: Option<BranchKind>| -> bool {
+        let s = &em.syms[target];
+        if s.def.map(|d| d.0) != Some(si) {
+            return false;
+        }
+        match em.target {
+            Target::Windows => true,
+            Target::Linux => !s.global || matches!(kind, Some(BranchKind::Jmp | BranchKind::Jcc(_))),
+            Target::MacOS => pos_atom[si][item] == sym_atom[target],
+        }
+    };
+
+    // Relaxation: every branch the assembler resolves starts short (calls are always near);
+    // grow to rel32 until all displacements fit (sizes only ever grow, so this terminates).
     let mut longs: Vec<Vec<bool>> = Vec::new();
     let mut offs: Vec<Vec<u64>> = Vec::new();
     for (si, items) in em.sections.iter().enumerate() {
         let mut long: Vec<bool> = items
             .iter()
-            .map(|it| match it {
+            .enumerate()
+            .map(|(i, it)| match it {
                 Item::Branch { kind: BranchKind::Call, .. } => true,
-                Item::Branch { target, .. } => em.syms[*target].def.map(|d| d.0) != Some(si),
+                Item::Branch { kind, target } => !resolved(si, i, *target, Some(*kind)),
                 _ => false,
             })
             .collect();
@@ -297,7 +358,7 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
                     data.extend_from_slice(d);
                     for f in fixups {
                         match sym_addr(f.symbol) {
-                            Some((s, addr)) if s == si => {
+                            Some((_, addr)) if resolved(si, i, f.symbol, None) => {
                                 let v = addr as i64 + f.disp - (at as i64 + f.end as i64);
                                 let v = i32::try_from(v)
                                     .map_err(|_| "relocation out of range".to_string())?;
@@ -317,7 +378,7 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
                     let long = longs[si][i];
                     let m = kind.fadec() | if long { FE_JMPL } else { 0 };
                     match sym_addr(*target) {
-                        Some((s, addr)) if s == si => {
+                        Some((_, addr)) if resolved(si, i, *target, Some(*kind)) => {
                             let b = fadec::encode_branch(m, at, addr)
                                 .map_err(|_| format!("cannot encode `{}'", kind.mnemonic()))?;
                             debug_assert_eq!(b.len() as u64, kind.len(long));
@@ -341,7 +402,9 @@ pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
                 Item::Align { align } => {
                     let pad = item_size(it, false, at);
                     let _ = align;
-                    if si == 0 {
+                    if si == 0 && em.target == Target::MacOS {
+                        llvm_nop_fill(&mut data, pad);
+                    } else if si == 0 {
                         nop_fill(&mut data, pad);
                     } else {
                         data.resize(data.len() + pad as usize, 0);

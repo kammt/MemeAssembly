@@ -98,6 +98,26 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 
 You can also check the [examples](examples/) directory to find more.
 
+## Installation
+Ready-made packages are available, no compiling required:
+- **Arch Linux:** install [`memeassembly`](https://aur.archlinux.org/packages/memeassembly) from the AUR
+- **Debian/Ubuntu and Fedora/openSUSE:** grab the `.deb` or `.rpm` file of the latest [release](https://github.com/kammt/MemeAssembly/releases)
+- **Windows:** run [`install_windows.bat`](install_windows.bat) (see below)
+
+The MemeASM-compiler writes executables all by itself, so you don't need gcc, an assembler or a linker to run your memes. A C compiler (gcc/cc) is only needed if you create object files with `-O` and link them yourself, like some of the [examples](examples/) do.
+
+### Building from source
+MemeAssembly is written in Rust. Building it requires [cargo](https://rustup.rs) and a C compiler (it compiles the bundled [fadec](https://github.com/aengelke/fadec) encoder).
+```
+make                # or: cargo build --release
+sudo make install   # installs memeasm into /usr/local/bin
+```
+`make install` honours `DESTDIR` and `bindir` (e.g. `make install bindir=/usr/bin`), `sudo make uninstall` removes memeasm again. Run the tests with `cargo test`.
+
+### Windows
+`install_windows.bat` downloads, compiles and installs the latest version of MemeAssembly. It needs [rustup](https://rustup.rs) in your `PATH`; both the default MSVC toolchain and the `stable-x86_64-pc-windows-gnu` toolchain work. \
+To build `memeasm.exe` on Linux instead, run `rustup target add x86_64-pc-windows-gnu`, install mingw-w64 (`x86_64-w64-mingw32-gcc`) and run `make windows`.
+
 ## Badge of honor
 Whoever dares to write their code in MemeASM shall be rewarded. Not only with a joyful coding experience, but also by being able to place this badge of honor in their GitHub ReadMe:\
 ![Made with MemeAssembly Badge](https://img.shields.io/badge/made%20with-MemeAssembly-blue)\

@@ -28,6 +28,8 @@ if ($opt eq '-O-2') {
 # translator.c:289 killParent on macOS used the Linux exit syscall number.
 if ($target eq 'macos') {
     $s =~ s/^    mov rax, 60$/    mov rax, 0x2000001/mg;
+    # translator.c:472 `.align n` means 2**n on Mach-O: -O-s never assembled for macOS.
+    $s =~ s/^\.align 536870912$/.p2align 29/mg;
 }
 
 # parameters.c:119-122/:207/:354 character parameters gas reads differently: '\v' (gas has no

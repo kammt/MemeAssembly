@@ -1,15 +1,20 @@
 #
 # check https://nfpm.goreleaser.com/configuration for detailed usage
 #
+# Packages the memeasm executable built with
+#   cargo build --release --locked --target x86_64-unknown-linux-musl
+# (statically linked, so it runs on any x86_64 Linux distribution)
+#
 name: "memeasm"
 arch: "amd64"
 platform: "linux"
 version: VERSION_STRING
 section: "default"
 priority: "extra"
-depends:
+# memeasm writes executables itself and has no runtime dependencies.
+# A C compiler is only needed to link object files created with -O
+suggests:
 - gcc
-- make
 maintainer: "Tobias Kamm <tobias.kamm@tutanota.de>"
 description: |
   A Meme-based programming language
@@ -18,10 +23,7 @@ license: "GPLv3"
 # Contents to add to the package
 # This can be binaries or any other files.
 contents:
-  - src: ../compiler
-    dst: /compiler
-  - src: ../Makefile
-    dst: Makefile
-scripts:
-  postinstall: ./postinstall.sh
-  postremove: ./postremove.sh
+  - src: ../target/x86_64-unknown-linux-musl/release/memeasm
+    dst: /usr/bin/memeasm
+    file_info:
+      mode: 0755

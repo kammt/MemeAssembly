@@ -1,17 +1,17 @@
 @echo off
-ECHO Checking for correct installation of mingw64
+ECHO Checking for correct installation of Rust
 
-WHERE gcc
-IF %ERRORLEVEL% == 0 goto :checkMake
-ECHO Error! Could not find gcc in your PATH. Check https://kammt.github.io/MemeAssembly/#/getting-started for more information
+WHERE cargo
+IF %ERRORLEVEL% == 0 goto :checkRustup
+ECHO Error! Could not find cargo in your PATH. Install Rust using rustup (https://rustup.rs). Check https://kammt.github.io/MemeAssembly/#/getting-started for more information
 ECHO Installation failed
 PAUSE
 EXIT 1
 
-:checkMake
-WHERE mingw32-make
+:checkRustup
+WHERE rustup
 IF %ERRORLEVEL% == 0 goto :downloadMemeasm
-ECHO Error! Could not find mingw32-make in your PATH. Check https://kammt.github.io/MemeAssembly/#/getting-started for more information
+ECHO Error! Could not find rustup in your PATH. Install Rust using rustup (https://rustup.rs). Check https://kammt.github.io/MemeAssembly/#/getting-started for more information
 ECHO Installation failed
 PAUSE
 EXIT 1
@@ -24,14 +24,15 @@ ECHO Extracting...
 powershell Expand-Archive %temp%\MemeAssembly.zip -DestinationPath %temp%\MemeAssembly-latest
 cd %temp%\MemeAssembly-latest\kammt-*
 
-:runMakefile
+:runCargo
 set /p installDir="Enter the desired installation directory. Make sure that you have the required priviledges (Default: C:\Program Files\MemeAssembly): "
 IF NOT DEFINED installDir SET "installDir=C:\Program Files\MemeAssembly"
 ECHO Compiling...
-mingw32-make
+cargo build --release
+IF %ERRORLEVEL% NEQ 0 goto :buildFailed
 ECHO Installing...
 mkdir "%installDir%"
-move "./memeasm.exe" "%installDir%\memeasm.exe"
+copy /Y "target\release\memeasm.exe" "%installDir%\memeasm.exe"
 icacls  "%installDir%\memeasm.exe"  /t  /grant  everyone:R
 
 :cleanup
@@ -42,5 +43,11 @@ DEL /F MemeAssembly.zip
 
 :endofinstall
 ECHO Installation done! To use MemeAssembly from the command line, add the directory %installDir% to your system-wide PATH-Variable
-PAUSE 
+PAUSE
 EXIT 0
+
+:buildFailed
+ECHO Error! Compiling MemeAssembly failed
+ECHO Installation failed
+PAUSE
+EXIT 1

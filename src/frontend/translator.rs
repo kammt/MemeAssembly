@@ -425,7 +425,9 @@ pub fn write_to_string(state: &CompileState) -> Vec<u8> {
     }
 
     if state.optimisation_level == OPT_S {
-        w.s(".align 536870912\n");
+        // On Mach-O `.align n` means 2**n (and n >= 32 is rejected), so the C code's directive
+        // never assembled for macOS; `.p2align 29` is the intended 512 MiB.
+        w.s(if target == Target::MacOS { ".p2align 29\n" } else { ".align 536870912\n" });
     }
 
     w.buf
