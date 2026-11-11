@@ -567,7 +567,8 @@ fn encode_command(
         print_debug(state.log_level, "\tCommand is not a function declaration, abort.", &[]);
         return Ok(());
     }
-    if let (Some(file), false) = (debug_file, is_def) {
+    // Like the -S text: function definitions get a row too (see translator.rs).
+    if let Some(file) = debug_file {
         enc.e.debug_line(file, cmd.line_num as u32);
     }
 
@@ -672,10 +673,12 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
     }
 
     let main_name = state.main_function_name();
+    let mut last_debug_file = None;
     for (i, file) in state.files.iter().enumerate() {
         let debug_file = state
             .use_debug_info
             .then(|| e.debug_file(&String::from_utf8_lossy(&debug_file_path(&file.file_name))));
+        last_debug_file = debug_file.or(last_debug_file);
 
         let mut line = 0usize;
         for func in 0..file.functions.len() {
@@ -710,6 +713,10 @@ pub fn encode_module(state: &CompileState) -> Result<ObjModule, String> {
 
     // With -O69420 all commands are optimised out, so these are not needed
     if state.optimisation_level != OPT_69420 {
+        // The helpers are not source code: line 0 (see translator.rs)
+        if let Some(file) = last_debug_file {
+            e.debug_line(file, 0);
+        }
         if target == Target::Windows {
             windows_io_function(&mut e, "writechar", -11, "WriteFile")?;
             windows_io_function(&mut e, "readchar", -10, "ReadFile")?;

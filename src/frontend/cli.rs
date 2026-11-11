@@ -14,7 +14,8 @@
 //! * everything after `--` and all non-options are passed through unchanged.
 //!
 //! Besides the C spellings, the clap-style aliases `--compile-mode`, `--no-martyrdom`,
-//! `--target`, `--object`, `--opt-level` and `--version` are accepted.
+//! `--target`, `--object`, `--opt-level` and `--version` are accepted (single-dash only where
+//! that does not change a C meaning, see [`ALIASES`]).
 
 use std::ffi::OsString;
 
@@ -88,14 +89,18 @@ const LONG_OPTIONS: [(&str, bool); 6] = [
     ("ftarget", true),
 ];
 
-/// Additional exact-only long names (clap-style aliases), and whether they take a value.
-const ALIASES: [(&str, bool); 6] = [
-    ("compile-mode", true),
-    ("no-martyrdom", false),
-    ("target", true),
-    ("object", false),
-    ("opt-level", true),
-    ("version", false),
+/// Additional exact-only long names (clap-style aliases), whether they take a value, and
+/// whether the single-dash spelling is accepted too. It is not for `object`/`opt-level`:
+/// getopt_long_only read `-object` as `-o bject` and `-opt-level` as `-o pt-level`. The other
+/// single-dash forms were either rejected by C (`-target`, `-compile-mode`, `-no-martyrdom`)
+/// or meant the same (`-version` = `-v`).
+const ALIASES: [(&str, bool, bool); 6] = [
+    ("compile-mode", true, true),
+    ("no-martyrdom", false, true),
+    ("target", true, true),
+    ("object", false, false),
+    ("opt-level", true, false),
+    ("version", false, true),
 ];
 
 /// The short options of the C optstring `o:hO::dgSv`.
@@ -107,8 +112,11 @@ enum LongMatch {
     None,
 }
 
-fn find_long(name: &str) -> LongMatch {
-    if let Some(&(n, v)) = LONG_OPTIONS.iter().chain(ALIASES.iter()).find(|(n, _)| *n == name) {
+fn find_long(name: &str, double_dash: bool) -> LongMatch {
+    if let Some(&(n, v)) = LONG_OPTIONS.iter().find(|(n, _)| *n == name) {
+        return LongMatch::Found(n, v);
+    }
+    if let Some(&(n, v, _)) = ALIASES.iter().find(|(n, _, single)| *n == name && (double_dash || *single)) {
         return LongMatch::Found(n, v);
     }
     let mut candidates = LONG_OPTIONS.iter().filter(|(n, _)| n.starts_with(name));
@@ -151,7 +159,7 @@ pub fn normalize(args: Vec<OsString>) -> Vec<OsString> {
                 Some((n, v)) => (n, Some(v)),
                 None => (body, None),
             };
-            match find_long(name) {
+            match find_long(name, double_dash) {
                 LongMatch::Found(canonical, takes_value) => {
                     let mut canon = format!("--{canonical}");
                     match value {
@@ -209,6 +217,31 @@ pub fn normalize(args: Vec<OsString>) -> Vec<OsString> {
         }
     }
     out
+}
+
+/// An unknown option that [`normalize`] left as it was (`-fbogus`, `-xyz`). clap would report
+/// only its first character (`-f`), getopt named the whole argument.
+pub fn unknown_option(normalized: &[OsString]) -> Option<String> {
+    normalized
+        .iter()
+        .skip(1)
+        .map_while(|a| a.to_str().filter(|a| *a != "--"))
+        .find(|a| a.len() > 2 && a.starts_with('-') && !a.starts_with("--"))
+        .map(str::to_string)
+}
+
+/// The clap error for an unknown option, naming the complete argument.
+pub fn unknown_option_error(arg: &str) -> clap::Error {
+    use clap::error::{ContextKind, ContextValue, ErrorKind};
+    use clap::CommandFactory;
+    let mut cmd = Cli::command();
+    let usage = cmd.render_usage();
+    let mut e = clap::Error::new(ErrorKind::UnknownArgument).with_cmd(&cmd);
+    e.insert(ContextKind::InvalidArg, ContextValue::String(arg.to_string()));
+    let tip = format!("to pass '{arg}' as a value, use '-- {arg}'");
+    e.insert(ContextKind::Suggested, ContextValue::StyledStrs(vec![tip.into()]));
+    e.insert(ContextKind::Usage, ContextValue::StyledStr(usage));
+    e
 }
 
 /// The options whose relative order matters (memeasm.c handled them one by one in argv order).
@@ -289,6 +322,29 @@ mod tests {
         // "-f" is ambiguous, "-x" unknown: left for clap to reject
         assert_eq!(norm(&["-f"]), ["-f"]);
         assert_eq!(norm(&["-xyz"]), ["-xyz"]);
+    }
+
+    #[test]
+    fn single_dash_aliases() {
+        assert_eq!(norm(&["-object"]), ["--output=bject"]);
+        assert_eq!(norm(&["-opt-level"]), ["--output=pt-level"]);
+        assert_eq!(norm(&["--object", "--opt-level", "-1"]), ["--object", "--opt-level=-1"]);
+        assert_eq!(norm(&["-target", "linux", "-version"]), ["--target=linux", "--version"]);
+        assert_eq!(norm(&["-compile-mode=noob", "-no-martyrdom"]), ["--compile-mode=noob", "--no-martyrdom"]);
+    }
+
+    #[test]
+    fn unknown_options_are_named_completely() {
+        let n = |args: &[&str]| {
+            let mut v: Vec<OsString> = vec!["memeasm".into()];
+            v.extend(args.iter().map(OsString::from));
+            unknown_option(&normalize(v))
+        };
+        assert_eq!(n(&["-fbogus", "-S"]).as_deref(), Some("-fbogus"));
+        assert_eq!(n(&["-xyz"]).as_deref(), Some("-xyz"));
+        assert_eq!(n(&["-dx", "-o", "-weird", "--", "-abc"]), None);
+        let msg = unknown_option_error("-fbogus").to_string();
+        assert!(msg.starts_with("error: unexpected argument '-fbogus' found"), "{msg}");
     }
 
     #[test]

@@ -96,7 +96,8 @@ normalize_stdout() {
 expected_asm() {
     [ -f "$WORK/ref/out.S" ] || return 0
     local size
-    size=$(grep -m1 -oE '(BYTE|WORD|DWORD|QWORD) PTR \[[a-z0-9]+\]' "$WORK/mine/out.S" 2>/dev/null | cut -d' ' -f1)
+    # (power's own `QWORD PTR [rsp]` operands are not bully pointers)
+    size=$(grep -oE '(BYTE|WORD|DWORD|QWORD) PTR \[[a-z0-9]+\]' "$WORK/mine/out.S" 2>/dev/null | grep -v -m1 '^QWORD PTR \[rsp\]$' | cut -d' ' -f1)
     normalize_asm "$WORK/ref/out.S" |
         BULLY_SIZE=$size perl "$ROOT/tests/frontend_parity_whitelist.pl" "$CASE_TARGET" "$CASE_MODE" "$CASE_OPT"
 }
@@ -205,6 +206,79 @@ check_fixed() {
     fi
 }
 
+# The assembler the -S output of <target> is meant for (none for macOS here).
+gas_for_target() {
+    case "$1" in
+        linux) echo x86_64-linux-gnu-as ;;
+        windows) echo x86_64-w64-mingw32-as ;;
+    esac
+}
+
+# Pass/fail bookkeeping for the checks below: record <name> <ok> [message]
+record() {
+    if [ "$2" = 1 ]; then
+        PASS=$((PASS + 1))
+    else
+        FAIL=$((FAIL + 1))
+        FAILED_CASES+=("$1")
+        [ $VERBOSE = 1 ] && echo "=== FAIL: $1 ${3:-}"
+    fi
+    return 0
+}
+
+# check_new_error <name> <target> <message> <args...>: input the C compiler accepted, although
+# its output does not assemble or does not mean what the program says (docs: fixed bugs). The
+# reference must succeed; the Rust port must fail with <message> (and only that error).
+check_new_error() {
+    local name=$1 target=$2 message=$3
+    shift 3
+    [[ "$name" =~ $FILTER ]] || return 0
+    local ref
+    ref=$(ref_for_target "$target")
+    if [ -z "$ref" ]; then SKIP=$((SKIP + 1)); return 0; fi
+    local ref_args=() mine_args=("-ftarget=$target") a
+    for a in "$@"; do
+        ref_args+=("${a//OUT/$WORK/ref/out.S}")
+        mine_args+=("${a//OUT/$WORK/mine/out.S}")
+    done
+    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${ref_args[@]}"
+    run "$WORK/mine" "" "$MINE" "${mine_args[@]}"
+    local ok=1
+    [ "$(cat "$WORK/ref/code")" = 0 ] || ok=0
+    [ "$(cat "$WORK/mine/code")" = 1 ] || ok=0
+    [ "$(grep -c 'error: ' "$WORK/mine/stdout")" = 1 ] || ok=0
+    grep -qF -- "$message" "$WORK/mine/stdout" || ok=0
+    grep -q 'Compilation failed with 1 error(s)' "$WORK/mine/stderr" || ok=0
+    record "$name" $ok "(reference exit $(cat "$WORK/ref/code"), rust exit $(cat "$WORK/mine/code")): $(head -c 300 "$WORK/mine/stdout")"
+}
+
+# check_assembles [--ref-fails] <name> <target> <args...>: the Rust -S output must assemble
+# without errors or warnings. With --ref-fails, the reference output must fail to assemble
+# (bully mode now fixes up what gas rejected).
+check_assembles() {
+    local ref_fails=0
+    if [ "$1" = --ref-fails ]; then ref_fails=1; shift; fi
+    local name=$1 target=$2
+    shift 2
+    [[ "$name" =~ $FILTER ]] || return 0
+    local ref gas
+    ref=$(ref_for_target "$target")
+    gas=$(gas_for_target "$target")
+    if [ -z "$ref" ] || [ -z "$gas" ]; then SKIP=$((SKIP + 1)); return 0; fi
+    local ref_args=() mine_args=("-ftarget=$target") a
+    for a in "$@"; do
+        ref_args+=("${a//OUT/$WORK/ref/out.S}")
+        mine_args+=("${a//OUT/$WORK/mine/out.S}")
+    done
+    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${ref_args[@]}"
+    run "$WORK/mine" "" "$MINE" "${mine_args[@]}"
+    local ok=1 msgs
+    [ "$(cat "$WORK/mine/code")" = 0 ] || ok=0
+    msgs=$("$gas" -o "$WORK/mine.o" "$WORK/mine/out.S" 2>&1) && [ -z "$msgs" ] || ok=0
+    if [ $ref_fails = 1 ] && "$gas" -o "$WORK/ref.o" "$WORK/ref/out.S" 2>/dev/null; then ok=0; fi
+    record "$name" $ok "(rust exit $(cat "$WORK/mine/code")): $msgs"
+}
+
 TARGETS=(linux windows)
 [ -n "$REF_MAC" ] && TARGETS+=(macos)
 
@@ -241,6 +315,31 @@ for target in "${TARGETS[@]}"; do
                 check_fixed "$target/$mode/fixed/perfectly-balanced-empty-file$opt" "$target" crash-or-ok -fcompile-mode bully $opt -S -o OUT tests/frontend_cases/err/empty.memeasm tests/frontend_cases/fixes/perfectly_balanced_twice.memeasm
             done
         fi
+        # Inputs the C compiler accepted although gas rejects its output (or the decimal
+        # overflowed): an error in noob/obfuscated mode, a bully fix-up in bully mode.
+        for input in tests/frontend_cases/fixes/{high_byte_with_*,pointer_*,push_imm*,decimal_overflow}.memeasm; do
+            if [ "$mode" = bully ]; then
+                flag=--ref-fails
+                [[ $input == */decimal_overflow.memeasm ]] && flag=
+                for seed in "" -O-1 -d; do
+                    # shellcheck disable=SC2086
+                    check_assembles $flag "$target/$mode/$input/assembles$seed" "$target" -fcompile-mode bully $seed -S -o OUT "$input"
+                done
+            else
+                case "$input" in
+                    *high_byte_with_r8b*) message="invalid parameter combination: 'ah' cannot be combined with 'r8b'" ;;
+                    *high_byte_with_spl*) message="invalid parameter combination: 'ah' cannot be combined with 'spl'" ;;
+                    *pointer_cmp_9000* | *pointer_upvote* | *pointer_not* | *pointer_shl*) message="invalid parameter combination: operand size unknown" ;;
+                    *pointer_8bit_base*) message="invalid parameter combination: a pointer must be a 64 or 32 bit register" ;;
+                    *pointer_*) message="invalid parameter combination: this command cannot use a pointer here" ;;
+                    *push_imm*) message="invalid parameter combination: pushed decimal numbers must be sign-extendable from 32 Bits" ;;
+                    *decimal_overflow*) message='invalid parameter provided: "99999999999999999999" does not fit into 64 Bits' ;;
+                esac
+                # obfuscated mode replaces every message with a random one
+                [ "$mode" = obfuscated ] && message="error: "
+                check_new_error "$target/$mode/$input/new-error" "$target" "$message" -fcompile-mode "$mode" -S -o OUT "$input"
+            fi
+        done
         # Without -S, compile errors (incl. "no main function" for executables) stop before
         # code generation, so these runs compare exactly as well.
         if [ "$mode" != bully ]; then

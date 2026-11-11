@@ -42,10 +42,18 @@ pub fn out(bytes: &[u8]) {
     buf.extend_from_slice(bytes);
     let line_buffered = std::io::stdout().is_terminal();
     if (line_buffered && bytes.contains(&b'\n')) || buf.len() >= 4096 {
-        let mut so = std::io::stdout().lock();
-        let _ = so.write_all(&text_mode(&buf));
-        let _ = so.flush();
+        write_stdout(&buf);
         buf.clear();
+    }
+}
+
+/// Writes to the real stdout. A write error (e.g. `/dev/full`) is reported and ends the program
+/// with exit code 1 (C's stdio ignored them); a closed pipe raises SIGPIPE as in C.
+fn write_stdout(bytes: &[u8]) {
+    let mut so = std::io::stdout().lock();
+    if let Err(e) = so.write_all(&text_mode(bytes)).and_then(|()| so.flush()) {
+        err_str(&format!("Failed to write to stdout: {}\n", super::libc::io_error_message(&e)));
+        std::process::exit(1);
     }
 }
 
@@ -67,10 +75,9 @@ pub fn err_str(s: &str) {
 pub fn flush_stdout() {
     let mut buf = STDOUT.lock().unwrap_or_else(|e| e.into_inner());
     if !buf.is_empty() {
-        let mut so = std::io::stdout().lock();
-        let _ = so.write_all(&text_mode(&buf));
-        let _ = so.flush();
-        buf.clear();
+        let bytes = std::mem::take(&mut *buf);
+        drop(buf);
+        write_stdout(&bytes);
     }
 }
 

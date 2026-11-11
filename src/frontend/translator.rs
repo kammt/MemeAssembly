@@ -246,7 +246,9 @@ fn translate_to_assembly(
         return;
     }
 
-    if state.use_debug_info && !is_def {
+    // Function definitions get a row too, so the martyrdom prologue that follows `main:` and
+    // `break <function>` are attributed to the definition line.
+    if state.use_debug_info {
         w.s(&format!("\t.loc {} {}\n", file_num + 1, cmd.line_num));
     }
 
@@ -397,6 +399,10 @@ pub fn write_to_string(state: &CompileState) -> Vec<u8> {
 
     // With -O69420 all commands are optimised out, so these are not needed
     if state.optimisation_level != OPT_69420 {
+        // The helpers are not source code: line 0 instead of the last command's line
+        if state.use_debug_info && !state.files.is_empty() {
+            w.s(&format!("\t.loc {} 0\n", state.files.len()));
+        }
         if target == Target::Windows {
             // All caller-saved registers are preserved. 48 bytes = shadow space + the 5th
             // argument's slot, keeping the stack 16-byte aligned (the C code reserved only the

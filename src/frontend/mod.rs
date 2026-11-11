@@ -80,7 +80,9 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         }
     };
     if let Err(msg) = backend::emit(&module, state.target, kind, &output_path) {
-        let mut m = msg.into_bytes();
+        // e.g. "cannot write out: Is a directory (os error 21)" -> perror style
+        let msg: Vec<String> = msg.lines().map(libc::strip_os_error).collect();
+        let mut m = msg.join("\n").into_bytes();
         if m.last() != Some(&b'\n') {
             m.push(b'\n');
         }

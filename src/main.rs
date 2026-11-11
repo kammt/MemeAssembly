@@ -9,7 +9,7 @@ use std::io::Read;
 
 use clap::Parser;
 
-use frontend::cli::{events, normalize, Cli, Event};
+use frontend::cli::{events, normalize, unknown_option, unknown_option_error, Cli, Event};
 use frontend::commands::{CompileMode, CompileState, LogLevel, OutputMode, OPT_S};
 use frontend::libc::{erange_message, strtol};
 use frontend::log::{err, err_str, exit, out_str, print_debug, print_information_header, print_note, Arg};
@@ -102,12 +102,32 @@ fn os_to_bytes(s: &OsString) -> Vec<u8> {
     }
 }
 
+/// Rust ignores SIGPIPE; C programs die of it when the reader of stdout goes away.
+#[cfg(unix)]
+fn restore_sigpipe() {
+    extern "C" {
+        fn signal(signum: i32, handler: usize) -> usize;
+    }
+    const SIGPIPE: i32 = 13;
+    const SIG_DFL: usize = 0;
+    // SAFETY: resetting a signal disposition to the default has no preconditions.
+    unsafe {
+        signal(SIGPIPE, SIG_DFL);
+    }
+}
+
 fn main() {
+    #[cfg(unix)]
+    restore_sigpipe();
     let args: Vec<OsString> = std::env::args_os().collect();
     let program_name = args.first().map(os_to_bytes).unwrap_or_default();
     let program_name_str = String::from_utf8_lossy(&program_name).into_owned();
 
     let args = normalize(args);
+    if let Some(unknown) = unknown_option(&args) {
+        let _ = unknown_option_error(&unknown).print();
+        exit(1);
+    }
     let cli = match Cli::try_parse_from(&args) {
         Ok(cli) => cli,
         Err(e) => {

@@ -276,7 +276,8 @@ pub fn io_error_message(e: &std::io::Error) -> String {
     strip_os_error(&e.to_string())
 }
 
-fn strip_os_error(s: &str) -> String {
+/// Removes Rust's ` (os error N)` suffix, leaving a perror-style `context: message`.
+pub(super) fn strip_os_error(s: &str) -> String {
     match s.rfind(" (os error ") {
         Some(p) => s[..p].to_string(),
         None => s.to_string(),
