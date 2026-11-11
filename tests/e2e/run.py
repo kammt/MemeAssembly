@@ -11,10 +11,14 @@ Environment:
   REF_WIN   reference Windows compiler (default /opt/memeasm-ref/memeasm-ref-win)
 
 Reference outcomes are computed live when the reference compilers exist (and can be stored with
---update-expected), otherwise they are read from tests/e2e/expected/.  See README-like notes at the
-bottom of this file (STATUS meanings) and tests/e2e/gen_programs.py for the corpus.
+--update-expected), otherwise they are read from tests/e2e/expected/.  See tests/e2e/README.md (status
+meanings, how documented fixes are judged) and tests/e2e/gen_programs.py for the corpus.
+
+Every spawned process runs in its own session with a timeout and rlimits; its process group is
+SIGKILLed when it finishes or times out, and all live groups are killed on exit/SIGTERM/SIGINT.
 """
 import argparse
+import atexit
 import ctypes
 import datetime
 import difflib
@@ -79,6 +83,46 @@ def _limits():
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
+# Every spawned process gets its own process group (start_new_session), which is SIGKILLed when the
+# command finishes, times out, or the suite exits (atexit / SIGINT / SIGTERM).  This also reaps
+# grandchildren (the reference pipes into gcc/as/ld, Wine starts helpers) and the reference compiler
+# when it hangs (e.g. "perfectly balanced" in bully mode, docs/rust-rewrite-changes.md #8).
+_live_groups = set()
+_groups_lock = threading.Lock()
+
+
+def _spawn(argv, **kw):
+    p = subprocess.Popen(argv, start_new_session=True, preexec_fn=_limits, **kw)
+    with _groups_lock:
+        _live_groups.add(p.pid)
+    return p
+
+
+def _kill_group(p):
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except OSError:
+        pass
+    with _groups_lock:
+        _live_groups.discard(p.pid)
+
+
+def kill_all_groups(*_):
+    with _groups_lock:
+        groups = list(_live_groups)
+        _live_groups.clear()
+    for g in groups:
+        try:
+            os.killpg(g, signal.SIGKILL)
+        except OSError:
+            pass
+
+
+def _die(signum, _frame):
+    kill_all_groups()
+    os._exit(128 + signum)
+
+
 def base_env():
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C", "LC_ALL": "C", "TZ": "UTC",
            "QEMU_LD_PREFIX": QEMU_PREFIX, "HOME": os.environ.get("HOME", "/tmp")}
@@ -87,16 +131,31 @@ def base_env():
     return env
 
 
-def run_proc(argv, cwd=None, env=None, timeout=60, stdin=None):
-    """Run a (compile/tool) command, return dict rc/stdout/stderr (bytes) or rc='timeout'."""
+def run_proc(argv, cwd=None, env=None, timeout=60, stdin=None, input=None):
+    """Run a (compile/tool) command, return dict rc/stdout/stderr (bytes) or rc='timeout'.
+    `input` (bytes) is fed to stdin.  The whole process group is killed afterwards (and on timeout)."""
+    if input is not None:
+        stdin = subprocess.PIPE
     try:
-        p = subprocess.run(argv, cwd=cwd, env=env or base_env(), timeout=timeout, capture_output=True,
-                           stdin=subprocess.DEVNULL if stdin is None else stdin, preexec_fn=_limits)
-        return {"rc": p.returncode, "stdout": p.stdout, "stderr": p.stderr}
-    except subprocess.TimeoutExpired as e:
-        return {"rc": "timeout", "stdout": e.stdout or b"", "stderr": e.stderr or b""}
+        p = _spawn(argv, cwd=cwd, env=env or base_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                   stdin=subprocess.DEVNULL if stdin is None else stdin)
     except OSError as e:
         return {"rc": "oserror", "stdout": b"", "stderr": str(e).encode()}
+    try:
+        out, err = p.communicate(input=input, timeout=timeout)
+        rc = p.returncode
+    except subprocess.TimeoutExpired:
+        _kill_group(p)
+        try:
+            out, err = p.communicate(timeout=10)
+        except subprocess.TimeoutExpired:  # a grandchild escaped the group and holds the pipes
+            out, err = b"", b""
+            p.kill()
+            p.wait()
+        rc = "timeout"
+    finally:
+        _kill_group(p)
+    return {"rc": rc, "stdout": out or b"", "stderr": err or b""}
 
 
 def status_of(rc):
@@ -110,8 +169,7 @@ def run_exe(argv, cwd, stdin_path=None, timeout=5.0):
     non-terminating programs (timeout / unbounded output) get status 'nonterm'."""
     stdin = open(stdin_path, "rb") if stdin_path else subprocess.DEVNULL
     try:
-        p = subprocess.Popen(argv, cwd=cwd, env=base_env(), stdin=stdin, stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, preexec_fn=_limits, start_new_session=True)
+        p = _spawn(argv, cwd=cwd, env=base_env(), stdin=stdin, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     except OSError as e:
         return {"status": "oserror", "stdout": str(e)}
     finally:
@@ -134,19 +192,14 @@ def run_exe(argv, cwd, stdin_path=None, timeout=5.0):
             break
         data += chunk
     if nonterm:
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except OSError:
-            pass
+        _kill_group(p)
     try:
         rc = p.wait(timeout=max(1.0, deadline - time.monotonic() + 1.0))
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(p.pid, signal.SIGKILL)
-        except OSError:
-            pass
+        _kill_group(p)
         p.wait()
         nonterm = True
+    _kill_group(p)
     p.stdout.close()
     out = bytes(data)
     if nonterm:
@@ -515,6 +568,13 @@ def ref_oracle(entry, flags, cid):
     return build_and_run("ref", entry, oflags, cid + ":oracle", files=files)
 
 
+def low_byte_status(run):
+    """A Linux run as the Windows wrapper reports it (exit code & 0xff)."""
+    if run["status"].startswith("exit:"):
+        return dict(run, status=f"exit:{int(run['status'][5:]) & 0xff}")
+    return run
+
+
 def eval_spec(spec, kind, new, ref, entry):
     """True if the new outcome satisfies the 'correct behaviour' spec, None if not evaluable."""
     k = spec["kind"]
@@ -537,16 +597,17 @@ def eval_spec(spec, kind, new, ref, entry):
         return comp is not None and comp["class"] in ("ok", "diag", "toolchain")
     if k == "compile_ok":
         return comp is not None and comp["rc"] == 0
-    if k == "runs":
-        if kind != "lin-exe" or not ref.get("oracle"):
+    if k == "runs":  # the reference-built Linux oracle program shows the correct behaviour
+        if kind not in ("lin-exe", "win-run") or not ref.get("oracle") or not isinstance(ref["oracle"].get("runs"), list):
             return None
-        o = ref["oracle"]
-        return comp is not None and comp["rc"] == 0 and not cmp_runs(o["runs"], new["runs"], entry.get("exit_code_unspecified"))
+        o = ref["oracle"]["runs"]
+        if kind == "win-run":
+            o = [low_byte_status(x) for x in o]
+        return comp is not None and comp["rc"] == 0 and not cmp_runs(o, new["runs"], entry.get("exit_code_unspecified"))
     if k == "linux_runs":
         if kind != "win-run" or not isinstance((ref.get("linux") or {}).get("runs"), list):
             return None
-        lin = [dict(x, status=f"exit:{int(x['status'][5:]) & 0xff}") if x["status"].startswith("exit:") else x
-               for x in ref["linux"]["runs"]]
+        lin = [low_byte_status(x) for x in ref["linux"]["runs"]]
         return comp is not None and comp["rc"] == 0 and not cmp_runs(lin, new["runs"])
     if k == "asm":
         if kind not in ("lin-asm", "win-asm"):
@@ -570,6 +631,15 @@ def apply_bug(entry, kind, ref, new, res):
         return res
     tag = f"[reference bug: {rb['desc']}]"
     in_bug = kind in rb["bug_kinds"]
+    if res.status == "FIXED":
+        # the comparer already accounted for the difference with a documented fix (whitelist / Linux behaviour);
+        # a 'correct' spec for this kind must still hold
+        if in_bug and eval_spec(rb["correct"], kind, new, ref, entry) is False:
+            return Result("FAIL", "matches the whitelisted reference but not the specified correct behaviour",
+                          tag + f"\ncorrect = {json.dumps(rb['correct'])}\n" + res.details)
+        return Result("FIXED", res.summary, tag + "\n" + res.details)
+    if res.status == "OLDBUG":
+        return res
     if res.status in ("PASS", "WARN"):
         if in_bug and rb["correct"]["kind"] == "unspecified":
             return Result(res.status, "same as reference (reference behaviour is undefined here)", tag + "\n" + res.details)
@@ -579,7 +649,9 @@ def apply_bug(entry, kind, ref, new, res):
                           tag + "\n" + res.details)
         return res
     if not in_bug:
-        return Result("CHANGED", "differs from buggy reference on a non-bug aspect: " + res.summary, tag + "\n" + res.details)
+        # the bug does not concern this kind: a difference is judged as for any other program (the documented
+        # -S/-O changes are already accounted for by the whitelist)
+        return Result(res.status, res.summary, tag + "\n" + res.details)
     v = eval_spec(rb["correct"], kind, new, ref, entry)
     if v is True:
         return Result("FIXED", "reference bug fixed: behaves as specified", tag + "\n" + res.details)
@@ -611,6 +683,10 @@ def k_exe(cid, entry, flags, target="lin"):
         else:
             # Linux behaviour of the same program: the oracle for reference-Windows bugs
             r["linux"] = build_and_run("ref", entry, flags, cid + ":linux", "lin")
+            if "win-run" in (bug_spec(entry) or {}).get("bug_kinds", []):
+                o = ref_oracle(entry, flags, cid)
+                if o:
+                    r["oracle"] = o
         return r
 
     def cmp(ref, new):
@@ -641,8 +717,7 @@ def k_exe(cid, entry, flags, target="lin"):
                 if not probs:
                     return Result("PASS" if CFG.allow_old_bugs else "OLDBUG",
                                   "reproduces the reference Windows crash" + (" (allowed)" if CFG.allow_old_bugs else ""), det)
-                lin_n = [dict(x, status=f"exit:{int(x['status'][5:]) & 0xff}") if x["status"].startswith("exit:") else x
-                         for x in lruns]
+                lin_n = [low_byte_status(x) for x in lruns]
                 if isinstance(new.get("runs"), list) and not cmp_runs(lin_n, new["runs"], entry.get("exit_code_unspecified")):
                     return Result("FIXED", "reference Windows build crashes; new behaves like the Linux build", det)
                 return Result("FAIL", "reference Windows build crashes and new differs from the Linux behaviour: "
@@ -672,6 +747,88 @@ def asm_build(side, entry, flags, cid, target, when=REF_TIME, files=None, strip=
     return r
 
 
+# ------------------------------------------------------------------------------------------------
+# intentional differences: the reference -S text is rewritten by tests/frontend_parity_whitelist.pl
+# (one rule per fixed bug of docs/rust-rewrite-changes.md), exactly as tests/frontend_parity.sh does,
+# before it is compared with the new compiler's -S text (lin-asm/win-asm) or assembled with the
+# cross gas and compared with the new compiler's -O object (lin-obj/win-obj).
+# ------------------------------------------------------------------------------------------------
+WHITELIST = ROOT / "tests" / "frontend_parity_whitelist.pl"
+GAS = {"lin": ["x86_64-linux-gnu-as", "-W", "--64"],   # what the reference's `gcc -w -c -x assembler -` runs
+       "win": ["x86_64-w64-mingw32-as", "-W"]}
+_BULLY_PTR = re.compile(r"(BYTE|WORD|DWORD|QWORD) PTR \[[a-z0-9]+\]")
+
+
+def flag_context(flags):
+    """(compile mode, optimisation flag) of a command line, read like frontend_parity.sh's check()."""
+    mode, opt, prev = "noob", "", None
+    for a in flags:
+        if prev in ("-fcompile-mode", "-fc"):
+            mode = a
+        if a.startswith("-fcompile-mode="):
+            mode = a.split("=", 1)[1]
+        if re.fullmatch(r"-O-[0-9s]|-O69420", a):
+            opt = a
+        prev = a
+    return mode, opt
+
+
+def bully_size(new_asm):
+    """BULLY_SIZE as frontend_parity.sh's expected_asm() derives it: the size of the first sized
+    pointer in the new -S output (power's own `QWORD PTR [rsp]` operands are not bully pointers)."""
+    for m in _BULLY_PTR.finditer(new_asm or ""):
+        if m.group(0) != "QWORD PTR [rsp]":
+            return m.group(1)
+    return ""
+
+
+def strip_debug(t):
+    """frontend_parity.sh normalize_asm(): removes the STABS (reference) and DWARF (new) directives."""
+    t = re.sub(r"^\n(?=\.LEOF:$)", "", t, flags=re.M)
+    return re.sub(r"^(?:\.stabs .*|\t?\.stabn .*|\t\.Lcmd_\d*:|\t\.Lret_.*:|\.LEOF:|\.file \d+ \".*|\t\.loc \d+ \d+)\n",
+                  "", t, flags=re.M)
+
+
+def whitelist(asm, target, flags, new_asm=""):
+    """The reference -S text with the documented fixes applied.  Raises if the script fails."""
+    mode, opt = flag_context(flags)
+    env = base_env()
+    env["BULLY_SIZE"] = bully_size(new_asm) if mode == "bully" else ""
+    r = run_proc(["perl", str(WHITELIST), {"lin": "linux", "win": "windows"}[target], mode, opt], env=env,
+                 input=asm.encode("latin-1"), timeout=60)
+    if r["rc"] != 0:
+        raise RuntimeError(f"whitelist script failed (rc={r['rc']}): {r['stderr'].decode('latin-1')[-500:]}")
+    return r["stdout"].decode("latin-1")
+
+
+def judge(ra, wa, na, what="assembly", fmt=None):
+    """ra = reference, wa = whitelisted reference, na = new (texts, or objdump infos with fmt).
+    Returns (status, summary, details)."""
+    fmt = fmt or (lambda x: x)
+    if na == wa:
+        if wa == ra:
+            return "PASS", "", ""
+        return "FIXED", f"{what} equals the reference with the documented fixes applied (frontend_parity_whitelist.pl)", \
+            "--- whitelist rewrite of the reference:\n" + text_diff(fmt(ra), fmt(wa), "reference", "whitelisted", n=60)
+    if na == ra and wa != ra:
+        st = "PASS" if CFG.allow_old_bugs else "OLDBUG"
+        return st, f"{what} equals the unfixed reference: a documented fix is missing" + \
+            (" (allowed)" if CFG.allow_old_bugs else ""), text_diff(fmt(ra), fmt(wa), "reference", "whitelisted")
+    return "FAIL", f"{what} differs from the whitelisted reference", \
+        text_diff(fmt(wa), fmt(na), "whitelisted reference", "new")
+
+
+def gas_objinfo(asm, target, d):
+    """Assembles -S text with the cross gas (as the reference's gcc pipe does).
+    Returns (objdump_info or None, gas stderr)."""
+    d.mkdir(parents=True, exist_ok=True)
+    out = d / f"gas{len(list(d.iterdir()))}.o"
+    r = run_proc(GAS[target] + ["-o", str(out), "-"], cwd=d, input=asm.encode("latin-1"))
+    if r["rc"] != 0 or not out.exists():
+        return None, r["stderr"].decode("latin-1")[-1500:]
+    return objdump_info(OBJDUMP_WIN if target == "win" else OBJDUMP_LIN, str(out)), ""
+
+
 def k_asm(cid, entry, flags, target="lin"):
     kind = "lin-asm" if target == "lin" else "win-asm"
     debug = "-g" in flags
@@ -692,17 +849,20 @@ def k_asm(cid, entry, flags, target="lin"):
             return Result("FAIL", p, det)
         if ref["compile"]["rc"] != 0:
             return Result("PASS", "", det)
+        ra, na = ref.get("asm") or "", new.get("asm") or ""
         if debug:
-            if not CFG.new_is_ref and target == "lin" and "bully" not in flags and new.get("asm") and not re.search(r"^\s*\.(loc|file)\b", new["asm"], re.M):
+            if not CFG.new_is_ref and target == "lin" and "bully" not in flags and na and not re.search(r"^\s*\.(loc|file)\b", na, re.M):
                 return Result("WARN", "-g: no DWARF .file/.loc directives in -S output", det)
-            return Result("PASS", "-g: assembly text not compared (STABS vs DWARF)", det)
-        if ref.get("asm") != new.get("asm"):
-            return Result("FAIL", "assembly differs", det + text_diff(ref.get("asm") or "", new.get("asm") or ""))
-        return Result("PASS", "", det)
+            # STABS (reference) vs DWARF (new): both are removed before comparing, as in frontend_parity.sh
+            ra, na = strip_debug(ra), strip_debug(na)
+        st, summary, d2 = judge(ra, whitelist(ra, target, flags, na), na)
+        if debug:
+            summary = "-g: compared without the STABS/DWARF directives" + (f"; {summary}" if summary else "")
+        return Result(st, summary, det + d2)
     return generic(cid, entry, kind, ref_fn, lambda: asm_build("new", entry, flags, cid, target), cmp)
 
 
-def obj_build(side, entry, flags, cid, target, link=None):
+def obj_build(side, entry, flags, cid, target):
     d = workdir(cid, side)
     out = str(d / "out.o")
     c = compile_(side, target, flags, entry, out, mode="-O")
@@ -718,42 +878,103 @@ def obj_build(side, entry, flags, cid, target, link=None):
                 l = run_proc([CC_WIN, "-o", str(d / "linked.exe")] + srcs + [out], cwd=d)
                 r["link_rc"] = l["rc"]
                 r["link_err"] = l["stderr"].decode("latin-1")[-2000:]
+    # the -S text of the same compilation: the reference's is whitelisted and assembled (k_obj); the new
+    # compiler's only provides the bully operand size for the whitelist (as in frontend_parity.sh)
+    if side == "ref" or flag_context(flags)[0] == "bully":
+        s = compile_(side, target, flags, entry, str(d / "out.S"), mode="-S")
+        try:
+            r["asm"] = Path(d / "out.S").read_text(encoding="latin-1") if s["rc"] == 0 else None
+        except OSError:
+            r["asm"] = None
     shutil.rmtree(d, ignore_errors=True)
     return r
 
 
+def obj_problems(want, got, det):
+    """Compares two objdump infos -> (problems, exact .text equal, normalised .text equal, details)."""
+    probs = []
+    if want["globals"] != got["globals"]:
+        probs.append("global/undefined symbols differ")
+        det += text_diff("\n".join(want["globals"]), "\n".join(got["globals"]))
+    if want["data"] != got["data"]:
+        probs.append(".data differs")
+        det += text_diff(want["data"], got["data"])
+    return probs, want["dis"] == got["dis"], norm_dis(want["dis"]) == norm_dis(got["dis"]), det
+
+
 def k_obj(cid, entry, flags, target="lin"):
+    """The new -O object is compared with the reference -S text, rewritten by the whitelist (documented fixes) and
+    assembled with the cross gas.  A self-check makes sure that assembling the unmodified reference -S text gives
+    the reference's own -O object (same objdump info), and the mingw link of the object is compared as before."""
     kind = "lin-obj" if target == "lin" else "win-obj"
+    debug = "-g" in flags
 
     def cmp(ref, new):
         det = fmt_compile("reference", ref["compile"]) + fmt_compile("new", new["compile"])
+        if "asm" not in ref:
+            return Result("ERROR", "stored reference outcome has no -S text: regenerate expected/ (--update-expected)", det)
+        no = new.get("obj")
+        ra = ref.get("asm")
+        if ra is not None and debug:
+            ra = strip_debug(ra)   # STABS: not comparable with DWARF, and -g with several files does not assemble
+        gas_dir = workdir(cid, "gas")
+        try:
+            wa = whitelist(ra, target, flags, new.get("asm") or "") if ra is not None else None
+            wo, werr = gas_objinfo(wa, target, gas_dir) if wa is not None else (None, "no reference -S text")
+            if wa == ra:
+                ro_s, rerr = wo, werr
+            else:
+                ro_s, rerr = gas_objinfo(ra, target, gas_dir) if ra is not None else (None, "")
+        finally:
+            shutil.rmtree(gas_dir.parent, ignore_errors=True)
         p = cmp_compile(ref["compile"], new["compile"])
         if p:
+            if ref["compile"]["class"] == "toolchain" and new["compile"]["rc"] == 0 and isinstance(no, dict) and wo:
+                # the reference's gas run failed, but the whitelisted reference -S text assembles: judge against it
+                probs, same, same_n, det = obj_problems(wo, no, det)
+                if not probs and same:
+                    return Result("FIXED", "reference -O fails in gas; the whitelisted reference -S assembles to the new "
+                                  "object", det + "--- reference gas errors:\n" + rerr + "\n" +
+                                  text_diff(ra, wa, "reference", "whitelisted", n=60))
+                return Result("FAIL", "reference -O fails in gas; the new object differs from the whitelisted reference",
+                              det + text_diff(norm_dis(wo["dis"]), norm_dis(no["dis"]), "whitelisted reference", "new"))
             return Result("FAIL", p, det)
         if ref["compile"]["rc"] != 0:
             return Result("PASS", "", det)
-        ro, no = ref.get("obj"), new.get("obj")
+        ro = ref.get("obj")
         if not isinstance(no, dict) or not isinstance(ro, dict):
             return Result("FAIL", f"object: {no!r:.80}", det)
-        probs = []
-        if ro["globals"] != no["globals"]:
-            probs.append("global/undefined symbols differ")
-            det += text_diff("\n".join(ro["globals"]), "\n".join(no["globals"]))
-        if ro["data"] != no["data"]:
-            probs.append(".data differs")
-            det += text_diff(ro["data"], no["data"])
+        # self-check of the assembling pipeline: gas(reference -S) must reproduce the reference -O object
+        if ro_s is None:
+            return Result("ERROR", "suite: the reference -S text does not assemble with " + GAS[target][0], det + rerr)
+        sp, ssame, _, _ = obj_problems(ro, ro_s, "")
+        if sp or not ssame:
+            return Result("ERROR", "suite: assembling the reference -S text does not reproduce the reference -O object",
+                          det + text_diff(ro["dis"], ro_s["dis"], "reference -O", "gas(reference -S)"))
+        if wo is None:
+            return Result("FAIL", "the whitelisted reference -S text does not assemble", det + werr)
+        probs, same, same_n, det = obj_problems(wo, no, det)
         if "link_rc" in ref and (ref["link_rc"] == 0) != (new.get("link_rc") == 0):
             probs.append(f"mingw link rc reference={ref['link_rc']} new={new.get('link_rc')}")
             det += "--- new link stderr:\n" + new.get("link_err", "") + "\n"
-        if ro["dis"] == no["dis"] and not probs:
-            return Result("PASS", "", det)
-        if norm_dis(ro["dis"]) == norm_dis(no["dis"]):
+        fixed = wa != ra
+        if same and not probs:
+            if not fixed or wo == ro_s:
+                return Result("PASS", "", det)
+            return Result("FIXED", "object equals the whitelisted reference -S text assembled with gas (documented "
+                          "fixes, frontend_parity_whitelist.pl)", det + text_diff(ra, wa, "reference", "whitelisted", n=60))
+        if fixed and not obj_problems(ro_s, no, "")[0] and ro_s["dis"] == no["dis"]:
+            return Result("PASS" if CFG.allow_old_bugs else "OLDBUG", "object equals the unfixed reference: a documented "
+                          "fix is missing", det + text_diff(ra, wa, "reference", "whitelisted"))
+        if same_n:
             if probs:
                 return Result("FAIL", "; ".join(probs), det)
-            return Result("WARN", "disassembly equal modulo encodings/addresses/symbol names", det + text_diff(ro["dis"], no["dis"]))
+            return Result("WARN", "disassembly equal modulo encodings/addresses/symbol names",
+                          det + text_diff(wo["dis"], no["dis"], "whitelisted reference", "new"))
         probs.append("instructions differ")
-        return Result("FAIL", "; ".join(probs), det + text_diff(norm_dis(ro["dis"]), norm_dis(no["dis"]))
-                      + "\n(raw)\n" + text_diff(ro["dis"], no["dis"], n=40))
+        return Result("FAIL", "; ".join(probs) + (" (vs the whitelisted reference)" if fixed else ""),
+                      det + text_diff(norm_dis(wo["dis"]), norm_dis(no["dis"]), "whitelisted reference", "new")
+                      + "\n(raw)\n" + text_diff(wo["dis"], no["dis"], "whitelisted reference", "new", n=40))
     return generic(cid, entry, kind, lambda: obj_build("ref", entry, flags, cid, target),
                    lambda: obj_build("new", entry, flags, cid, target), cmp)
 
@@ -943,14 +1164,26 @@ def k_random_asm(cid, entry, flags, target):
         if new["compile"]["rc"] != 0:
             return Result("PASS", "", det)
         a = new.get("asm") or ""
-        if a in ref["variants"]:
-            return Result("PASS", "random: matches a sampled reference variant (confused-stonks label ignored)", det)
+        wl = lambda t: whitelist(t, target, flags, a)
+        wvariants = {v: wl(v) for v in ref["variants"]}
+        for v, w in wvariants.items():
+            if a == w:
+                if w == v:
+                    return Result("PASS", "random: matches a sampled reference variant (confused-stonks label ignored)", det)
+                return Result("FIXED", "random: matches a sampled reference variant with the documented fixes applied "
+                              "(frontend_parity_whitelist.pl)", det + text_diff(v, w, "reference", "whitelisted", n=60))
+        if a in wvariants:
+            return Result("PASS" if CFG.allow_old_bugs else "OLDBUG", "random: equals an unfixed reference variant: a "
+                          "documented fix is missing", det + text_diff(a, wvariants[a], "reference", "whitelisted"))
         # blank lines are ignored: the deleted/"perfectly balanced" lines themselves leave empty '\t' lines behind
         nonblank = lambda t: [l for l in t.splitlines() if l.strip()]
-        if ref.get("full") and is_subsequence(nonblank(a), nonblank(ref["full"])):
-            return Result("PASS", "random: perfectly balanced output is a line-subsequence of the full program", det)
-        best = min(ref["variants"], key=lambda v: len(text_diff(v, a, n=10 ** 6))) if ref["variants"] else ""
-        return Result("FAIL", "random: assembly matches no sampled reference variant", det + text_diff(best, a))
+        if ref.get("full"):
+            if is_subsequence(nonblank(a), nonblank(wl(ref["full"]))):
+                return Result("PASS", "random: perfectly balanced output is a line-subsequence of the full program "
+                              "(whitelisted)", det)
+        best = min(wvariants.values(), key=lambda v: len(text_diff(v, a, n=10 ** 6))) if wvariants else ""
+        return Result("FAIL", "random: assembly matches no sampled (whitelisted) reference variant",
+                      det + text_diff(best, a, "whitelisted reference", "new"))
     return generic(cid, entry, kind, ref_fn, lambda: asm_build("new", entry, flags, cid, target, strip=True), cmp)
 
 
@@ -1191,17 +1424,17 @@ def k_gdb(cid, entry, line, expect_text):
     with _wd_lock:
         _port[0] += 1
         port = _port[0]
-    q = subprocess.Popen(["qemu-x86_64", "-L", QEMU_PREFIX, "-g", str(port), exe], cwd=d, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, env=base_env())
+    q = _spawn(["qemu-x86_64", "-L", QEMU_PREFIX, "-g", str(port), exe], cwd=d, stdout=subprocess.DEVNULL,
+               stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, env=base_env())
     time.sleep(0.5)
     src = Path(entry["files"][0]).name
     g = run_proc(["gdb-multiarch", "-batch", "-nx", "-ex", f"set sysroot {QEMU_PREFIX}", "-ex", f"file {exe}",
                   "-ex", f"target remote :{port}", "-ex", f"break {src}:{line}", "-ex", "continue",
                   "-ex", "info line *$pc", "-ex", "kill"], cwd=d, timeout=60)
+    _kill_group(q)
     try:
-        q.kill()
         q.wait(5)
-    except Exception:
+    except subprocess.TimeoutExpired:
         pass
     out = g["stdout"].decode("latin-1") + g["stderr"].decode("latin-1")
     shutil.rmtree(d, ignore_errors=True)
@@ -1293,7 +1526,10 @@ def plan(manifest):
             if e.get("driver"):
                 add(f"lin-link:{name}{sfx}", cat, k_link, e, fl)
             if "win-exe" in e["kinds"] and not e.get("random"):
-                if CFG.wine_run:
+                if CFG.wine_run and e.get("win_run_unsupported"):
+                    add(f"win-run:{name}{sfx}", "windows-run",
+                        lambda *a, why=e["win_run_unsupported"]: Result("SKIP", "cannot run under box64+Wine: " + why))
+                elif CFG.wine_run:
                     add(f"win-run:{name}{sfx}", "windows-run", k_exe, e, fl, "win")
             if e.get("martyrdom"):
                 for v in e.get("martyrdom_variants", [[], ["-fno-martyrdom"]]):
@@ -1336,6 +1572,10 @@ def main():
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--martyr-helper", nargs=2, metavar=("EXE", "TIMEOUT"), help=argparse.SUPPRESS)
     a = ap.parse_args()
+    atexit.register(kill_all_groups)
+    signal.signal(signal.SIGTERM, _die)
+    signal.signal(signal.SIGINT, _die)
+    signal.signal(signal.SIGHUP, _die)
     if a.martyr_helper:
         martyr_helper(a.martyr_helper[0], float(a.martyr_helper[1]))
         return 0

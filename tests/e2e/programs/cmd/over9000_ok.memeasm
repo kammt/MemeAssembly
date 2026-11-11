@@ -5,9 +5,9 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
     it's over 9000 ax
     ebx is brilliant, but I like 100000
     it's over 9000 ebx
-    al is brilliant, but I like 50
-    it's over 9000 al
-    What the hell happened here? 9000 is truncated to 0x28 for 8-bit registers by gas
+    r12w is brilliant, but I like 32767
+    it's over 9000 r12w
+    What the hell happened here? 8-bit values are never over 9000 (always halt, see crash/over9000_hlt8)
     what can I say except o
     what can I say except k
     what can I say except \n

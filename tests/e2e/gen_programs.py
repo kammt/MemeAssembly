@@ -352,7 +352,17 @@ for dvs, dvd, a, v in [("7", "rax", "0", "100"), ("-7", "rax", "0", "100"), ("7"
           f"{PARENT[dvd]} is brilliant, but I like {v}" if dvd != "rax" else f"rax is brilliant, but I like {v}",
           "rdx is brilliant, but I like 12345" if dvd == "rdx" else "rdx is brilliant, but I like 5",
           f"look at what {dvs} needs to mimic a fraction of {dvd}"] + show(dvd) + show("rdx")
-cmd("idiv", b)
+cmd("idiv", b, ref_bug={
+    "desc": "division with the dividend in rdx (docs/rust-rewrite-changes.md #12): the reference's final 'pop rdx' "
+            "restores the old rdx, so 'look at what \\n needs to mimic a fraction of rdx' leaves rdx = 12345 "
+            "instead of 1234",
+    "bug_kinds": ["lin-exe", "win-run"],
+    "correct": {"kind": "runs", "oracle": "tests/e2e/programs/cmd/idiv.oracle.memeasm"}})
+# oracle: the rdx case divides rbx instead and copies the quotient into rdx (correct in the reference, too)
+PROGRAMS["cmd/idiv.oracle.memeasm"] = runprog(sum([
+    ["rbx is brilliant, but I like 12345", "look at what \\n needs to mimic a fraction of rbx",
+     "rdx is brilliant, but I like rbx"] if l == "look at what \\n needs to mimic a fraction of rdx" else
+    [] if l == "rdx is brilliant, but I like 12345" else [l] for l in b], []))
 
 # power ----------------------------------------------------------------------------------------
 b = []
@@ -432,14 +442,17 @@ cmd("read", b, stdin=b"AbC\xffxyz\n")
 cmd("nop", ["oh no! anyway"] + say("nop\n") + ["oh no! anyway"])
 cmd("over9000_ok", ["rax is brilliant, but I like 9001", "it's over 9000 rax", "ax is brilliant, but I like 9001",
                     "it's over 9000 ax", "ebx is brilliant, but I like 100000", "it's over 9000 ebx",
-                    "al is brilliant, but I like 50", "it's over 9000 al",
-                    "What the hell happened here? 9000 is truncated to 0x28 for 8-bit registers by gas"] + say("ok\n"))
+                    "r12w is brilliant, but I like 32767", "it's over 9000 r12w",
+                    "What the hell happened here? 8-bit values are never over 9000 (always halt, see crash/over9000_hlt8)"]
+    + say("ok\n"))
 cmd("rdrand", ["rax is brilliant, but I like -1", "it's dangerous to go alone, take eax"] + [
     "they had us in the first half, not gonna lie rax"] * 32 + show("rax") + [
     "rbx is brilliant, but I like -1", "it's dangerous to go alone, take bx"] + [
     "they had us in the first half, not gonna lie rbx"] * 16 + show("rbx") + [
     "it's dangerous to go alone, take r12", "it's dangerous to go alone, take r12d",
-    "it's dangerous to go alone, take r12w"] + say("ok\n"))
+    "it's dangerous to go alone, take r12w"] + say("ok\n"),
+    win_run_unsupported="box64 does not implement 'rdrand r16' (66 0F C7 /6): SIGILL at 'rdrand bx', also in a "
+                        "mingw-gcc build of the same -S text")
 cmd("syscall_exit", say("bye\n") + ["rax is brilliant, but I like 60", "rdi is brilliant, but I like 42",
                                     "we need air support"] + say("unreachable"))
 cmd("syscall_write", ["stonks 2660", "rax is brilliant, but I like 1", "rdi is brilliant, but I like 1",
@@ -817,7 +830,13 @@ bully("orphans", "what can I say except o\n" + func("main", say("m\n")) + "what 
 bully("orphans_only", "what can I say except o\nwhat can I say except \\n\nrax is brilliant, but I like 5\n",
       ref_bug=WIN_NO_MAIN)
 bully("mixed", func("main", say("x") + ["stonks al", "blub", "upvote 5", "rax is brilliant, but I like eax",
-                                        "fuck go back", "upgrades, people. Upgrades 7"] + say("y\n")) + "\n" + func("main", []))
+                                        "fuck go back", "upgrades, people. Upgrades 7"] + say("y\n")) + "\n" + func("main", []),
+      ref_bug={"desc": "the bully fix-ups of this program read uninitialised registers: 'stonks al' becomes an unbalanced "
+                       "'push rax' (rax as left by the start-up code) that main's 'ret' pops, and 'blub' becomes a "
+                       "'syscall' with start-up register contents. The reference (glibc start-up) returns to garbage "
+                       "after 'xy\\n'; new executables enter main with rax = &main (docs/rust-rewrite-changes.md, "
+                       "'Other known divergences') and print 'xy\\n' twice. The -S/-O output is still compared exactly.",
+               "bug_kinds": ["lin-exe"], "correct": {"kind": "unspecified"}})
 bully("with_g_note", func("main", say("g\n")), flags=BF + ["-g"])
 add("bully/dot_path", None, "bully", flags=BF, cwd="tests/e2e/programs/bully/dot_path", files={
     "zz_main.memeasm": func("main", say("<") + ["some invalid thing", "another 1 2 3", "stonks al"] + say(">\n")),
@@ -834,10 +853,21 @@ add("bully/dot_path", None, "bully", flags=BF, cwd="tests/e2e/programs/bully/dot
 # --------------------------------------------------------------------------------------------
 
 
+def with_oracle(spec, path):
+    """Attaches the oracle program to the "runs" spec, wherever it is nested (see run.py find_oracle_spec)."""
+    if spec["kind"] == "runs":
+        return dict(spec, oracle=path)
+    if spec["kind"] == "any_of":
+        return dict(spec, of=[with_oracle(s, path) for s in spec["of"]])
+    if spec["kind"] == "per_kind":
+        return {k: (v if k == "kind" else with_oracle(v, path)) for k, v in spec.items()}
+    return spec
+
+
 def bug(name, text, desc, bug_kinds, correct, kinds=None, oracle=None, **kw):
     if oracle is not None:
         PROGRAMS[f"bugs/{name}.oracle.memeasm"] = oracle
-        correct = dict(correct, oracle=f"tests/e2e/programs/bugs/{name}.oracle.memeasm")
+        correct = with_oracle(correct, f"tests/e2e/programs/bugs/{name}.oracle.memeasm")
     add(f"bugs/{name}", text, "bugs", kinds=kinds, ref_bug={"desc": desc, "bug_kinds": bug_kinds, "correct": correct}, **kw)
 
 
@@ -872,13 +902,16 @@ bug("power_one", runprog(say("before\n") + ["rax is brilliant, but I like 5", "r
     "x UNLIMITED POWER 1 decrements the exponent twice before testing it and loops ~2^64 times",
     ["lin-exe"], RUNS, kinds=["lin-exe", "lin-asm", "win-asm"], timeout=3,
     oracle=runprog(say("before\n") + ["rax is brilliant, but I like 5"] + show("rax") + say("after\n")))
-bug("power_negative", runprog(say("before\n") + ["rax is brilliant, but I like 1", "rax UNLIMITED POWER -1"] + say("after\n"),
-                              hexlib=False),
-    "negative exponent loops ~2^64 times (no defined result)", ["lin-exe"], {"kind": "unspecified"},
-    kinds=["lin-exe", "lin-asm", "win-asm"], timeout=3)
+# x ** y for y < 0 (docs/rust-rewrite-changes.md #13): 1 for x = 1, +-1 by the parity of y for x = -1, 0 otherwise
+POW_NEG = [("1", "-1", "1"), ("-1", "-3", "-1"), ("-1", "-2", "1"), ("5", "-1", "0"), ("0", "-4", "0")]
+bug("power_negative", runprog(say("before\n") + sum([[f"rax is brilliant, but I like {x}", f"rax UNLIMITED POWER {y}"]
+                                                     + show("rax") for x, y, _ in POW_NEG], []) + say("after\n")),
+    "negative exponent loops ~2^64 times", ["lin-exe"], RUNS, kinds=["lin-exe", "lin-asm", "win-asm"], timeout=3,
+    oracle=runprog(say("before\n") + sum([[f"rax is brilliant, but I like {r}"] + show("rax") for _, _, r in POW_NEG], [])
+                   + say("after\n")))
 bug("decimal_overflow", runprog(["rax is brilliant, but I like 99999999999999999999"] + show("rax")),
-    "decimal literal larger than 2^64 is silently saturated to INT64_MAX by strtoll", ["lin-exe", "lin-asm", "win-asm"],
-    {"kind": "unspecified"}, kinds=["lin-exe", "lin-asm", "win-asm"])
+    "decimal literal larger than 2^64 is silently saturated to INT64_MAX by strtoll (docs #14: now a compile error "
+    "in noob mode)", ["lin-exe", "lin-asm", "win-asm"], {"kind": "diagnostic"}, kinds=["lin-exe", "lin-asm", "win-asm"])
 bug("over9000_8bit", runprog(say("before\n") + ["al is brilliant, but I like 41", "it's over 9000 al"] + say("after\n"),
                              hexlib=False),
     "it's over 9000 with an 8-bit register emits 'cmp al, 9000'; gas truncates 9000 to 0x28 (warning hidden by -w), "
@@ -904,8 +937,8 @@ bully("no_main_fno_martyrdom_sigint", func("loop", say("R\n") + ["you shall not 
       kinds=["lin-exe"], martyrdom=True, flags=BF + ["-fno-martyrdom"], martyrdom_variants=[[]])
 bug("bully_empty_file", "",
     "bully mode with no functions at all: the generated main falls through into writechar and returns an "
-    "uninitialised rax (undefined behaviour)", ["lin-exe"], {"kind": "unspecified"},
-    kinds=["lin-exe", "lin-asm", "win-asm"], flags=BF, timeout=3, exit_code_unspecified=True)
+    "uninitialised rax (undefined behaviour); docs #16: the injected main now returns 0", ["lin-exe"], RUNS,
+    kinds=["lin-exe", "lin-asm", "win-asm"], flags=BF, timeout=3, oracle=func("main", []))
 bug("multi_line_comment", func("main", ["Why, why?", "comment", "Oh, that's why"]),
     "multi-line comments ('Why, why?' ... \"Oh, that's why\") are defined in commands.h but never implemented",
     ["lin-exe", "lin-asm", "win-asm"], {"kind": "unspecified"}, kinds=["lin-exe", "lin-asm", "win-asm"])
