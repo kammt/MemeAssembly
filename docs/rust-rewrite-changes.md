@@ -9,7 +9,7 @@ exactly these differences: the per-fix rewrite rules are in
 crashes or hangs, `check_new_error` the inputs that are now rejected (#14, #18) and
 `check_assembles` the bully fix-ups that now assemble (#18).
 
-Line numbers refer to the C sources at commit 8f186d8.
+Line numbers refer to the C sources in `compiler/` at commit 8f186d8 (still on `main`).
 
 ## Fixed bugs
 
