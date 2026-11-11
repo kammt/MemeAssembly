@@ -49,25 +49,29 @@ jobs:
         run: make CARGO_FLAGS=--locked windows
 
   build_windows:
-    # The type of runner that the job will run on
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # MSVC is rustup's default on Windows; the GNU toolchain is what `make windows` cross-builds with
+        toolchain: [stable-x86_64-pc-windows-msvc, stable-x86_64-pc-windows-gnu]
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: actions/checkout@v4
 
-      # MemeAssembly cannot be built with MSVC, use the GNU toolchain with mingw64's gcc
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable-x86_64-pc-windows-gnu
+          toolchain: ${{ matrix.toolchain }}
 
       - uses: msys2/setup-msys2@v2
+        if: contains(matrix.toolchain, 'gnu')
         id: msys2
         with:
           msystem: MINGW64
           install: mingw-w64-x86_64-gcc
 
       - name: Add mingw64 to PATH
+        if: contains(matrix.toolchain, 'gnu')
         shell: pwsh
         run: echo "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" >> $env:GITHUB_PATH
 

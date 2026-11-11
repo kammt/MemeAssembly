@@ -115,7 +115,7 @@ sudo make install   # installs memeasm into /usr/local/bin
 `make install` honours `DESTDIR` and `bindir` (e.g. `make install bindir=/usr/bin`), `sudo make uninstall` removes memeasm again. Run the tests with `cargo test`.
 
 ### Windows
-`install_windows.bat` downloads, compiles and installs the latest version of MemeAssembly. It needs [rustup](https://rustup.rs) and gcc from [mingw-w64](https://www.mingw-w64.org) in your `PATH`, as MemeAssembly is built with the `stable-x86_64-pc-windows-gnu` toolchain (MSVC is not supported, it is way too serious for this). \
+`install_windows.bat` downloads, compiles and installs the latest version of MemeAssembly. It needs [rustup](https://rustup.rs) in your `PATH`; both the default MSVC toolchain and the `stable-x86_64-pc-windows-gnu` toolchain work. \
 To build `memeasm.exe` on Linux instead, run `rustup target add x86_64-pc-windows-gnu`, install mingw-w64 (`x86_64-w64-mingw32-gcc`) and run `make windows`.
 
 ## Badge of honor

@@ -61,20 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # MemeAssembly cannot be built with MSVC, use the GNU toolchain with mingw64's gcc
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable-x86_64-pc-windows-gnu
-
-      - uses: msys2/setup-msys2@v2
-        id: msys2
-        with:
-          msystem: MINGW64
-          install: mingw-w64-x86_64-gcc
-
-      - name: Add mingw64 to PATH
-        shell: pwsh
-        run: echo "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" >> $env:GITHUB_PATH
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Compile memeasm
         shell: powershell
