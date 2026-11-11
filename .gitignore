@@ -22,3 +22,4 @@ compile_commands.json
 
 # Rust
 /target/
+/.claude/worktrees/
