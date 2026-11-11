@@ -4,12 +4,13 @@ pub mod helper;
 pub mod parameters;
 
 use super::commands::*;
-use super::libc::{time_now, CRand, RandAlgorithm};
+use super::random::Rng;
 use super::log::{print_debug, print_error, print_thanos_ascii, Arg};
 use helper::{check_companion_command_existence, check_duplicate_definition};
 
 /// Runs the parameter checks on every command and then every command's analysis function.
 pub fn analyse_commands(state: &mut CompileState) {
+    let mut rng = Rng::default();
     let mut lists: Vec<Vec<CmdLoc>> = vec![Vec::new(); NUMBER_OF_COMMANDS];
 
     for file in 0..state.files.len() {
@@ -34,8 +35,8 @@ pub fn analyse_commands(state: &mut CompileState) {
             Some(Analysis::TheyreTheSamePicture) => {
                 analyse_theyre_the_same_picture_commands(&lists, opcode, state)
             }
-            Some(Analysis::ConfusedStonks) => set_confused_stonks_jump_label(state),
-            Some(Analysis::PerfectlyBalanced) => choose_lines_to_be_deleted(&lists, opcode, state),
+            Some(Analysis::ConfusedStonks) => set_confused_stonks_jump_label(state, &mut rng),
+            Some(Analysis::PerfectlyBalanced) => choose_lines_to_be_deleted(&lists, opcode, state, &mut rng),
         }
     }
 
@@ -100,14 +101,13 @@ fn analyse_theyre_the_same_picture_commands(lists: &[Vec<CmdLoc>], opcode: usize
 }
 
 /// Chooses a random line of code for each input file at which the "confused stonks" jump
-/// marker is placed (`srand(time(NULL))` + `rand() % loc`, like the C code).
-fn set_confused_stonks_jump_label(state: &mut CompileState) {
-    let mut rng = CRand::new(RandAlgorithm::host(), time_now() as u32);
+/// marker is placed.
+fn set_confused_stonks_jump_label(state: &mut CompileState, rng: &mut Rng) {
     for i in 0..state.files.len() {
         if state.files[i].loc == 0 {
             continue;
         }
-        state.files[i].random_index = rng.rand() as usize % state.files[i].loc;
+        state.files[i].random_index = rng.below(state.files[i].loc);
         print_debug(
             state.log_level,
             "Chose random line for jump marker: %lu",
@@ -118,7 +118,7 @@ fn set_confused_stonks_jump_label(state: &mut CompileState) {
 
 /// Marks random lines as deleted depending on how often "perfectly balanced as all things
 /// should be" was used.
-fn choose_lines_to_be_deleted(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
+fn choose_lines_to_be_deleted(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState, rng: &mut Rng) {
     let ll = state.log_level;
     print_debug(ll, "Starting analysis of the \"Perfectly balanced...\" command", &[]);
     let perfectly_balanced_used = lists[opcode].len();
@@ -146,18 +146,17 @@ fn choose_lines_to_be_deleted(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut 
     if lines_to_be_deleted > 0 {
         print_thanos_ascii(lines_to_be_deleted);
 
-        let mut rng = CRand::new(RandAlgorithm::host(), time_now() as u32);
-        let file_count = state.files.len() as u32;
+        let file_count = state.files.len();
         let mut selected_lines = 0;
         while selected_lines < lines_to_be_deleted.min(deletable) {
-            let random_file = (rng.rand() as u32 % file_count) as usize;
+            let random_file = rng.below(file_count);
             let file_loc = state.files[random_file].loc;
             if file_loc == 0 {
                 // A file without code (possible in bully mode) has no line to delete; the C code
-                // computed `rand() % 0` and crashed here. Pick another file instead.
+                // computed `rand() % 0` and crashed here. Draw another file instead.
                 continue;
             }
-            let random_line = rng.rand() as usize % file_loc;
+            let random_line = rng.below(file_loc);
             print_debug(
                 ll,
                 "\tGenerated random line %lu in file %u",

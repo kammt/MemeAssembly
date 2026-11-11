@@ -1,10 +1,8 @@
-//! Port of compiler/logger/log.c plus the stdio behaviour the C code relied on.
+//! Port of compiler/logger/log.c.
 
-use std::io::{IsTerminal, Write};
-use std::sync::Mutex;
+use std::io::{ErrorKind, Write};
 
 use super::commands::{CompileMode, CompileState, LogLevel};
-use super::libc::c_char_value;
 use crate::target::Target;
 
 pub const RED: &str = "\x1B[31m";
@@ -16,42 +14,20 @@ pub const RESET: &str = "\x1B[0m";
 
 pub const VERSION_STRING: &str = "v1.6";
 
-/// C `stdout` buffer. Like stdio, it is line buffered on a terminal and fully buffered
-/// otherwise; it is always flushed by [`exit`].
-static STDOUT: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+/// Exit code when stdout is a closed pipe (what shells report for a process killed by SIGPIPE).
+pub const BROKEN_PIPE_EXIT_CODE: i32 = 141;
 
-/// The C runtime on Windows writes text streams with CRLF line endings.
-pub fn text_mode(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
-    if cfg!(windows) && bytes.contains(&b'\n') {
-        let mut v = Vec::with_capacity(bytes.len() + 16);
-        for &b in bytes {
-            if b == b'\n' {
-                v.push(b'\r');
-            }
-            v.push(b);
-        }
-        std::borrow::Cow::Owned(v)
-    } else {
-        std::borrow::Cow::Borrowed(bytes)
-    }
-}
-
-/// `printf` equivalent: writes raw bytes to stdout.
+/// Writes raw bytes to stdout. If the reader of a pipe has gone away, the compiler ends quietly
+/// with [`BROKEN_PIPE_EXIT_CODE`]; any other write error (e.g. `/dev/full`) is reported and
+/// ends the program with exit code 1.
 pub fn out(bytes: &[u8]) {
-    let mut buf = STDOUT.lock().unwrap_or_else(|e| e.into_inner());
-    buf.extend_from_slice(bytes);
-    let line_buffered = std::io::stdout().is_terminal();
-    if (line_buffered && bytes.contains(&b'\n')) || buf.len() >= 4096 {
-        write_stdout(&buf);
-        buf.clear();
-    }
-}
-
-/// Writes to the real stdout. A write error (e.g. `/dev/full`) is reported and ends the program
-/// with exit code 1 (C's stdio ignored them); a closed pipe raises SIGPIPE as in C.
-fn write_stdout(bytes: &[u8]) {
     let mut so = std::io::stdout().lock();
-    if let Err(e) = so.write_all(&text_mode(bytes)).and_then(|()| so.flush()) {
+    let result = so.write_all(bytes).and_then(|()| so.flush());
+    drop(so);
+    if let Err(e) = result {
+        if e.kind() == ErrorKind::BrokenPipe {
+            std::process::exit(BROKEN_PIPE_EXIT_CODE);
+        }
         err_str(&format!("Failed to write to stdout: {}\n", super::libc::io_error_message(&e)));
         std::process::exit(1);
     }
@@ -61,30 +37,15 @@ pub fn out_str(s: &str) {
     out(s.as_bytes());
 }
 
-/// `fprintf(stderr, ...)` equivalent (stderr is unbuffered).
+/// Writes raw bytes to stderr (write errors are ignored).
 pub fn err(bytes: &[u8]) {
     let mut se = std::io::stderr().lock();
-    let _ = se.write_all(&text_mode(bytes));
+    let _ = se.write_all(bytes);
     let _ = se.flush();
 }
 
 pub fn err_str(s: &str) {
     err(s.as_bytes());
-}
-
-pub fn flush_stdout() {
-    let mut buf = STDOUT.lock().unwrap_or_else(|e| e.into_inner());
-    if !buf.is_empty() {
-        let bytes = std::mem::take(&mut *buf);
-        drop(buf);
-        write_stdout(&bytes);
-    }
-}
-
-/// C `exit()`: flushes stdio buffers, then terminates.
-pub fn exit(code: i32) -> ! {
-    flush_stdout();
-    std::process::exit(code)
 }
 
 /// An argument for [`cformat`].
@@ -283,10 +244,10 @@ pub fn print_error(
     } else {
         let mut computed_index = line_num as u64;
         for &b in super::libc::cstr(input_file_name) {
-            computed_index = computed_index.wrapping_add(c_char_value(b));
+            computed_index = computed_index.wrapping_add(u64::from(b));
         }
         for &b in fmt.as_bytes() {
-            computed_index = computed_index.wrapping_add(c_char_value(b));
+            computed_index = computed_index.wrapping_add(u64::from(b));
         }
         computed_index = computed_index.wrapping_add(var_arg_num as u64);
         let idx = (computed_index % RANDOM_ERROR_MESSAGES.len() as u64) as usize;

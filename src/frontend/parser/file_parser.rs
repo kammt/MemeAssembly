@@ -1,7 +1,7 @@
 //! Port of compiler/parser/fileParser.c
 
 use crate::frontend::commands::*;
-use crate::frontend::libc::{c_char_value, cstr, strncmp_eq, StrTok};
+use crate::frontend::libc::{cstr, strncmp_eq, StrTok};
 use crate::frontend::log::{print_debug, print_error, Arg};
 use crate::target::Target;
 
@@ -39,26 +39,6 @@ impl Iterator for LineReader<'_> {
         }
         Some((line, len))
     }
-}
-
-/// Emulates the Microsoft C runtime's text mode ("r" without "b") that the C compiler used for
-/// reading input on Windows hosts: CRLF becomes LF and Ctrl-Z ends the file.
-pub fn host_text_mode_input(data: Vec<u8>) -> Vec<u8> {
-    if !cfg!(windows) {
-        return data;
-    }
-    let end = data.iter().position(|&b| b == 0x1a).unwrap_or(data.len());
-    let mut v = Vec::with_capacity(end);
-    let mut i = 0;
-    while i < end {
-        if data[i] == b'\r' && i + 1 < end && data[i + 1] == b'\n' {
-            i += 1;
-            continue;
-        }
-        v.push(data[i]);
-        i += 1;
-    }
-    v
 }
 
 fn remove_line_breaks_and_tabs(line: &[u8]) -> Vec<u8> {
@@ -196,9 +176,9 @@ fn parse_line(
         // In bully mode, we replace this non-working command with a (deterministic) valid one.
         // "computedIndex" is global, so the value depends on the previous illegal commands.
         for &b in line {
-            state.computed_index = state.computed_index.wrapping_add(c_char_value(b));
+            state.computed_index = state.computed_index.wrapping_add(u64::from(b));
         }
-        let first = c_char_value(input_file_name.first().copied().unwrap_or(0));
+        let first = u64::from(input_file_name.first().copied().unwrap_or(0));
         state.computed_index =
             (state.computed_index.wrapping_mul(line_num as u64) % 420).wrapping_mul(first);
         let ci = state.computed_index;

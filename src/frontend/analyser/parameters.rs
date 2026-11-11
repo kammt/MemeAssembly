@@ -1,7 +1,7 @@
 //! Port of compiler/analyser/parameters.c
 
 use crate::frontend::commands::*;
-use crate::frontend::libc::{c_char_value, cstr, strtol, strtoll};
+use crate::frontend::libc::{cstr, decimal_value, parse_decimal};
 use crate::frontend::log::{
     print_debug, print_error, print_internal_compiler_error, print_nice_ascii, print_note, Arg,
 };
@@ -129,9 +129,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         }
 
         if allowed_types & PARAM_DECIMAL != 0 {
-            let r = strtoll(&parameter);
-            // If the end pointer does not point to the end of the string, there was an illegal character
-            if r.end == parameter.len() || (r.end == 0 && parameter.is_empty()) {
+            if let Some(r) = parse_decimal(&parameter) {
                 print_debug(ll, "\t\tParameter is a decimal number", &[]);
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a decimal number cannot be a pointer");
                 if r.value == 69 || r.value == 420 {
@@ -179,9 +177,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             print_debug(ll, "\t\tParameter is neither a character nor an escape sequence", &[]);
 
             // Now check if it is an ASCII-code
-            let r = strtol(&parameter);
-            let end_ok = r.end == parameter.len() || (r.end == 0 && parameter.is_empty());
-            if end_ok && r.value >= 0 && r.value <= 255 {
+            if parse_decimal(&parameter).is_some_and(|r| (0..=255).contains(&r.value)) {
                 print_debug(ll, "\t\tParameter is an ASCII-code", &[]);
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a character cannot be a pointer");
                 cmd.param_types[parameter_num] = PARAM_CHAR;
@@ -257,7 +253,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             // Replace the parameter with something pseudo-random that works, derived from the
             // global "computedIndex".
             for &c in &parameter {
-                state.computed_index = state.computed_index.wrapping_mul(c_char_value(c)) / 2;
+                state.computed_index = state.computed_index.wrapping_mul(u64::from(c)) / 2;
             }
 
             // Choose a parameter. If it is not allowed, rotate the bitmask until we find a valid one
@@ -277,7 +273,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                     let length = (state.computed_index % 7 + 2) as usize;
                     let mut p = Vec::with_capacity(length);
                     for _ in 0..length {
-                        p.push(if state.computed_index % 2 == 0 { b'u' } else { b'a' });
+                        p.push(if state.computed_index.is_multiple_of(2) { b'u' } else { b'a' });
                         state.computed_index = state.computed_index.wrapping_mul(3) / 2;
                     }
                     Some(p)
@@ -293,7 +289,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                         true,
                         &[Arg::U(chosen as u64)],
                     );
-                    crate::frontend::log::exit(1);
+                    std::process::exit(1);
                 }
             };
             if cmd.is_pointer as usize == parameter_num + 1 {
@@ -324,7 +320,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             let reg_index = 1 - decimal_index;
             let reg_size = get_register_size(cmd.param_types[reg_index]);
 
-            let number = strtoll(cmd.param(decimal_index)).value;
+            let number = decimal_value(cmd.param(decimal_index));
             // Two's complement: positive numbers need 64 - clz bits, negative ones 64 - clz(~n) + 1.
             // (__builtin_clzll(0) for n = -1 is undefined in C; this uses 64 like ARM's CLZ.)
             let bits_needed: u32 = if number == 0 {
@@ -372,7 +368,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                     let cut = (state.computed_index % 32) as usize;
                     if let Some(p) = cmd.parameters[decimal_index].as_mut() {
                         p.truncate(cut);
-                        while !fits_sign_extended_32(strtoll(p).value) {
+                        while !fits_sign_extended_32(decimal_value(p)) {
                             p.pop();
                         }
                     }
@@ -440,14 +436,14 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
     // `push` only takes sign-extended 32-bit immediates
     let push_too_large = cmd.opcode == OP_PUSH
         && cmd.param_types[0] == PARAM_DECIMAL
-        && !fits_sign_extended_32(strtoll(cmd.param(0)).value);
+        && !fits_sign_extended_32(decimal_value(cmd.param(0)));
     if bully {
         if push_too_large {
             // Shorten it like the "sign-extendable from 32 Bits" fix-up above
             let cut = (state.computed_index % 32) as usize;
             if let Some(p) = cmd.parameters[0].as_mut() {
                 p.truncate(cut);
-                while !fits_sign_extended_32(strtoll(p).value) {
+                while !fits_sign_extended_32(decimal_value(p)) {
                     p.pop();
                 }
             }

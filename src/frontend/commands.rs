@@ -352,7 +352,7 @@ pub struct File {
     pub random_index: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum CompileMode {
     Noob,
     Bully,
