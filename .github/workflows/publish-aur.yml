@@ -22,7 +22,7 @@ jobs:
       
       - name: Replace VERSION_STRING in PKGBUILD file with parameter
         if: ${{ github.event_name == 'release' }}
-        run: sed -i 's/VERSION_STRING/${GITHUB_REF:11}/g' PKGBUILD
+        run: sed -i "s/VERSION_STRING/${GITHUB_REF_NAME#v}/g" PKGBUILD
         
       - name: Replace VERSION_STRING in PKGBUILD file with parameter
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -39,9 +39,8 @@ jobs:
       - name: Replace 256SUM in PKGBUILD file with parameter
         if: ${{ github.event_name == 'release' }}
         run: |
-          wget https://github.com/${{ github.repository }}/archive/$GITHUB_REF.tar.gz
-          export CHECKSUM=
-          sed -i "s/256SUM/$(sha256sum $GITHUB_REF.tar.gz | cut -d " " -f 1)/g" PKGBUILD  
+          wget -O source.tar.gz https://github.com/${{ github.repository }}/archive/$GITHUB_REF.tar.gz
+          sed -i "s/256SUM/$(sha256sum source.tar.gz | cut -d " " -f 1)/g" PKGBUILD
           
       - name: Replace 256SUM in PKGBUILD file with parameter
         if: ${{ github.event_name == 'workflow_dispatch' }}

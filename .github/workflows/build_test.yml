@@ -2,7 +2,7 @@
 
 name: Build Test
 
-# Controls when the action will run. 
+# Controls when the action will run.
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
@@ -12,6 +12,11 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Treat warnings as errors
+  RUSTFLAGS: -Dwarnings
 
 jobs:
 
@@ -24,30 +29,66 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      # Optional tools used by the tests to compare against the GNU/LLVM toolchains
+      - name: Install test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64 llvm lld gdb qemu-user
+
       - name: Build Linux
-        run: make CFLAGS+=-Werror debug
+        run: make CARGO_FLAGS=--locked debug
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Cross-compile for Windows
+        run: make CARGO_FLAGS=--locked windows
 
   build_windows:
     # The type of runner that the job will run on
-    runs-on: windows-2019
+    runs-on: windows-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Run Makefile
-        shell: powershell
-        run: |
-          $env:Path += ";C:\msys64\mingw64\bin"
-          mingw32-make.exe debug
-          
+
+      # MemeAssembly cannot be built with MSVC, use the GNU toolchain with mingw64's gcc
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable-x86_64-pc-windows-gnu
+
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+
+      - name: Add mingw64 to PATH
+        shell: pwsh
+        run: echo "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" >> $env:GITHUB_PATH
+
+      - name: Build Windows
+        run: cargo build --locked
+
+      - name: Run tests
+        run: cargo test --locked
+
   build_macos:
     # The type of runner that the job will run on
     runs-on: macos-latest
-    
+
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Build MacOS
-        run: make CFLAGS+=-Werror debug
+        run: make CARGO_FLAGS=--locked debug
+
+      - name: Run tests
+        run: cargo test --locked
