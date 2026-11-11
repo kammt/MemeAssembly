@@ -10,6 +10,9 @@ on:
 
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   run_linux:
     runs-on: ubuntu-latest
@@ -17,8 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Compile the project
-        run: make debug
+        run: make CARGO_FLAGS=--locked debug
 
       - name: Run the compiler on runnable_example.memeasm
         run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
@@ -27,16 +32,31 @@ jobs:
         run: ./tmp
 
   run_windows:
-      runs-on: windows-2019
+      runs-on: windows-latest
 
       steps:
         - uses: actions/checkout@v4
 
+        # MemeAssembly cannot be built with MSVC, use the GNU toolchain with mingw64's gcc
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: stable-x86_64-pc-windows-gnu
+
+        - uses: msys2/setup-msys2@v2
+          id: msys2
+          with:
+            msystem: MINGW64
+            install: mingw-w64-x86_64-gcc
+
+        - name: Add mingw64 to PATH
+          shell: pwsh
+          run: echo "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" >> $env:GITHUB_PATH
+
         - name: Compile memeasm
           shell: powershell
           run: |
-            $env:Path += ";C:\msys64\mingw64\bin"
-            mingw32-make.exe debug
+            cargo build --locked
+            Copy-Item target\debug\memeasm.exe memeasm.exe
 
         - name: Run compiler on runnable_example.memeasm
           shell: powershell
@@ -47,13 +67,20 @@ jobs:
           run: ./tmp.exe
 
   run_macos:
-    runs-on: macos-11
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      # memeasm generates x86_64 executables, which need Rosetta 2 on arm64 runners
+      - name: Install Rosetta 2
+        if: runner.arch == 'ARM64'
+        run: softwareupdate --install-rosetta --agree-to-license
+
       - name: Compile the project
-        run: make debug
+        run: make CARGO_FLAGS=--locked debug
 
       - name: Run the compiler on runnable_example.memeasm
         run: ./memeasm -d -o tmp .github/workflows/runnable_example.memeasm
