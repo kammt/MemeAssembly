@@ -125,6 +125,22 @@ fn elf_executable_headers_are_sane() {
         assert!(text.contains(s), "missing {s}: {text}");
     }
     assert!(!text.contains(".rela"), "{text}");
+    // Separate page-aligned segments like `ld -z separate-code`: headers R, code R+X, data RW.
+    let loads: Vec<(u64, u64, String)> = text
+        .lines()
+        .filter(|l| l.trim_start().starts_with("LOAD"))
+        .map(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            let hex = |s: &str| u64::from_str_radix(s.trim_start_matches("0x"), 16).unwrap();
+            (hex(f[1]), hex(f[2]), f[6..f.len() - 1].join(" "))
+        })
+        .collect();
+    let flags: Vec<&str> = loads.iter().map(|l| l.2.as_str()).collect();
+    assert_eq!(flags, ["R", "R E", "RW"], "{text}");
+    assert_eq!((loads[0].0, loads[0].1), (0, 0x400000), "{text}");
+    for (off, vaddr, _) in &loads {
+        assert!(off % 0x1000 == 0 && vaddr % 0x1000 == 0, "{text}");
+    }
 }
 
 /// `(line, address)` rows of the decoded line table (`objdump --dwarf=decodedline`), without
@@ -296,6 +312,57 @@ fn elf_hand_built_hello_world() {
         return;
     }
     let (code, out) = run_with_input(linux_runner(&p).unwrap(), b"");
+    assert_eq!(String::from_utf8_lossy(&out), "Hi\n");
+    assert_eq!(code, 7);
+}
+
+/// `_start` calls `main` through rax, which holds `main`'s address on entry (like crt1).
+#[test]
+fn elf_start_passes_main_in_rax() {
+    use crate::backend::fadec::*;
+    let mut b = samples::Builder::new();
+    b.global("main");
+    b.label(0, "main");
+    b.rip(FE_LEA64rm, &[FE_CX, 0], 1, 0, "main");
+    b.ins(FE_SUB64rr, &[FE_AX, FE_CX]);
+    b.ins(FE_NEG64r, &[FE_AX]); // CF = (rax != &main)
+    b.ins(FE_SBB32rr, &[FE_AX, FE_AX]);
+    b.ins(FE_NEG32r, &[FE_AX]);
+    b.ins(FE_RET, &[]);
+    let p = scratch("elf_start_rax").join("rax");
+    write_file(&p, &write(&b.finish(), Target::Linux, OutputKind::Executable).unwrap());
+    if !host_x86_64() && tool(&["qemu-x86_64"]).is_none() {
+        return;
+    }
+    assert_eq!(run_with_input(linux_runner(&p).unwrap(), b"").0, 0);
+}
+
+/// Calls to a global function defined in the same section stay relocations in objects
+/// (`R_X86_64_PLT32` against the symbol, like gas) and are resolved in executables.
+#[test]
+fn elf_calls_to_defined_globals() {
+    let m = samples::hello_world_linux_global_calls();
+    let dir = scratch("elf_global_calls");
+    let (po, pe) = (dir.join("hello.o"), dir.join("hello"));
+    write_file(&po, &write(&m, Target::Linux, OutputKind::Object).unwrap());
+    write_file(&pe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
+    if let Some(readelf) = need(tool(&["x86_64-linux-gnu-readelf", "readelf"]), "readelf") {
+        let relocs = stdout(Command::new(&readelf).arg("-rW").arg(&po));
+        let plt = relocs.lines().filter(|l| l.contains("R_X86_64_PLT32") && l.contains(" writechar - 4")).count();
+        assert_eq!(plt, 3, "{relocs}");
+        if let Some(gcc) = need(tool(&["x86_64-linux-gnu-gcc"]), "x86_64-linux-gnu-gcc") {
+            let linked = dir.join("hello.gcc");
+            run_ok(Command::new(gcc).args(["-static", "-no-pie", "-z", "execstack", "-o"]).arg(&linked).arg(&po));
+            if host_x86_64() || tool(&["qemu-x86_64"]).is_some() {
+                let (code, out) = run_with_input(linux_runner(&linked).unwrap(), b"");
+                assert_eq!((code, String::from_utf8_lossy(&out).as_ref()), (7, "Hi\n"));
+            }
+        }
+    }
+    if !host_x86_64() && tool(&["qemu-x86_64"]).is_none() {
+        return;
+    }
+    let (code, out) = run_with_input(linux_runner(&pe).unwrap(), b"");
     assert_eq!(String::from_utf8_lossy(&out), "Hi\n");
     assert_eq!(code, 7);
 }

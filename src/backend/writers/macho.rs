@@ -8,6 +8,8 @@ use super::{align_up, link, put_u64, Le};
 const MH_MAGIC_64: u32 = 0xfeed_facf;
 const CPU_TYPE_X86_64: u32 = 0x0100_0007;
 const CPU_SUBTYPE_X86_64_ALL: u32 = 3;
+/// Set in executables' cpusubtype by ld64 and lld (64-bit libraries).
+const CPU_SUBTYPE_LIB64: u32 = 0x8000_0000;
 const MH_OBJECT: u32 = 1;
 const MH_EXECUTE: u32 = 2;
 const MH_NOUNDEFS: u32 = 0x1;
@@ -24,11 +26,15 @@ const LC_UUID: u32 = 0x1b;
 const LC_DYLD_INFO_ONLY: u32 = 0x8000_0022;
 const LC_MAIN: u32 = 0x8000_0028;
 const LC_BUILD_VERSION: u32 = 0x32;
+const LC_FUNCTION_STARTS: u32 = 0x26;
+const LC_DATA_IN_CODE: u32 = 0x29;
 
 const PLATFORM_MACOS: u32 = 1;
 /// Minimum OS version recorded in `LC_BUILD_VERSION` (10.14, the first release whose loader
 /// understands `LC_BUILD_VERSION`).
 const MIN_MACOS: u32 = 0x000a_0e00;
+/// SDK version recorded in executables (macOS 15.0; objects record none, like llvm-mc).
+const SDK_MACOS: u32 = 0x000f_0000;
 
 const S_ATTR_PURE_INSTRUCTIONS: u32 = 0x8000_0000;
 const S_ATTR_SOME_INSTRUCTIONS: u32 = 0x0000_0400;
@@ -61,7 +67,7 @@ const SECTION_HDR_SIZE: u64 = 80;
 fn header(out: &mut Vec<u8>, filetype: u32, ncmds: u32, sizeofcmds: u32, flags: u32) {
     out.u32(MH_MAGIC_64);
     out.u32(CPU_TYPE_X86_64);
-    out.u32(CPU_SUBTYPE_X86_64_ALL);
+    out.u32(if filetype == MH_EXECUTE { CPU_SUBTYPE_X86_64_ALL | CPU_SUBTYPE_LIB64 } else { CPU_SUBTYPE_X86_64_ALL });
     out.u32(filetype);
     out.u32(ncmds);
     out.u32(sizeofcmds);
@@ -538,7 +544,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
 
     // Load commands: __PAGEZERO, __TEXT(__text), [__DATA(__data)], __LINKEDIT,
     // LC_DYLD_INFO_ONLY, LC_SYMTAB, LC_DYSYMTAB, LC_LOAD_DYLINKER, LC_UUID, LC_BUILD_VERSION,
-    // LC_MAIN, LC_LOAD_DYLIB.
+    // LC_MAIN, LC_FUNCTION_STARTS, LC_DATA_IN_CODE, LC_LOAD_DYLIB.
     let nsegs = 3 + has_data as u64;
     let sizeofcmds = SEGMENT_CMD_SIZE * nsegs
         + SECTION_HDR_SIZE * (1 + has_data as u64)
@@ -549,8 +555,10 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         + 24
         + 24
         + 24
+        + 16
+        + 16
         + dylib_cmd_size();
-    let ncmds = nsegs as u32 + 8;
+    let ncmds = nsegs as u32 + 10;
 
     // Alignment above a page can't be honoured by the loader (segments are page aligned).
     let text_align = text.align.clamp(16, PAGE);
@@ -619,10 +627,38 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let (strtab, strx) = string_table(&names);
     let symbols = nlist_bytes(&syms, &strx);
 
-    // __LINKEDIT: rebase info, export trie, symbol table, string table.
+    // Function starts: the code symbols' addresses as ULEB128 deltas (the first one from the
+    // image start), zero terminated.
+    let mut starts: Vec<u64> = m
+        .symbols
+        .iter()
+        .filter(|s| !s.temporary)
+        .filter_map(|s| match s.definition {
+            Some((0, off)) => Some(addrs[0] + off),
+            _ => None,
+        })
+        .collect();
+    starts.sort_unstable();
+    starts.dedup();
+    let mut function_starts = Vec::new();
+    let mut prev = text_base;
+    for a in starts {
+        uleb(&mut function_starts, a - prev);
+        prev = a;
+    }
+    if !function_starts.is_empty() {
+        function_starts.push(0);
+        let len = align_up(function_starts.len() as u64, 8);
+        function_starts.pad_to(len, 0);
+    }
+
+    // __LINKEDIT: rebase info, export trie, function starts, (empty) data in code, symbol
+    // table, string table.
     let rebase_off = linkedit_off;
     let export_off = rebase_off + rebase.len() as u64;
-    let symoff = export_off + trie.len() as u64;
+    let function_starts_off = export_off + trie.len() as u64;
+    let data_in_code_off = function_starts_off + function_starts.len() as u64;
+    let symoff = data_in_code_off;
     let stroff = symoff + symbols.len() as u64;
     let linkedit_size = stroff + strtab.len() as u64 - linkedit_off;
 
@@ -707,11 +743,17 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     out.u32(24);
     let uuid_at = out.len();
     out.extend_from_slice(&[0; 16]);
-    build_version(&mut out, MIN_MACOS);
+    build_version(&mut out, SDK_MACOS);
     out.u32(LC_MAIN);
     out.u32(24);
     out.u64(entryoff);
     out.u64(0); // stack size: default
+    for (cmd, off, size) in [(LC_FUNCTION_STARTS, function_starts_off, function_starts.len()), (LC_DATA_IN_CODE, data_in_code_off, 0)] {
+        out.u32(cmd);
+        out.u32(16);
+        out.u32(off as u32);
+        out.u32(size as u32);
+    }
     // dylib: name offset, timestamp, current version, compatibility version.
     padded_cmd_string(&mut out, LC_LOAD_DYLIB, &[24, 2, 0x0505_0100, 0x0001_0000], LIBSYSTEM);
     debug_assert_eq!(out.len() as u64, HEADER_SIZE + sizeofcmds);
@@ -725,6 +767,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     }
     out.extend_from_slice(&rebase);
     out.extend_from_slice(&trie);
+    out.extend_from_slice(&function_starts);
     out.extend_from_slice(&symbols);
     out.extend_from_slice(&strtab);
     let id = uuid(&out);

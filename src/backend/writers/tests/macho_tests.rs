@@ -384,9 +384,17 @@ fn macho_executables_match_ld64_lld() {
         if name == "pointers" {
             assert_eq!(ra.len(), 4, "{ra:?}");
         }
+        let starts = |p: &Path, mo: &MachO| -> Option<Vec<u64>> {
+            let text = mo.section("__text").unwrap().addr;
+            let out = objdump(p, &["--function-starts"])?;
+            Some(out.lines().filter_map(|l| u64::from_str_radix(l.split_whitespace().next()?, 16).ok()).map(|a| a - text).collect())
+        };
+        let (Some(fa), Some(fb)) = (starts(&ours_path, &a), starts(&lld_path, &b)) else { return };
+        assert!(!fa.is_empty());
+        assert_eq!(fa, fb, "{name}: function starts");
         let Some(h) = objdump(&ours_path, &["--all-headers", "--exports-trie", "-d"]) else { return };
         for want in [
-            "MH_MAGIC_64  X86_64        ALL  0x00     EXECUTE",
+            "MH_MAGIC_64  X86_64        ALL LIB64     EXECUTE",
             "NOUNDEFS DYLDLINK TWOLEVEL PIE",
             "segname __PAGEZERO",
             "cmd LC_DYLD_INFO_ONLY",
@@ -396,6 +404,9 @@ fn macho_executables_match_ld64_lld() {
             "cmd LC_UUID",
             "platform macos",
             "minos 10.14",
+            "sdk 15.0",
+            "cmd LC_FUNCTION_STARTS",
+            "cmd LC_DATA_IN_CODE",
             "0x100000000  __mh_execute_header",
             "_main:",
         ] {
@@ -435,6 +446,24 @@ fn macho_hand_built_hello_world() {
     write_file(&lp, &obj);
     let Some(lld) = ld64(&[&lp], &dir.join("hello.lld"), &[]) else { return };
     same_linked_contents(&m, (&exe, &e), (&lld, &parse(&lld))).unwrap();
+}
+
+/// Calls to a global function defined in the same section become extern `BRANCH` relocations
+/// (like llvm-mc), and the executable resolves them like ld64.lld.
+#[test]
+fn macho_calls_to_defined_globals() {
+    let m = samples::hello_world_macos_global_calls();
+    let obj = write(&m, Target::MacOS, OutputKind::Object).unwrap();
+    let exe = write(&m, Target::MacOS, OutputKind::Executable).unwrap();
+    let dir = scratch("macho_global_calls");
+    let (po, pe) = (dir.join("hello.o"), dir.join("hello"));
+    write_file(&po, &obj);
+    write_file(&pe, &exe);
+    let Some(r) = objdump(&po, &["-r"]) else { return };
+    let branches = r.lines().filter(|l| l.split_whitespace().skip(1).eq(["True", "long", "True", "BRANCH", "False", "writechar"])).count();
+    assert_eq!(branches, 3, "{r}");
+    let Some(lld) = ld64(&[&po], &dir.join("hello.lld"), &[]) else { return };
+    same_linked_contents(&m, (&exe, &parse(&exe)), (&lld, &parse(&lld))).unwrap();
 }
 
 /// Link errors: undefined symbols (no libraries are linked), a missing `_main`, and 32-bit
