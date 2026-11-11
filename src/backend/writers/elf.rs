@@ -139,7 +139,9 @@ fn serialize(
         if s.offset != 0 {
             continue; // placed by the executable layout
         }
-        pos = align_up(pos, s.align.max(1));
+        // Like BFD, file offsets are aligned to at most 8 bytes (the ELF64 file alignment):
+        // `sh_addralign` alone carries larger alignments, which matter only once loaded.
+        pos = align_up(pos, s.align.clamp(1, 8));
         s.offset = pos;
         if s.sh_type != SHT_NOBITS {
             pos += s.data.len() as u64;
@@ -386,7 +388,10 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
 }
 
 /// The crt replacement: `_start` sets up `main(argc, argv, envp)` exactly like glibc's crt1
-/// (16-byte aligned stack at the call), then `exit_group(main(...))`.
+/// (16-byte aligned stack at the call), then `exit_group(main(...))`. Like glibc
+/// (`__libc_start_call_main`), main is called through rax, so rax = &main on entry; the other
+/// registers keep the kernel's zeros. Returns the code and the offset of the rip-relative
+/// displacement to `main`.
 fn entry_stub() -> (Vec<u8>, usize) {
     let mut a = Asm::new();
     a.ins(FE_XOR32rr, &[FE_BP, FE_BP]); // mark the outermost frame, like crt1
@@ -394,7 +399,8 @@ fn entry_stub() -> (Vec<u8>, usize) {
     a.ins(FE_LEA64rm, &[FE_SI, mem(FE_SP, 0, FE_NOREG, 8)]); // argv
     a.ins(FE_LEA64rm, &[FE_DX, mem(FE_SI, 8, FE_DI, 8)]); // envp = argv + argc + 1
     a.ins(FE_AND64ri, &[FE_SP, -16]);
-    let call = a.branch_placeholder(FE_CALL);
+    let call = a.rip_placeholder(FE_LEA64rm, &[FE_AX, 0], 1); // lea rax, [rip + main]
+    a.ins(FE_CALLr, &[FE_AX]);
     a.ins(FE_MOV32rr, &[FE_DI, FE_AX]);
     a.ins(FE_MOV32ri, &[FE_AX, 231]); // exit_group
     a.ins(FE_SYSCALL, &[]);
@@ -417,15 +423,11 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let nphdr = 3 + has_data as u64;
     let hdr_end = 64 + 56 * nphdr;
 
-    // Places a segment after (file_end, vaddr_end): file offsets and addresses congruent
-    // modulo the page size, each segment starting on a fresh page.
+    // Places a segment after (file_end, vaddr_end).
+    // Like `ld -z separate-code`, every segment starts on a page of its own, in the file
+    // and in memory, so the code segment maps nothing but code.
     let place = |file_end: u64, vaddr_end: u64, align: u64| -> (u64, u64) {
-        if align <= PAGE {
-            let off = align_up(file_end, align);
-            (off, align_up(vaddr_end, PAGE) + off % PAGE)
-        } else {
-            (align_up(file_end, PAGE), align_up(vaddr_end, align))
-        }
+        (align_up(file_end, PAGE), align_up(vaddr_end, align.max(PAGE)))
     };
     // .text output section = module .text followed by the entry stub.
     let text_align = text.align.max(16);
@@ -456,7 +458,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     text_bytes.resize(stub_off_in_text as usize, 0);
     let mut stub = stub;
     let rel = main_addr as i128 - (stub_addr + call_field as u64 + 4) as i128;
-    let rel = i32::try_from(rel).map_err(|_| "(.text): relocation truncated to fit: R_X86_64_PLT32 against `main'".to_string())?;
+    let rel = i32::try_from(rel).map_err(|_| "(.text): relocation truncated to fit: R_X86_64_PC32 against `main'".to_string())?;
     stub[call_field..call_field + 4].copy_from_slice(&rel.to_le_bytes());
     text_bytes.extend_from_slice(&stub);
 

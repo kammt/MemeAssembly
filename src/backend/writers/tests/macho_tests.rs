@@ -384,9 +384,17 @@ fn macho_executables_match_ld64_lld() {
         if name == "pointers" {
             assert_eq!(ra.len(), 4, "{ra:?}");
         }
+        let starts = |p: &Path, mo: &MachO| -> Option<Vec<u64>> {
+            let text = mo.section("__text").unwrap().addr;
+            let out = objdump(p, &["--function-starts"])?;
+            Some(out.lines().filter_map(|l| u64::from_str_radix(l.split_whitespace().next()?, 16).ok()).map(|a| a - text).collect())
+        };
+        let (Some(fa), Some(fb)) = (starts(&ours_path, &a), starts(&lld_path, &b)) else { return };
+        assert!(!fa.is_empty());
+        assert_eq!(fa, fb, "{name}: function starts");
         let Some(h) = objdump(&ours_path, &["--all-headers", "--exports-trie", "-d"]) else { return };
         for want in [
-            "MH_MAGIC_64  X86_64        ALL  0x00     EXECUTE",
+            "MH_MAGIC_64  X86_64        ALL LIB64     EXECUTE",
             "NOUNDEFS DYLDLINK TWOLEVEL PIE",
             "segname __PAGEZERO",
             "cmd LC_DYLD_INFO_ONLY",
@@ -396,6 +404,9 @@ fn macho_executables_match_ld64_lld() {
             "cmd LC_UUID",
             "platform macos",
             "minos 10.14",
+            "sdk 15.0",
+            "cmd LC_FUNCTION_STARTS",
+            "cmd LC_DATA_IN_CODE",
             "0x100000000  __mh_execute_header",
             "_main:",
         ] {

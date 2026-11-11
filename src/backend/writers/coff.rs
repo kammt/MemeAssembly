@@ -82,6 +82,13 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
         })
         .collect();
 
+    // Like mingw-as, PC-relative references to a symbol in the same section (global or not)
+    // are resolved here; everything else becomes a relocation.
+    let local_pcrel = |si: usize, r: &super::super::module::Reloc| {
+        matches!(r.kind, RelocKind::Pc32 | RelocKind::Branch32) && m.symbols[r.symbol].definition.is_some_and(|(t, _)| t == si)
+    };
+    let nreloc: Vec<u16> = m.sections.iter().enumerate().map(|(si, s)| s.relocs.iter().filter(|r| !local_pcrel(si, r)).count() as u16).collect();
+
     // Symbol table: .file, local labels, section symbols, globals, undefined symbols.
     let mut syms: Vec<CoffSym> = Vec::new();
     let mut file_aux = [0u8; 18];
@@ -98,7 +105,7 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     for i in 0..3 {
         section_sym[i] = index(&syms);
         let (len, nrel) = match m.sections.get(i) {
-            Some(s) => (s.data.len() as u32, s.relocs.len() as u16),
+            Some(s) => (s.data.len() as u32, nreloc[i]),
             None => (0, 0),
         };
         let mut aux = [0u8; 18];
@@ -115,8 +122,10 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     }
     // Undefined symbols that are actually referenced (gas drops unused `.extern`s).
     let mut referenced = vec![false; m.symbols.len()];
-    for r in m.sections.iter().flat_map(|s| &s.relocs) {
-        referenced[r.symbol] = true;
+    for (si, sec) in m.sections.iter().enumerate() {
+        for r in sec.relocs.iter().filter(|r| !local_pcrel(si, r)) {
+            referenced[r.symbol] = true;
+        }
     }
     for (id, s) in m.symbols.iter().enumerate() {
         if s.definition.is_none() && (referenced[id] || s.binding == Binding::Global) {
@@ -132,6 +141,13 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     for (si, sec) in m.sections.iter().enumerate() {
         for r in &sec.relocs {
             let s = &m.symbols[r.symbol];
+            if local_pcrel(si, r) {
+                let (_, off) = s.definition.expect("checked");
+                let v = off as i64 + r.addend - r.offset as i64;
+                let v = i32::try_from(v).map_err(|_| format!("relocation out of range for `{}'", s.name))?;
+                fields[si][r.offset as usize..r.offset as usize + 4].copy_from_slice(&v.to_le_bytes());
+                continue;
+            }
             let (symi, base) = match s.definition {
                 Some((tsec, off)) => (section_sym[tsec], off as i64),
                 None => {
@@ -207,7 +223,7 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
         out.u32(raw_ptr.get(i).copied().unwrap_or(0));
         out.u32(reloc_ptr.get(i).copied().unwrap_or(0));
         out.u32(0); // PointerToLinenumbers
-        out.u16(m.sections.get(i).map_or(0, |s| s.relocs.len() as u16));
+        out.u16(nreloc.get(i).copied().unwrap_or(0));
         out.u16(0);
         out.u32(chars[i] | align_flag(aligns[i]));
     }

@@ -1,6 +1,7 @@
 use std::process::Command;
 
 use super::*;
+use crate::backend::module::RelocKind;
 use crate::backend::writers::write;
 use crate::backend::OutputKind;
 use crate::target::Target;
@@ -41,10 +42,16 @@ fn pe_executable_structure() {
         "ReadFile",
         "ExitProcess",
         "__getmainargs",
-        "relocations stripped",
+        "Characteristics 0x22",
+        "DllCharacteristics\t00000160",
+        "HIGH_ENTROPY_VA",
+        "DYNAMIC_BASE",
+        "NX_COMPAT",
+        "Base Relocation Directory [.reloc]",
     ] {
         assert!(p.contains(want), "missing `{want}`:\n{p}");
     }
+    assert!(!p.contains("relocations stripped"), "{p}");
     // Three `jmp *(%rip)` thunks (GetStdHandle, ReadFile, WriteFile) and two indirect calls
     // in the stub.
     assert_eq!(p.matches("jmp    *0x").count(), 3, "{p}");
@@ -149,4 +156,48 @@ fn pe_reports_unresolved_symbols() {
     m.symbols[id].name = "notmain".into();
     let err = write(&m, Target::Windows, OutputKind::Executable).unwrap_err();
     assert!(err.contains("undefined reference to `main'"), "{err}");
+}
+
+/// Every absolute address gets a DIR64 base relocation (one block per page, padded like ld),
+/// and the program finds its pointers intact under Wine.
+#[test]
+fn pe_base_relocations() {
+    let dir = scratch("pe_base_relocations");
+    let Some(m) = module_for(&fixture_dir().join("pointers.windows.s"), &dir) else { return };
+    let exe = dir.join("pointers.exe");
+    write_file(&exe, &write(&m, Target::Windows, OutputKind::Executable).unwrap());
+    let Some(p) = objdump_p(&exe) else { return };
+    // .text at 0x1000: the movabs immediate; .data at 0x2000/0x3000: four pointers on the
+    // first page, one on the next.
+    let movabs = m.sections[0].relocs.iter().find(|r| r.kind == RelocKind::Abs64).unwrap().offset;
+    let text_page = format!("reloc    0 offset {:>4x} [{:x}] DIR64", movabs, 0x1000 + movabs);
+    for want in [
+        "Virtual Address: 00001000 Chunk size 12 (0xc) Number of fixups 2",
+        text_page.as_str(),
+        "Virtual Address: 00002000 Chunk size 16 (0x10) Number of fixups 4",
+        "reloc    0 offset    0 [2000] DIR64",
+        "reloc    1 offset    8 [2008] DIR64",
+        "reloc    2 offset   10 [2010] DIR64",
+        "reloc    3 offset   20 [2020] DIR64",
+        "Virtual Address: 00003000 Chunk size 12 (0xc) Number of fixups 2",
+        "reloc    0 offset    0 [3000] DIR64",
+        "reloc    1 offset    0 [3000] ABSOLUTE",
+    ] {
+        assert!(p.contains(want), "missing `{want}`:\n{p}");
+    }
+    assert_eq!(p.matches("DIR64").count(), 6, "{p}");
+    let Some(c) = wine_runner(&exe) else { return };
+    let (code, _) = run_with_input(c, b"");
+    assert_eq!(code, 42);
+}
+
+/// Without absolute addresses, `.reloc` still exists (one empty block), as with ld.
+#[test]
+fn pe_without_absolute_addresses_has_empty_reloc_block() {
+    let m = samples::hello_world_windows();
+    let dir = scratch("pe_empty_reloc");
+    let exe = dir.join("hello.exe");
+    write_file(&exe, &write(&m, Target::Windows, OutputKind::Executable).unwrap());
+    let Some(p) = objdump_p(&exe) else { return };
+    assert!(p.contains("Chunk size 8 (0x8) Number of fixups 0"), "{p}");
 }
