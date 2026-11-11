@@ -12,6 +12,7 @@ name = "memeasm"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 
 [build-dependencies]
 cc = "1"
