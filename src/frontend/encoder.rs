@@ -237,19 +237,8 @@ pub fn gas_symbol(text: &[u8]) -> Result<String, String> {
 
 // ---- encode functions of the command table (same order as COMMAND_LIST) ----
 
-/// Local alias of a function whose name gas misreads as a `call` operand (`$`, `rax`, `byte`).
-/// The `-S` text calls these as quoted symbols (`call "$"`); the emitter has no quoted symbol
-/// names, so the direct path calls this alias defined at the same address instead.
-fn quoted_function_alias(name: &[u8]) -> Option<String> {
-    gas_misreads_symbol(name).then(|| format!(".Lfn${}", String::from_utf8_lossy(name)))
-}
-
 pub fn func_def(e: &mut Enc, a: &CmdArgs) -> EncResult {
-    e.label(&a.sym("", 0, "")?)?;
-    if let Some(alias) = quoted_function_alias(a.cmd.param(0)) {
-        e.label(&alias)?;
-    }
-    Ok(())
+    e.label(&a.sym("", 0, "")?)
 }
 pub fn ret(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Ret, &[])
@@ -263,11 +252,13 @@ pub fn ret_zero(e: &mut Enc, _: &CmdArgs) -> EncResult {
     e.i(Op::Ret, &[])
 }
 pub fn call(e: &mut Enc, a: &CmdArgs) -> EncResult {
-    if let Some(alias) = quoted_function_alias(a.cmd.param(0)) {
-        return e.call(&alias);
+    if gas_misreads_symbol(a.cmd.param(0)) {
+        // the -S text calls it as a quoted symbol (`call "$"`)
+        let text = a.text(0);
+        let name = text.strip_prefix(b"\"").and_then(|t| t.strip_suffix(b"\"")).unwrap_or(&text);
+        return e.e.call(BranchTarget::Quoted(String::from_utf8_lossy(name).into_owned()));
     }
-    let name = a.sym("", 0, "")?;
-    e.call(&name)
+    e.call(&a.sym("", 0, "")?)
 }
 pub fn push(e: &mut Enc, a: &CmdArgs) -> EncResult {
     e.i(Op::Push, &[a.op(0)?])

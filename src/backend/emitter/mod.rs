@@ -112,6 +112,9 @@ pub enum BranchTarget {
     /// defined symbols are resolved or keep a Branch32 reloc per object format (ELF: calls to
     /// global symbols; Mach-O: anything outside the current atom); see `layout::finish`.
     Symbol(String),
+    /// A quoted symbol name (gas `call "$"`): taken verbatim, without char-constant
+    /// substitution or register/`$` interpretation. Otherwise like `Symbol`.
+    Quoted(String),
     /// Numeric local label reference `Nf` (forward = true) / `Nb`.
     Local { n: u32, forward: bool },
 }
@@ -417,6 +420,12 @@ impl Emitter {
                 } else {
                     self.sym(&fb_name(n, count))
                 }
+            }
+            BranchTarget::Quoted(s) => {
+                if s.is_empty() {
+                    return Err("empty symbol name".into());
+                }
+                self.sym(&s)
             }
             BranchTarget::Symbol(s) => {
                 let s = char_constants(&s);
