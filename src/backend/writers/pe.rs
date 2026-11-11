@@ -12,7 +12,7 @@
 //! Undefined symbols may only name the kernel32 functions MemeAssembly programs use: a call
 //! to `X` goes through a `jmp [rip + __imp_X]` thunk, `__imp_X` is the IAT slot itself.
 use super::super::fadec::*;
-use super::super::module::{Binding, ObjModule};
+use super::super::module::ObjModule;
 use super::coff::{
     IMAGE_FILE_MACHINE_AMD64, IMAGE_SCN_CNT_CODE, IMAGE_SCN_CNT_INITIALIZED_DATA, IMAGE_SCN_MEM_EXECUTE,
     IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
@@ -78,21 +78,6 @@ fn entry_stub() -> (Vec<u8>, usize, usize, usize) {
     (a.code, main, getmainargs, exit)
 }
 
-/// PE image checksum (as computed by `CheckSumMappedFile`).
-fn checksum(image: &[u8], checksum_offset: usize) -> u32 {
-    let mut sum: u64 = 0;
-    for (i, c) in image.chunks(2).enumerate() {
-        if i * 2 == checksum_offset || i * 2 == checksum_offset + 2 {
-            continue;
-        }
-        let w = c[0] as u64 | (c.get(1).copied().unwrap_or(0) as u64) << 8;
-        sum += w;
-        sum = (sum & 0xffff) + (sum >> 16);
-    }
-    sum = (sum & 0xffff) + (sum >> 16);
-    (sum as u32) + image.len() as u32
-}
-
 /// `jmp`/`call` targets are 32-bit displacements from the end of the field.
 fn rel32(from_field: u64, to: u64) -> Result<[u8; 4], String> {
     let d = to as i128 - (from_field + 4) as i128;
@@ -126,10 +111,6 @@ fn base_relocations(sites: &[u64], first_page: u64) -> Vec<u8> {
 }
 
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
-    let main = m
-        .symbol_by_name("main")
-        .filter(|&id| m.symbols[id].definition.is_some() && m.symbols[id].binding == Binding::Global);
-
     // Imports: everything the module references, plus the stub's.
     let mut imports: Vec<Import> = Vec::new();
     let mut direct: Vec<String> = Vec::new();
@@ -243,26 +224,14 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
             imp.thunk.map(|t| IMAGE_BASE + text_rva + t)
         }
     };
-    let linked = link::relocate(m, &addrs, &resolve);
-    let mut errors = Vec::new();
-    if let Err(e) = &linked {
-        errors.push(e.clone());
-    }
-    if main.is_none() {
-        errors.push(link::missing_entry("main"));
-    }
-    if !errors.is_empty() {
-        return Err(errors.join("\n"));
-    }
-    // (32-bit absolute relocations fail above: the image base is above 4 GiB, as with ld.
+    // (32-bit absolute relocations fail here: the image base is above 4 GiB, as with ld.
     // They couldn't be rebased either.)
-    let linked = linked.expect("checked above");
+    let (linked, main_addr) = link::link_program(m, "main", link::NO_MAIN, &addrs, &resolve)?;
 
     // Patch the stub and thunks.
     let slot_of = |n: &str| imports.iter().find(|i| i.name == n).expect("stub import").slot;
     let stub_rva = text_rva + stub_off;
-    let (msec, moff) = m.symbols[main.expect("checked above")].definition.expect("defined");
-    let main_rva = [text_rva, data_rva][msec] + moff;
+    let main_rva = main_addr - IMAGE_BASE;
     let patch = |code: &mut Vec<u8>, base_rva: u64, field: usize, target_rva: u64| -> Result<(), String> {
         let b = rel32(base_rva + field as u64, target_rva)?;
         code[field..field + 4].copy_from_slice(&b);
@@ -337,8 +306,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     out.u32(0); // Win32VersionValue
     out.u32(image_size as u32);
     out.u32(headers_size as u32);
-    let checksum_offset = out.len();
-    out.u32(0); // CheckSum, filled in below
+    out.u32(0); // CheckSum (only checked for drivers and system DLLs)
     out.u16(IMAGE_SUBSYSTEM_WINDOWS_CUI);
     out.u16(IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA | IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE | IMAGE_DLLCHARACTERISTICS_NX_COMPAT);
     out.u64(0x20_0000); // stack reserve
@@ -377,7 +345,5 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         out.extend_from_slice(bytes);
     }
     out.pad_to(file_pos, 0);
-    let sum = checksum(&out, checksum_offset);
-    put_u32(&mut out, checksum_offset, sum);
     Ok(out)
 }

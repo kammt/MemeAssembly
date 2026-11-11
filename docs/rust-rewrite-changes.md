@@ -171,7 +171,13 @@ command-line order. This covers:
     rsi and rdx hold argc/argv/envp and rax holds the address of `main`; every other
     register is 0 instead of whatever the C runtime left behind. Programs that read
     uninitialised registers can behave differently.
-  - Windows executables are relocatable and use ASLR, as mingw's defaults do.
+  - Windows executables are relocatable and use ASLR, as mingw's defaults do. Their PE
+    `CheckSum` is 0 (Windows only checks it for drivers and system DLLs).
+  - Object files (`-O`) have the same sections, symbols and relocations as
+    gas / mingw-as / llvm-mc output, but are not byte-identical: no empty `.bss`, no COFF
+    `.file` symbol or padding to the section alignment, Mach-O references to temporary labels
+    are non-extern (section-relative) relocations, and `-g` DWARF uses inline strings without
+    `.debug_str`/`.debug_line_str`/`.debug_aranges`.
 - Write errors are no longer ignored: a `-S` output that cannot be written completely (e.g.
   `-o /dev/full`) gives `Failed to write output file: No space left on device` (exit 1), and
   a failed write to stdout gives `Failed to write to stdout: ...` (exit 1). As in C, a closed

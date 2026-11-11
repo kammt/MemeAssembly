@@ -17,11 +17,63 @@ fn debug_fixtures() -> Vec<(String, PathBuf)> {
     fixtures("linux_g").into_iter().map(|(n, p)| (format!("{n}_g"), p)).collect()
 }
 
-/// Our ELF objects are byte-for-byte what GNU as writes for the same source. (The `-g`
-/// fixtures are excluded: gas writes their STABS, we write DWARF.)
+/// What `readelf` shows of a relocatable object, minus what only depends on the layout:
+/// sections `(name, type, size, flags)` in any order, without the empty `.bss` and the
+/// symbol/string tables; symbols `(name, type, binding, section, value)` without section
+/// symbols; relocations `(section, offset, type, symbol + addend)`.
+#[derive(Debug, PartialEq)]
+struct ElfStructure {
+    sections: Vec<String>,
+    symbols: Vec<String>,
+    relocs: Vec<String>,
+}
+
+fn elf_structure(readelf: &Path, obj: &Path) -> ElfStructure {
+    let out = run_ok(Command::new(readelf).args(["-SW", "-sW", "-rW"]).arg(obj));
+    assert!(out.stderr.is_empty(), "readelf {}: {}", obj.display(), String::from_utf8_lossy(&out.stderr));
+    let text = String::from_utf8(out.stdout).unwrap();
+    let mut index_names = vec![String::new()];
+    let mut st = ElfStructure { sections: vec![], symbols: vec![], relocs: vec![] };
+    let mut reloc_section = String::new();
+    for l in text.lines() {
+        let f: Vec<&str> = l.split_whitespace().collect();
+        if l.trim_start().starts_with('[') && !l.contains("Nr]") {
+            // [Nr] Name Type Address Off Size ES Flg Lk Inf Al (the name of section 0 is empty)
+            let f: Vec<&str> = l.split(']').nth(1).unwrap().split_whitespace().collect();
+            if f[0] == "NULL" {
+                continue;
+            }
+            index_names.push(f[0].to_string());
+            let flags = if f.len() == 10 { f[6] } else { "" };
+            if ![".bss", ".symtab", ".strtab", ".shstrtab"].contains(&f[0]) {
+                st.sections.push(format!("{} {} {} {flags}", f[0], f[1], f[4]));
+            }
+        } else if let Some(rest) = l.strip_prefix("Relocation section '") {
+            reloc_section = rest.split('\'').next().unwrap().to_string();
+        } else if f.len() >= 8 && f[0].ends_with(':') && f[0][..f[0].len() - 1].parse::<u32>().is_ok() {
+            // Num: Value Size Type Bind Vis Ndx Name
+            if f[3] == "SECTION" {
+                continue;
+            }
+            let sec = f[6].parse::<usize>().map_or(f[6].to_string(), |i| index_names[i].clone());
+            st.symbols.push(format!("{} {} {} {sec} {}", f[7], f[3], f[4], f[1]));
+        } else if f.len() >= 5 && f[2].starts_with("R_X86_64") {
+            st.relocs.push(format!("{reloc_section} {} {} {}", f[0], f[2], f[4..].join(" ")));
+        }
+    }
+    st.sections.sort();
+    st.symbols.sort();
+    st
+}
+
+/// Our ELF objects have the sections, symbols, relocations and section contents GNU as writes
+/// for the same source (the layout differs: no empty `.bss`, sections in index order, a section
+/// symbol for every section). (The `-g` fixtures are excluded: gas writes their STABS, we write
+/// DWARF.)
 #[test]
 fn elf_objects_match_gas() {
     let dir = scratch("elf_objects_match_gas");
+    let Some(readelf) = need(tool(&["x86_64-linux-gnu-readelf", "readelf"]), "readelf") else { return };
     let mut checked = 0;
     for (name, src) in fixtures("linux") {
         let gas_path = gas_obj_path(&src, &dir);
@@ -29,10 +81,13 @@ fn elf_objects_match_gas() {
         let module = elf_import::import(&gas);
         assert!(module.debug.is_none());
         let ours = write(&module, Target::Linux, OutputKind::Object).unwrap();
-        if ours != gas {
-            let p = dir.join(format!("{name}.ours.o"));
-            std::fs::write(&p, &ours).unwrap();
-            panic!("{name}: object differs from gas; compare `readelf -aW` of {} and {}", p.display(), gas_path.display());
+        let ours_path = dir.join(format!("{name}.ours.o"));
+        write_file(&ours_path, &ours);
+        let (a, b) = (elf_structure(&readelf, &ours_path), elf_structure(&readelf, &gas_path));
+        assert!(!b.sections.is_empty() && !b.symbols.is_empty());
+        assert_eq!(a, b, "{name}: compare `readelf -aW` of {} and {}", ours_path.display(), gas_path.display());
+        for sec in [".text", ".data"] {
+            assert_eq!(elf_section(&ours, sec), elf_section(&gas, sec), "{name}: {sec} contents");
         }
         checked += 1;
     }
@@ -121,7 +176,7 @@ fn elf_executable_headers_are_sane() {
     assert!(text.contains("EXEC (Executable file)"));
     assert!(text.contains("GNU_STACK") && text.contains(" RWE "), "{text}");
     assert!(text.contains(" main") && text.contains(" _start") && text.contains(" writechar"));
-    for s in [".debug_info", ".debug_abbrev", ".debug_line ", ".debug_aranges", ".debug_str", ".debug_line_str"] {
+    for s in [".debug_info", ".debug_abbrev", ".debug_line "] {
         assert!(text.contains(s), "missing {s}: {text}");
     }
     assert!(!text.contains(".rela"), "{text}");

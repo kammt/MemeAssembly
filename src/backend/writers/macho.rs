@@ -1,9 +1,7 @@
-//! Mach-O x86-64: `MH_OBJECT` files laid out like the LLVM (Apple) assembler writes them, and
-//! `MH_EXECUTE` images linked directly (dyld + libSystem, entry through `LC_MAIN`).
-use std::collections::HashMap;
-
-use super::super::module::{Binding, ObjModule, RelocKind, SymbolId};
-use super::{align_up, link, put_u64, Le};
+//! Mach-O x86-64: `MH_OBJECT` files with the load commands the LLVM (Apple) assembler writes,
+//! and `MH_EXECUTE` images linked directly (dyld + libSystem, entry through `LC_MAIN`).
+use super::super::module::{ObjModule, RelocKind};
+use super::{align_up, link, put_u64, symbol_groups, uleb, Le, StrTab};
 
 const MH_MAGIC_64: u32 = 0xfeed_facf;
 const CPU_TYPE_X86_64: u32 = 0x0100_0007;
@@ -27,7 +25,6 @@ const LC_DYLD_INFO_ONLY: u32 = 0x8000_0022;
 const LC_MAIN: u32 = 0x8000_0028;
 const LC_BUILD_VERSION: u32 = 0x32;
 const LC_FUNCTION_STARTS: u32 = 0x26;
-const LC_DATA_IN_CODE: u32 = 0x29;
 
 const PLATFORM_MACOS: u32 = 1;
 /// Minimum OS version recorded in `LC_BUILD_VERSION` (10.14, the first release whose loader
@@ -173,35 +170,6 @@ fn dysymtab_cmd(out: &mut Vec<u8>, nlocal: usize, nextdef: usize, nundef: usize)
     }
 }
 
-/// String table the way LLVM's `StringTableBuilder` lays it out for Mach-O: a leading NUL,
-/// strings sorted by their reversed bytes (descending) so that a string directly follows the
-/// strings it is a suffix of, tail merging, size padded to 8.
-fn string_table(names: &[&str]) -> (Vec<u8>, HashMap<String, u32>) {
-    let mut uniq: Vec<&str> = names.iter().copied().filter(|n| !n.is_empty()).collect();
-    uniq.sort_unstable();
-    uniq.dedup();
-    uniq.sort_by(|a, b| b.bytes().rev().cmp(a.bytes().rev()));
-    let mut data = vec![0u8];
-    let mut offsets = HashMap::new();
-    offsets.insert(String::new(), 0u32);
-    let mut prev: Option<&str> = None;
-    for s in uniq {
-        if let Some(p) = prev {
-            if p.ends_with(s) {
-                offsets.insert(s.to_string(), (data.len() - s.len() - 1) as u32);
-                continue;
-            }
-        }
-        offsets.insert(s.to_string(), data.len() as u32);
-        data.extend_from_slice(s.as_bytes());
-        data.push(0);
-        prev = Some(s);
-    }
-    let len = align_up(data.len() as u64, 8);
-    data.pad_to(len, 0);
-    (data, offsets)
-}
-
 struct Nlist {
     name: String,
     n_type: u8,
@@ -210,16 +178,20 @@ struct Nlist {
     value: u64,
 }
 
-fn nlist_bytes(syms: &[Nlist], strx: &HashMap<String, u32>) -> Vec<u8> {
+/// Symbol table and string table (padded to 8 bytes) contents.
+fn symtab_bytes(syms: &[Nlist]) -> (Vec<u8>, Vec<u8>) {
+    let mut names = StrTab::new(&[0]);
     let mut b = Vec::with_capacity(16 * syms.len());
     for s in syms {
-        b.u32(strx[&s.name]);
+        b.u32(names.add(&s.name));
         b.u8(s.n_type);
         b.u8(s.n_sect);
         b.u16(s.n_desc);
         b.u64(s.value);
     }
-    b
+    let len = align_up(names.data.len() as u64, 8);
+    names.data.pad_to(len, 0);
+    (b, names.data)
 }
 
 fn reloc_entry(out: &mut Vec<u8>, address: u64, symbolnum: u32, pcrel: bool, length: u32, external: bool, ty: u32) {
@@ -237,50 +209,26 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     let vmsize = data_addr + sizes[1];
 
     // Symbol table: locals (module order), external definitions and undefined symbols
-    // (each sorted by name). Temporary symbols are not emitted.
-    let mut referenced = vec![false; m.symbols.len()];
-    for r in m.sections.iter().flat_map(|s| &s.relocs) {
-        referenced[r.symbol] = true;
-    }
-    let mut locals = Vec::new();
-    let mut extdefs = Vec::new();
-    let mut undefs = Vec::new();
-    for (id, s) in m.symbols.iter().enumerate() {
-        match (s.definition, s.binding) {
-            (Some(_), Binding::Local) if !s.temporary => locals.push(id),
-            (Some(_), Binding::Global) => extdefs.push(id),
-            (None, b) if referenced[id] || b == Binding::Global => undefs.push(id),
-            _ => {}
-        }
-    }
-    extdefs.sort_by(|&a, &b| m.symbols[a].name.cmp(&m.symbols[b].name));
-    undefs.sort_by(|&a, &b| m.symbols[a].name.cmp(&m.symbols[b].name));
-    let mut sym_index: HashMap<SymbolId, u32> = HashMap::new();
+    // (each sorted by name, as LC_DYSYMTAB documents). Temporary symbols are not emitted.
+    let mut groups = symbol_groups(m);
+    groups.globals.sort_by(|&a, &b| m.symbols[a].name.cmp(&m.symbols[b].name));
+    groups.undefined.sort_by(|&a, &b| m.symbols[a].name.cmp(&m.symbols[b].name));
+    let mut sym_index = vec![u32::MAX; m.symbols.len()];
     let mut syms = Vec::new();
-    for &id in locals.iter().chain(&extdefs).chain(&undefs) {
-        sym_index.insert(id, syms.len() as u32);
+    let external = groups.globals.iter().chain(&groups.undefined);
+    for (&id, ext) in groups.locals.iter().map(|id| (id, 0)).chain(external.map(|id| (id, N_EXT))) {
+        sym_index[id] = syms.len() as u32;
         let s = &m.symbols[id];
         let (n_type, n_sect, value) = match s.definition {
-            Some((sec, off)) => (N_SECT | if s.binding == Binding::Global { N_EXT } else { 0 }, sec as u8 + 1, addrs[sec] + off),
+            Some((sec, off)) => (N_SECT | ext, sec as u8 + 1, addrs[sec] + off),
             None => (N_EXT, 0, 0),
         };
         syms.push(Nlist { name: s.name.clone(), n_type, n_sect, n_desc: 0, value });
     }
 
     // Relocations (emitted in reverse order, like LLVM). A reference to a temporary label is
-    // made relative to its atom, the closest symbol in the symbol table at or before it in the
-    // same section, as LLVM does; without one, it refers to the section (non-extern), the target
-    // address being implicit in the field.
-    let atom = |sec: usize, off: u64| {
-        locals
-            .iter()
-            .chain(&extdefs)
-            .filter_map(|&id| match m.symbols[id].definition {
-                Some((s, o)) if s == sec && o <= off => Some((o, id)),
-                _ => None,
-            })
-            .max()
-    };
+    // non-extern: it refers to the label's section, the target address being implicit in the
+    // field. (Without MH_SUBSECTIONS_VIA_SYMBOLS the linker never splits sections into atoms.)
     let mut contents = [m.sections[0].data.clone(), m.sections[1].data.clone()];
     let mut relocs: [Vec<u8>; 2] = [Vec::new(), Vec::new()];
     for (si, sec) in m.sections.iter().enumerate() {
@@ -288,33 +236,27 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
             let s = &m.symbols[r.symbol];
             let field = r.offset as usize;
             let buf = &mut contents[si];
-            let (external, addend) = match s.definition {
-                Some((tsec, off)) if s.temporary => match atom(tsec, off) {
-                    Some((base, id)) => (Some(id), r.addend + (off - base) as i64),
-                    None => (None, r.addend),
-                },
-                _ => (Some(r.symbol), r.addend),
-            };
-            debug_assert!(external.map_or(true, |id| sym_index.contains_key(&id)), "`{}' not in the symbol table", s.name);
+            let external = !(s.temporary && s.definition.is_some());
+            debug_assert!(!external || sym_index[r.symbol] != u32::MAX, "`{}' not in the symbol table", s.name);
             match r.kind {
                 RelocKind::Abs32 => return Err(ABS32_UNSUPPORTED.into()),
                 RelocKind::Abs64 => {
-                    if let Some(id) = external {
-                        put_u64(buf, field, addend as u64);
-                        reloc_entry(&mut relocs[si], r.offset, sym_index[&id], false, 3, true, X86_64_RELOC_UNSIGNED);
+                    if external {
+                        put_u64(buf, field, r.addend as u64);
+                        reloc_entry(&mut relocs[si], r.offset, sym_index[r.symbol], false, 3, true, X86_64_RELOC_UNSIGNED);
                     } else {
                         let (tsec, off) = s.definition.expect("temporary symbols are defined");
-                        put_u64(buf, field, (addrs[tsec] + off).wrapping_add(addend as u64));
+                        put_u64(buf, field, (addrs[tsec] + off).wrapping_add(r.addend as u64));
                         reloc_entry(&mut relocs[si], r.offset, tsec as u32 + 1, false, 3, false, X86_64_RELOC_UNSIGNED);
                     }
                 }
                 RelocKind::Pc32 | RelocKind::Branch32 => {
                     let p = addrs[si] + r.offset;
-                    if let Some(id) = external {
+                    if external {
                         // Like LLVM, the field holds the addend + 4, and SIGNED_j marks an
-                        // instruction with j immediate bytes after the field (the reference's own
-                        // addend, before rebasing onto the atom, is exactly -4 - j); ld64 adds j
-                        // back to the field and computes S + field + j - (P + 4 + j).
+                        // instruction with j immediate bytes after the field (the addend is
+                        // exactly -4 - j); ld64 adds j back to the field and computes
+                        // S + field + j - (P + 4 + j).
                         let ty = match (r.kind, -(r.addend + 4)) {
                             (RelocKind::Branch32, _) => X86_64_RELOC_BRANCH,
                             (_, 1) => X86_64_RELOC_SIGNED_1,
@@ -322,9 +264,9 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
                             (_, 4) => X86_64_RELOC_SIGNED_4,
                             _ => X86_64_RELOC_SIGNED,
                         };
-                        let v = i32::try_from(addend + 4).map_err(|_| format!("addend out of range for `{}'", s.name))?;
+                        let v = i32::try_from(r.addend + 4).map_err(|_| format!("addend out of range for `{}'", s.name))?;
                         buf[field..field + 4].copy_from_slice(&v.to_le_bytes());
-                        reloc_entry(&mut relocs[si], r.offset, sym_index[&id], true, 2, true, ty);
+                        reloc_entry(&mut relocs[si], r.offset, sym_index[r.symbol], true, 2, true, ty);
                     } else {
                         // The field holds the displacement; the linker finds the target section at
                         // P + 4 + j + field, where j is the SIGNED_j bias. Pick j so that this
@@ -332,15 +274,15 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
                         // the target section (its end included, for labels at the end).
                         let (tsec, off) = s.definition.expect("temporary symbols are defined");
                         let target = addrs[tsec] + off;
-                        let disp = target as i64 + addend - p as i64;
+                        let disp = target as i64 + r.addend - p as i64;
                         let v = i32::try_from(disp).map_err(|_| format!("relocation out of range for `{}'", s.name))?;
                         buf[field..field + 4].copy_from_slice(&v.to_le_bytes());
                         let lands = |j: i64| {
-                            let dst = target as i64 + addend + 4 + j;
+                            let dst = target as i64 + r.addend + 4 + j;
                             dst >= addrs[tsec] as i64 && dst <= (addrs[tsec] + sizes[tsec]) as i64
                         };
                         let candidates = [(0, X86_64_RELOC_SIGNED), (1, X86_64_RELOC_SIGNED_1), (2, X86_64_RELOC_SIGNED_2), (4, X86_64_RELOC_SIGNED_4)];
-                        let exact = candidates.iter().find(|(j, _)| *j == -(addend + 4));
+                        let exact = candidates.iter().find(|(j, _)| *j == -(r.addend + 4));
                         let ty = if r.kind == RelocKind::Branch32 && lands(0) {
                             X86_64_RELOC_BRANCH
                         } else {
@@ -371,8 +313,7 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
         }
     }
     let symoff = pos;
-    let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
-    let (strtab, strx) = string_table(&names);
+    let (symbols, strtab) = symtab_bytes(&syms);
     let stroff = symoff + 16 * syms.len() as u64;
 
     let segment = SegmentCmd {
@@ -403,7 +344,7 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     segment.write(&mut out);
     build_version(&mut out, 0);
     symtab_cmd(&mut out, symoff, syms.len(), stroff, strtab.len());
-    dysymtab_cmd(&mut out, locals.len(), extdefs.len(), undefs.len());
+    dysymtab_cmd(&mut out, groups.locals.len(), groups.globals.len(), groups.undefined.len());
     debug_assert_eq!(out.len() as u64, data_start);
     for i in 0..2 {
         out.pad_to(data_start + addrs[i], 0);
@@ -413,22 +354,9 @@ pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     for r in &relocs {
         out.extend_from_slice(r);
     }
-    out.extend_from_slice(&nlist_bytes(&syms, &strx));
+    out.extend_from_slice(&symbols);
     out.extend_from_slice(&strtab);
     Ok(out)
-}
-
-/// ULEB128.
-fn uleb(b: &mut Vec<u8>, mut v: u64) {
-    loop {
-        let byte = (v & 0x7f) as u8;
-        v >>= 7;
-        if v == 0 {
-            b.push(byte);
-            return;
-        }
-        b.push(byte | 0x80);
-    }
 }
 
 /// Export trie with terminal nodes for `names` (regular exports at image offsets). Nodes are
@@ -533,9 +461,6 @@ fn dylib_cmd_size() -> u64 {
 }
 
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
-    let main = m
-        .symbol_by_name("_main")
-        .filter(|&id| m.symbols[id].definition.is_some() && m.symbols[id].binding == Binding::Global);
     let text = &m.sections[0];
     let data = &m.sections[1];
     let has_data = !data.data.is_empty();
@@ -545,7 +470,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
 
     // Load commands: __PAGEZERO, __TEXT(__text), [__DATA(__data)], __LINKEDIT,
     // LC_DYLD_INFO_ONLY, LC_SYMTAB, LC_DYSYMTAB, LC_LOAD_DYLINKER, LC_UUID, LC_BUILD_VERSION,
-    // LC_MAIN, LC_FUNCTION_STARTS, LC_DATA_IN_CODE, LC_LOAD_DYLIB.
+    // LC_MAIN, LC_FUNCTION_STARTS, LC_LOAD_DYLIB.
     let nsegs = 3 + has_data as u64;
     let sizeofcmds = SEGMENT_CMD_SIZE * nsegs
         + SECTION_HDR_SIZE * (1 + has_data as u64)
@@ -557,9 +482,8 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         + 24
         + 24
         + 16
-        + 16
         + dylib_cmd_size();
-    let ncmds = nsegs as u32 + 10;
+    let ncmds = nsegs as u32 + 9;
 
     // Alignment above a page can't be honoured by the loader (segments are page aligned).
     let text_align = text.align.clamp(16, PAGE);
@@ -572,21 +496,9 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let linkedit_off = data_off + data_seg_size;
     let addrs = [text_base + text_off, text_base + data_off];
 
-    let none = |_: &str| None;
-    let linked = link::relocate(m, &addrs, &none);
-    let mut errors = Vec::new();
-    if let Err(e) = &linked {
-        errors.push(e.clone());
-    }
-    if main.is_none() {
-        errors.push("undefined reference to `_main' (entry point)".to_string());
-    }
-    if !errors.is_empty() {
-        return Err(errors.join("\n"));
-    }
-    let linked = linked.expect("checked above");
-    let (main_sec, main_off) = m.symbols[main.expect("checked above")].definition.expect("defined");
-    let entryoff = [text_off, data_off][main_sec] + main_off;
+    let missing = "undefined reference to `_main' (entry point)";
+    let (linked, main_addr) = link::link_program(m, "_main", missing, &addrs, &|_| None)?;
+    let entryoff = main_addr - text_base;
 
     // Absolute pointers must be rebased when ASLR slides the image. The __TEXT segment is
     // read-only, so with a pointer in code the image is not position independent instead.
@@ -600,12 +512,13 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let rebase = rebase_info(&rebase_sites);
 
     // Symbols: locals, then external definitions sorted by name (with __mh_execute_header).
-    let mut syms = Vec::new();
-    for s in &m.symbols {
-        if let (Some((sec, off)), false, Binding::Local) = (s.definition, s.temporary, s.binding) {
-            syms.push(Nlist { name: s.name.clone(), n_type: N_SECT, n_sect: sec as u8 + 1, n_desc: 0, value: addrs[sec] + off });
-        }
-    }
+    let groups = symbol_groups(m);
+    let sym = |id: usize, n_type: u8| {
+        let s = &m.symbols[id];
+        let (sec, off) = s.definition.expect("defined");
+        Nlist { name: s.name.clone(), n_type, n_sect: sec as u8 + 1, n_desc: 0, value: addrs[sec] + off }
+    };
+    let mut syms: Vec<Nlist> = groups.locals.iter().map(|&id| sym(id, N_SECT)).collect();
     let nlocal = syms.len();
     let mut ext: Vec<Nlist> = vec![Nlist {
         name: "__mh_execute_header".into(),
@@ -614,19 +527,13 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         n_desc: REFERENCED_DYNAMICALLY,
         value: text_base,
     }];
-    for s in &m.symbols {
-        if let (Some((sec, off)), Binding::Global) = (s.definition, s.binding) {
-            ext.push(Nlist { name: s.name.clone(), n_type: N_SECT | N_EXT, n_sect: sec as u8 + 1, n_desc: 0, value: addrs[sec] + off });
-        }
-    }
+    ext.extend(groups.globals.iter().map(|&id| sym(id, N_SECT | N_EXT)));
     ext.sort_by(|a, b| a.name.cmp(&b.name));
     let nextdef = ext.len();
     let exports: Vec<(String, u64)> = ext.iter().map(|s| (s.name.clone(), s.value - text_base)).collect();
     syms.extend(ext);
     let trie = export_trie(&exports);
-    let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
-    let (strtab, strx) = string_table(&names);
-    let symbols = nlist_bytes(&syms, &strx);
+    let (symbols, strtab) = symtab_bytes(&syms);
 
     // Function starts: the code symbols' addresses as ULEB128 deltas (the first one from the
     // image start), zero terminated.
@@ -653,13 +560,11 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         function_starts.pad_to(len, 0);
     }
 
-    // __LINKEDIT: rebase info, export trie, function starts, (empty) data in code, symbol
-    // table, string table.
+    // __LINKEDIT: rebase info, export trie, function starts, symbol table, string table.
     let rebase_off = linkedit_off;
     let export_off = rebase_off + rebase.len() as u64;
     let function_starts_off = export_off + trie.len() as u64;
-    let data_in_code_off = function_starts_off + function_starts.len() as u64;
-    let symoff = data_in_code_off;
+    let symoff = function_starts_off + function_starts.len() as u64;
     let stroff = symoff + symbols.len() as u64;
     let linkedit_size = stroff + strtab.len() as u64 - linkedit_off;
 
@@ -749,12 +654,10 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     out.u32(24);
     out.u64(entryoff);
     out.u64(0); // stack size: default
-    for (cmd, off, size) in [(LC_FUNCTION_STARTS, function_starts_off, function_starts.len()), (LC_DATA_IN_CODE, data_in_code_off, 0)] {
-        out.u32(cmd);
-        out.u32(16);
-        out.u32(off as u32);
-        out.u32(size as u32);
-    }
+    out.u32(LC_FUNCTION_STARTS);
+    out.u32(16);
+    out.u32(function_starts_off as u32);
+    out.u32(function_starts.len() as u32);
     // dylib: name offset, timestamp, current version, compatibility version.
     padded_cmd_string(&mut out, LC_LOAD_DYLIB, &[24, 2, 0x0505_0100, 0x0001_0000], LIBSYSTEM);
     debug_assert_eq!(out.len() as u64, HEADER_SIZE + sizeofcmds);

@@ -1,23 +1,18 @@
-//! ELF64 x86-64: relocatable objects laid out exactly like GNU as (BFD) does, and static,
-//! non-PIE, libc-free executables.
-use std::collections::HashMap;
-
+//! ELF64 x86-64: relocatable objects (the sections, symbols and relocations GNU as would
+//! write) and static, non-PIE, libc-free executables.
 use super::super::fadec::*;
-use super::super::module::{Binding, ObjModule, RelocKind, SymbolId};
-use super::dwarf::{self, DebugSection, RelTarget};
+use super::super::module::{ObjModule, Reloc, RelocKind};
+use super::dwarf::{self, RelTarget};
 use super::link;
-use super::{align_up, is_global, Asm, Le, SuffixStrTab};
+use super::{align_up, is_global, symbol_groups, Asm, Le, StrTab};
 
 const SHT_PROGBITS: u32 = 1;
 const SHT_SYMTAB: u32 = 2;
 const SHT_STRTAB: u32 = 3;
 const SHT_RELA: u32 = 4;
-const SHT_NOBITS: u32 = 8;
 const SHF_WRITE: u64 = 1;
 const SHF_ALLOC: u64 = 2;
 const SHF_EXECINSTR: u64 = 4;
-const SHF_MERGE: u64 = 0x10;
-const SHF_STRINGS: u64 = 0x20;
 const SHF_INFO_LINK: u64 = 0x40;
 
 const R_X86_64_64: u32 = 1;
@@ -41,8 +36,6 @@ struct Shdr {
     flags: u64,
     addr: u64,
     data: Vec<u8>,
-    /// For SHT_NOBITS.
-    nobits_size: u64,
     link: u32,
     info: u32,
     align: u64,
@@ -58,20 +51,11 @@ impl Shdr {
             flags,
             addr: 0,
             data,
-            nobits_size: 0,
             link: 0,
             info: 0,
             align,
             entsize: 0,
             offset: 0,
-        }
-    }
-
-    fn size(&self) -> u64 {
-        if self.sh_type == SHT_NOBITS {
-            self.nobits_size
-        } else {
-            self.data.len() as u64
         }
     }
 }
@@ -83,69 +67,39 @@ struct ElfSym {
     value: u64,
 }
 
-fn sym_bytes(syms: &[ElfSym], names: &HashMap<String, u32>) -> Vec<u8> {
+/// `.symtab` and `.strtab` contents.
+fn symtab_bytes(syms: &[ElfSym]) -> (Vec<u8>, Vec<u8>) {
+    let mut names = StrTab::new(&[0]);
     let mut b = Vec::with_capacity(24 * syms.len());
     for s in syms {
-        b.u32(names[&s.name]);
+        b.u32(names.add(&s.name));
         b.u8(s.info);
         b.u8(0);
         b.u16(s.shndx);
         b.u64(s.value);
         b.u64(0);
     }
-    b
+    (b, names.data)
 }
 
 /// Lays out and serializes an ELF file. `sections[0]` must be the NULL section placeholder;
 /// `.shstrtab` is appended here. Allocated sections must already have their offsets set
-/// (`offset != 0`) when `phdrs` is non-empty; all other sections are placed the way BFD does.
-fn serialize(
-    e_type: u16,
-    entry: u64,
-    phdrs: &[u8],
-    preplaced_end: u64,
-    mut sections: Vec<Shdr>,
-    file_prefix: Vec<u8>,
-) -> Vec<u8> {
-    // .shstrtab: BFD adds .symtab/.strtab/.shstrtab first, then the section names in order.
-    let mut shstr = SuffixStrTab::new();
-    for n in [".symtab", ".strtab", ".shstrtab"] {
-        if n != ".shstrtab" && !sections.iter().any(|s| s.name == n) {
-            continue;
-        }
-        shstr.add(n);
-    }
-    for s in &sections[1..] {
-        shstr.add(&s.name);
-    }
-    let (shstr_bytes, shstr_off) = shstr.finish();
-    sections.push(Shdr::new(".shstrtab", SHT_STRTAB, 0, shstr_bytes, 1));
+/// (`offset != 0`) when `phdrs` is non-empty, ending at `preplaced_end`; the other sections
+/// follow in index order.
+fn serialize(e_type: u16, entry: u64, phdrs: &[u8], preplaced_end: u64, mut sections: Vec<Shdr>) -> Vec<u8> {
+    sections.push(Shdr::new(".shstrtab", SHT_STRTAB, 0, Vec::new(), 1));
     let shstrndx = sections.len() - 1;
+    let mut shstr = StrTab::new(&[0]);
+    let names: Vec<u32> = sections.iter().map(|s| shstr.add(&s.name)).collect();
+    sections[shstrndx].data = shstr.data;
 
-    // File placement (BFD order): ordinary sections in section order, then .symtab and
-    // .strtab, then relocation sections, then .shstrtab.
-    let mut order: Vec<usize> = Vec::new();
-    let is_rel = |s: &Shdr| s.sh_type == SHT_RELA;
-    let is_tab = |s: &Shdr| matches!(s.name.as_str(), ".symtab" | ".strtab" | ".shstrtab");
-    order.extend((1..sections.len()).filter(|&i| !is_rel(&sections[i]) && !is_tab(&sections[i])));
-    order.extend((1..sections.len()).filter(|&i| matches!(sections[i].name.as_str(), ".symtab" | ".strtab")));
-    order.extend((1..sections.len()).filter(|&i| is_rel(&sections[i])));
-    order.push(shstrndx);
-
-    let mut out = file_prefix;
     let mut pos = if phdrs.is_empty() { 64 } else { preplaced_end };
-    for &i in &order {
-        let s = &mut sections[i];
-        if s.offset != 0 {
-            continue; // placed by the executable layout
-        }
-        // Like BFD, file offsets are aligned to at most 8 bytes (the ELF64 file alignment):
+    for s in sections[1..].iter_mut().filter(|s| s.offset == 0) {
+        // File offsets are aligned to at most 8 bytes (the ELF64 file alignment):
         // `sh_addralign` alone carries larger alignments, which matter only once loaded.
         pos = align_up(pos, s.align.clamp(1, 8));
         s.offset = pos;
-        if s.sh_type != SHT_NOBITS {
-            pos += s.data.len() as u64;
-        }
+        pos += s.data.len() as u64;
     }
     let shoff = align_up(pos, 8);
 
@@ -165,16 +119,9 @@ fn serialize(
     h.u16(64);
     h.u16(sections.len() as u16);
     h.u16(shstrndx as u16);
-    if out.len() < 64 + phdrs.len() {
-        out.resize(64 + phdrs.len(), 0);
-    }
-    out[..64].copy_from_slice(&h);
-    out[64..64 + phdrs.len()].copy_from_slice(phdrs);
-
+    let mut out = h;
+    out.extend_from_slice(phdrs);
     for s in &sections[1..] {
-        if s.sh_type == SHT_NOBITS || s.data.is_empty() {
-            continue;
-        }
         let end = s.offset as usize + s.data.len();
         if out.len() < end {
             out.resize(end, 0);
@@ -182,17 +129,17 @@ fn serialize(
         out[s.offset as usize..end].copy_from_slice(&s.data);
     }
     out.pad_to(shoff, 0);
-    for s in &sections {
+    for (s, name) in sections.iter().zip(names) {
         if s.sh_type == 0 {
             out.extend_from_slice(&[0; 64]);
             continue;
         }
-        out.u32(shstr_off[&s.name]);
+        out.u32(name);
         out.u32(s.sh_type);
         out.u64(s.flags);
         out.u64(s.addr);
         out.u64(s.offset);
-        out.u64(s.size());
+        out.u64(s.data.len() as u64);
         out.u32(s.link);
         out.u32(s.info);
         out.u64(s.align);
@@ -205,22 +152,13 @@ fn null_section() -> Shdr {
     Shdr::new("", 0, 0, Vec::new(), 0)
 }
 
-/// Target of an ELF relocation after gas' symbol adjustment.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum Target {
-    /// Section symbol of `.text`/`.data`.
-    Section(usize),
-    /// Section symbol of a debug section (index into the DWARF section list).
-    Debug(usize),
-    Symbol(SymbolId),
-}
-
-/// gas keeps relocations against global/undefined symbols and rewrites everything else to
-/// "section symbol + offset". Branches to local symbols become plain PC32.
-fn adjust(m: &ObjModule, sym: SymbolId, kind: RelocKind, addend: i64) -> (Target, u32, i64) {
-    let s = &m.symbols[sym];
+/// Relocation type, symbol table index and addend of a module relocation. Like gas, references
+/// to global and undefined symbols stay against the symbol, everything else becomes "section
+/// symbol + offset" (and a branch to a local target a plain PC32).
+fn adjust(m: &ObjModule, r: &Reloc, sym_index: &[u32]) -> (u32, u32, i64) {
+    let s = &m.symbols[r.symbol];
     let global = is_global(s);
-    let ty = match kind {
+    let ty = match r.kind {
         RelocKind::Pc32 => R_X86_64_PC32,
         RelocKind::Branch32 if global => R_X86_64_PLT32,
         RelocKind::Branch32 => R_X86_64_PC32,
@@ -228,163 +166,91 @@ fn adjust(m: &ObjModule, sym: SymbolId, kind: RelocKind, addend: i64) -> (Target
         RelocKind::Abs64 => R_X86_64_64,
     };
     match s.definition {
-        Some((sec, off)) if !global => (Target::Section(sec), ty, addend.wrapping_add(off as i64)),
-        _ => (Target::Symbol(sym), ty, addend),
+        Some((sec, off)) if !global => (section_symbol(sec), ty, r.addend.wrapping_add(off as i64)),
+        _ => (sym_index[r.symbol], ty, r.addend),
     }
 }
 
-/// Section header for a DWARF section (`data` already resolved or with zero fields).
-fn debug_shdr(s: &DebugSection, data: Vec<u8>) -> Shdr {
-    if s.is_strings() {
-        let mut h = Shdr::new(s.name, SHT_PROGBITS, SHF_MERGE | SHF_STRINGS, data, 1);
-        h.entsize = 1;
-        h
-    } else {
-        Shdr::new(s.name, SHT_PROGBITS, 0, data, 1)
-    }
+/// Section index of module section `sec` (`.text` = 1, `.data` = 2, then the DWARF sections),
+/// which is also the index of its section symbol.
+fn section_symbol(sec: usize) -> u32 {
+    sec as u32 + 1
 }
 
 pub fn write_object(m: &ObjModule) -> Vec<u8> {
-    // Relocations of .text/.data after gas' symbol adjustment.
-    let mut text_data_relocs: [Vec<(u64, Target, u32, i64)>; 2] = [Vec::new(), Vec::new()];
-    for (si, sec) in m.sections.iter().enumerate() {
-        for r in &sec.relocs {
-            let (t, ty, a) = adjust(m, r.symbol, r.kind, r.addend);
-            text_data_relocs[si].push((r.offset, t, ty, a));
-        }
-    }
-    // DWARF (`-g`): addresses are `.text` + offset, section offsets are against the debug
-    // sections' own section symbols, as gas emits them.
+    // Sections with contents: .text, .data, the DWARF sections (`-g`).
     let debug = m.debug.as_ref().map(|d| dwarf::build(d, m.sections[0].data.len() as u64)).unwrap_or_default();
-    let debug_index = |name: &str| debug.iter().position(|s| s.name == name).expect("known debug section");
-    let debug_relocs: Vec<Vec<(u64, Target, u32, i64)>> = debug
+    let mut sections = vec![
+        null_section(),
+        Shdr::new(".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR, m.sections[0].data.clone(), m.sections[0].align),
+        Shdr::new(".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE, m.sections[1].data.clone(), m.sections[1].align),
+    ];
+    sections.extend(debug.iter().map(|s| Shdr::new(s.name, SHT_PROGBITS, 0, s.data.clone(), 1)));
+    let ncontent = sections.len() - 1;
+
+    // Symbol table: NULL, a section symbol per section above, locals, globals.
+    let groups = symbol_groups(m);
+    let mut syms = vec![ElfSym { name: String::new(), info: 0, shndx: 0, value: 0 }];
+    syms.extend((1..=ncontent).map(|i| ElfSym { name: String::new(), info: (STB_LOCAL << 4) | STT_SECTION, shndx: i as u16, value: 0 }));
+    let first_global = syms.len() + groups.locals.len();
+    let mut sym_index = vec![0u32; m.symbols.len()];
+    for &id in groups.locals.iter().chain(&groups.globals).chain(&groups.undefined) {
+        let s = &m.symbols[id];
+        let bind = if syms.len() < first_global { STB_LOCAL } else { STB_GLOBAL };
+        let (shndx, value) = s.definition.map_or((0, 0), |(sec, off)| (section_symbol(sec) as u16, off));
+        sym_index[id] = syms.len() as u32;
+        syms.push(ElfSym { name: s.name.clone(), info: (bind << 4) | STT_NOTYPE, shndx, value });
+    }
+
+    // Relocations as (offset, symbol index, type, addend) per section. DWARF addresses are
+    // `.text` + offset, offsets into other debug sections are against their section symbols.
+    let mut relocs: Vec<Vec<(u64, u32, u32, i64)>> = m
+        .sections
         .iter()
-        .map(|s| {
-            s.relocs
+        .map(|sec| {
+            sec.relocs
                 .iter()
-                .map(|r| match r.target {
-                    RelTarget::Text => (r.offset, Target::Section(0), R_X86_64_64, r.addend),
-                    RelTarget::Section(n) => (r.offset, Target::Debug(debug_index(n)), R_X86_64_32, r.addend),
+                .map(|r| {
+                    let (symi, ty, addend) = adjust(m, r, &sym_index);
+                    (r.offset, symi, ty, addend)
                 })
                 .collect()
         })
         .collect();
+    let index_of = |name: &str| sections.iter().position(|s| s.name == name).expect("known debug section") as u32;
+    relocs.extend(debug.iter().map(|s| {
+        s.relocs
+            .iter()
+            .map(|r| match r.target {
+                RelTarget::Text => (r.offset, section_symbol(0), R_X86_64_64, r.addend),
+                RelTarget::Section(n) => (r.offset, index_of(n), R_X86_64_32, r.addend),
+            })
+            .collect()
+    }));
 
-    // ELF section indices: .text=1, [.rela.text], .data, [.rela.data], .bss, then each debug
-    // section followed by its relocations.
-    let text_idx = 1u16;
-    let data_idx = text_idx + 1 + !text_data_relocs[0].is_empty() as u16;
-    let sec_idx = [text_idx, data_idx];
-    let mut next = data_idx + 1 + !text_data_relocs[1].is_empty() as u16 + 1;
-    let mut debug_idx = Vec::new();
-    for r in &debug_relocs {
-        debug_idx.push(next);
-        next += 1 + !r.is_empty() as u16;
-    }
-
-    // Symbol table: NULL, section symbols of .text/.data in use, other locals, debug section
-    // symbols in use, globals.
-    let mut used_sections = [false; 2];
-    let mut used_debug = vec![false; debug.len()];
-    let mut referenced = vec![false; m.symbols.len()];
-    for (_, t, _, _) in text_data_relocs.iter().chain(debug_relocs.iter()).flatten() {
-        match *t {
-            Target::Section(s) => used_sections[s] = true,
-            Target::Debug(s) => used_debug[s] = true,
-            Target::Symbol(id) => referenced[id] = true,
-        }
-    }
-    let section_symbol = |shndx: u16| ElfSym { name: String::new(), info: (STB_LOCAL << 4) | STT_SECTION, shndx, value: 0 };
-    let mut syms = vec![ElfSym { name: String::new(), info: 0, shndx: 0, value: 0 }];
-    let mut section_sym = [0u32; 2];
-    for s in 0..2 {
-        if used_sections[s] {
-            section_sym[s] = syms.len() as u32;
-            syms.push(section_symbol(sec_idx[s]));
-        }
-    }
-    let mut sym_index: HashMap<SymbolId, u32> = HashMap::new();
-    for (id, s) in m.symbols.iter().enumerate() {
-        if let (Some((sec, off)), false, Binding::Local) = (s.definition, s.temporary, s.binding) {
-            sym_index.insert(id, syms.len() as u32);
-            syms.push(ElfSym { name: s.name.clone(), info: (STB_LOCAL << 4) | STT_NOTYPE, shndx: sec_idx[sec], value: off });
-        }
-    }
-    let mut debug_sym = vec![0u32; debug.len()];
-    for (i, used) in used_debug.iter().enumerate() {
-        if *used {
-            debug_sym[i] = syms.len() as u32;
-            syms.push(section_symbol(debug_idx[i]));
-        }
-    }
-    let first_global = syms.len() as u32;
-    for (id, s) in m.symbols.iter().enumerate() {
-        if !is_global(s) || (s.binding != Binding::Global && !referenced[id]) {
-            continue;
-        }
-        let (shndx, value) = match s.definition {
-            Some((sec, off)) => (sec_idx[sec], off),
-            None => (0, 0),
-        };
-        sym_index.insert(id, syms.len() as u32);
-        syms.push(ElfSym { name: s.name.clone(), info: (STB_GLOBAL << 4) | STT_NOTYPE, shndx, value });
-    }
-    let mut strtab = SuffixStrTab::new();
-    for s in &syms[1..] {
-        strtab.add(&s.name);
-    }
-    let (strtab_bytes, str_off) = strtab.finish();
-
-    let rela_bytes = |relocs: &[(u64, Target, u32, i64)]| {
-        let mut b = Vec::with_capacity(24 * relocs.len());
-        for &(off, t, ty, a) in relocs {
-            let symi = match t {
-                Target::Section(s) => section_sym[s],
-                Target::Debug(s) => debug_sym[s],
-                Target::Symbol(id) => sym_index[&id],
-            };
+    let symtab_idx = sections.len() as u32;
+    let (symtab_bytes, strtab_bytes) = symtab_bytes(&syms);
+    let mut symtab = Shdr::new(".symtab", SHT_SYMTAB, 0, symtab_bytes, 8);
+    symtab.entsize = 24;
+    symtab.info = first_global as u32;
+    symtab.link = symtab_idx + 1;
+    sections.push(symtab);
+    sections.push(Shdr::new(".strtab", SHT_STRTAB, 0, strtab_bytes, 1));
+    for (i, rel) in relocs.iter().enumerate().filter(|(_, r)| !r.is_empty()) {
+        let mut b = Vec::with_capacity(24 * rel.len());
+        for &(off, symi, ty, addend) in rel {
             b.u64(off);
             b.u64(((symi as u64) << 32) | ty as u64);
-            b.u64(a as u64);
+            b.u64(addend as u64);
         }
-        b
-    };
-    let rela = |sections: &mut Vec<Shdr>, name: &str, relocs: &[(u64, Target, u32, i64)]| {
-        if !relocs.is_empty() {
-            let mut r = Shdr::new(&format!(".rela{name}"), SHT_RELA, SHF_INFO_LINK, rela_bytes(relocs), 8);
-            r.info = (sections.len() - 1) as u32;
-            r.entsize = 24;
-            sections.push(r);
-        }
-    };
-
-    // Section headers.
-    let mut sections = vec![null_section()];
-    let names = [".text", ".data"];
-    let flags = [SHF_ALLOC | SHF_EXECINSTR, SHF_ALLOC | SHF_WRITE];
-    for s in 0..2 {
-        sections.push(Shdr::new(names[s], SHT_PROGBITS, flags[s], m.sections[s].data.clone(), m.sections[s].align));
-        rela(&mut sections, names[s], &text_data_relocs[s]);
+        let target = i + 1;
+        let mut r = Shdr::new(&format!(".rela{}", sections[target].name), SHT_RELA, SHF_INFO_LINK, b, 8);
+        r.info = target as u32;
+        r.link = symtab_idx;
+        r.entsize = 24;
+        sections.push(r);
     }
-    sections.push(Shdr::new(".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE, Vec::new(), 1));
-    for (i, s) in debug.iter().enumerate() {
-        debug_assert_eq!(sections.len(), debug_idx[i] as usize);
-        sections.push(debug_shdr(s, s.data.clone()));
-        rela(&mut sections, s.name, &debug_relocs[i]);
-    }
-    let mut symtab = Shdr::new(".symtab", SHT_SYMTAB, 0, sym_bytes(&syms, &str_off), 8);
-    symtab.entsize = 24;
-    symtab.info = first_global;
-    symtab.link = sections.len() as u32 + 1;
-    sections.push(symtab);
-    let symtab_idx = (sections.len() - 1) as u32;
-    sections.push(Shdr::new(".strtab", SHT_STRTAB, 0, strtab_bytes, 1));
-    for s in sections.iter_mut() {
-        if s.sh_type == SHT_RELA {
-            s.link = symtab_idx;
-        }
-    }
-    serialize(1, 0, &[], 0, sections, Vec::new())
+    serialize(1, 0, &[], 0, sections)
 }
 
 /// The crt replacement: `_start` sets up `main(argc, argv, envp)` exactly like glibc's crt1
@@ -409,10 +275,6 @@ fn entry_stub() -> (Vec<u8>, usize) {
 }
 
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
-    let main = m
-        .symbol_by_name("main")
-        .filter(|&id| m.symbols[id].definition.is_some() && m.symbols[id].binding == Binding::Global);
-
     let (stub, call_field) = entry_stub();
     let text = &m.sections[0];
     let data = &m.sections[1];
@@ -437,22 +299,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let (data_off, data_addr) = place(text_off + text_size, text_addr + text_size, data.align.max(1));
     let addrs = [text_addr, data_addr];
 
-    let none = |_: &str| None;
-    let linked = link::relocate(m, &addrs, &none);
-    let mut errors = Vec::new();
-    if main.is_none() {
-        errors.push(link::missing_entry("main"));
-    }
-    let linked = match linked {
-        Ok(l) if errors.is_empty() => l,
-        Ok(_) => return Err(errors.join("\n")),
-        Err(e) => {
-            errors.push(e);
-            return Err(errors.join("\n"));
-        }
-    };
-    let (main_sec, main_off) = m.symbols[main.expect("checked above")].definition.expect("defined");
-    let main_addr = addrs[main_sec] + main_off;
+    let (linked, main_addr) = link::link_program(m, "main", link::NO_MAIN, &addrs, &|_| None)?;
     let stub_addr = text_addr + stub_off_in_text;
     let mut text_bytes = linked.sections[0].clone();
     text_bytes.resize(stub_off_in_text as usize, 0);
@@ -505,36 +352,29 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     // DWARF with final addresses (the CU covers the module's code, not the entry stub).
     if let Some(d) = &m.debug {
         for s in dwarf::build(d, text.data.len() as u64) {
-            sections.push(debug_shdr(&s, s.resolved(text_addr)));
+            sections.push(Shdr::new(s.name, SHT_PROGBITS, 0, s.resolved(text_addr), 1));
         }
     }
 
     // Symbol table: locals (non-temporary), then globals including `_start`.
-    let shndx = |sec: usize| if sec == 0 { 1 } else { data_shndx };
+    let groups = symbol_groups(m);
+    let sym = |id: usize, bind: u8| {
+        let s = &m.symbols[id];
+        let (sec, off) = s.definition.expect("defined");
+        ElfSym { name: s.name.clone(), info: bind << 4, shndx: if sec == 0 { 1 } else { data_shndx }, value: addrs[sec] + off }
+    };
     let mut syms = vec![ElfSym { name: String::new(), info: 0, shndx: 0, value: 0 }];
-    for s in &m.symbols {
-        if let (Some((sec, off)), false, Binding::Local) = (s.definition, s.temporary, s.binding) {
-            syms.push(ElfSym { name: s.name.clone(), info: STT_NOTYPE, shndx: shndx(sec), value: addrs[sec] + off });
-        }
-    }
+    syms.extend(groups.locals.iter().map(|&id| sym(id, STB_LOCAL)));
     let first_global = syms.len() as u32;
     syms.push(ElfSym { name: "_start".into(), info: (STB_GLOBAL << 4) | STT_FUNC, shndx: 1, value: stub_addr });
-    for s in &m.symbols {
-        if let (Some((sec, off)), Binding::Global) = (s.definition, s.binding) {
-            syms.push(ElfSym { name: s.name.clone(), info: STB_GLOBAL << 4, shndx: shndx(sec), value: addrs[sec] + off });
-        }
-    }
-    let mut strtab = SuffixStrTab::new();
-    for s in &syms[1..] {
-        strtab.add(&s.name);
-    }
-    let (strtab_bytes, str_off) = strtab.finish();
-    let mut symtab = Shdr::new(".symtab", SHT_SYMTAB, 0, sym_bytes(&syms, &str_off), 8);
+    syms.extend(groups.globals.iter().map(|&id| sym(id, STB_GLOBAL)));
+    let (symtab_bytes, strtab_bytes) = symtab_bytes(&syms);
+    let mut symtab = Shdr::new(".symtab", SHT_SYMTAB, 0, symtab_bytes, 8);
     symtab.entsize = 24;
     symtab.info = first_global;
     symtab.link = sections.len() as u32 + 1;
     sections.push(symtab);
     sections.push(Shdr::new(".strtab", SHT_STRTAB, 0, strtab_bytes, 1));
 
-    Ok(serialize(2, stub_addr, &ph, file_end, sections, Vec::new()))
+    Ok(serialize(2, stub_addr, &ph, file_end, sections))
 }

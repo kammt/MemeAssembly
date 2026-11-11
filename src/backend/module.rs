@@ -93,9 +93,8 @@ pub struct DebugFunction {
 }
 
 /// Source-level debug information for `-g` (replaces the original STABS). Writers turn it into
-/// DWARF sections (`.debug_info`, `.debug_abbrev`, `.debug_line`, `.debug_aranges`, plus
-/// `.debug_str`/`.debug_line_str` if the chosen DWARF version needs them) with the relocations
-/// the object format requires; executables get them resolved.
+/// DWARF sections (`.debug_info`, `.debug_abbrev`, `.debug_line`, strings inline) with the
+/// relocations the object format requires; executables get them resolved.
 #[derive(Debug, Clone, Default)]
 pub struct DebugInfo {
     /// Source files as written in the debug info (absolute paths; raw bytes, since paths need

@@ -9,10 +9,13 @@
 //! | Windows | COFF x86-64 object ([`coff`])        | PE32+ console executable ([`pe`])         |
 //! | macOS   | Mach-O `MH_OBJECT` ([`macho`])       | Mach-O `MH_EXECUTE` ([`macho`])           |
 //!
-//! Object files mirror what GNU as (or, for Mach-O, the Apple/LLVM assembler) emits for the
-//! same source. Executables are linked here directly (no crt/libc): see [`link`] for the shared
-//! relocation logic and the format modules for their entry stubs.
-use super::module::{Binding, ObjModule, RelocKind, Symbol};
+//! Object files carry the same sections, symbols and relocations as GNU as (or, for Mach-O,
+//! the Apple/LLVM assembler) would produce for the same source, in a simpler layout.
+//! Executables are linked here directly (no crt/libc): see [`link`] for the shared relocation
+//! logic and the format modules for their entry stubs.
+use std::collections::HashMap;
+
+use super::module::{Binding, ObjModule, RelocKind, Symbol, SymbolId};
 use super::OutputKind;
 use crate::target::Target;
 
@@ -57,7 +60,7 @@ fn validate(m: &ObjModule) -> Result<(), String> {
             if r.symbol >= m.symbols.len() {
                 return internal(format!("relocation against symbol #{}", r.symbol));
             }
-            if r.offset.checked_add(field_size(r.kind)).map_or(true, |end| end > s.data.len() as u64) {
+            if r.offset.checked_add(field_size(r.kind)).is_none_or(|end| end > s.data.len() as u64) {
                 return internal(format!("relocation at {:#x} outside section {i}", r.offset));
             }
         }
@@ -212,65 +215,66 @@ impl Asm {
     }
 }
 
-/// String table with the layout BFD (`elf-strtab.c`) produces: identical strings are stored
-/// once and a string that is a suffix of another one shares its storage. Offsets of the other
-/// strings follow insertion order, starting after the leading NUL.
-pub(crate) struct SuffixStrTab {
-    strings: Vec<String>,
+/// A string table: each distinct string once, NUL terminated, in insertion order, after a
+/// format-specific prefix (ELF/Mach-O: a NUL, COFF: the 4-byte size field). Offsets count from
+/// the start of the table, prefix included; the empty string is offset 0.
+pub(crate) struct StrTab {
+    pub data: Vec<u8>,
+    offsets: HashMap<String, u32>,
 }
 
-impl SuffixStrTab {
-    pub fn new() -> Self {
-        SuffixStrTab { strings: Vec::new() }
+impl StrTab {
+    pub fn new(prefix: &[u8]) -> StrTab {
+        StrTab { data: prefix.to_vec(), offsets: HashMap::from([(String::new(), 0)]) }
     }
 
-    pub fn add(&mut self, s: &str) {
-        if !s.is_empty() && !self.strings.iter().any(|x| x == s) {
-            self.strings.push(s.to_string());
+    pub fn add(&mut self, s: &str) -> u32 {
+        if let Some(&o) = self.offsets.get(s) {
+            return o;
         }
+        let o = self.data.len() as u32;
+        self.data.extend_from_slice(s.as_bytes());
+        self.data.push(0);
+        self.offsets.insert(s.to_string(), o);
+        o
     }
+}
 
-    /// Returns the table bytes and a lookup function result as a map.
-    pub fn finish(self) -> (Vec<u8>, std::collections::HashMap<String, u32>) {
-        use std::collections::HashMap;
-        // BFD sorts by reversed string, longest first among equal suffixes; a string becomes a
-        // suffix of the closest preceding (longer) entry that ends with it.
-        let mut order: Vec<usize> = (0..self.strings.len()).collect();
-        let rev = |s: &str| s.bytes().rev().collect::<Vec<u8>>();
-        order.sort_by(|&a, &b| {
-            let (ra, rb) = (rev(&self.strings[a]), rev(&self.strings[b]));
-            // Compare reversed strings; when one is a prefix of the other, the longer first.
-            let n = ra.len().min(rb.len());
-            ra[..n].cmp(&rb[..n]).then(rb.len().cmp(&ra.len()))
-        });
-        let mut host: Vec<Option<usize>> = vec![None; self.strings.len()];
-        let mut last: Option<usize> = None;
-        for &i in &order {
-            if let Some(l) = last {
-                if self.strings[l].len() > self.strings[i].len() && self.strings[l].ends_with(&self.strings[i]) {
-                    host[i] = Some(l);
-                    continue;
-                }
-            }
-            last = Some(i);
+/// ULEB128.
+pub(crate) fn uleb(b: &mut Vec<u8>, mut v: u64) {
+    loop {
+        let byte = (v & 0x7f) as u8;
+        v >>= 7;
+        if v == 0 {
+            b.push(byte);
+            return;
         }
-        let mut bytes = vec![0u8];
-        let mut offsets: HashMap<String, u32> = HashMap::new();
-        for (i, s) in self.strings.iter().enumerate() {
-            if host[i].is_none() {
-                offsets.insert(s.clone(), bytes.len() as u32);
-                bytes.extend_from_slice(s.as_bytes());
-                bytes.push(0);
-            }
-        }
-        for (i, s) in self.strings.iter().enumerate() {
-            if let Some(h) = host[i] {
-                let hs = &self.strings[h];
-                let off = offsets[hs] + (hs.len() - s.len()) as u32;
-                offsets.insert(s.clone(), off);
-            }
-        }
-        offsets.insert(String::new(), 0);
-        (bytes, offsets)
+        b.push(byte | 0x80);
     }
+}
+
+/// The symbols an object's symbol table lists, each group in module order: defined
+/// non-temporary locals, defined globals, and undefined symbols that are referenced or declared
+/// global (an unused `.extern` is dropped, like gas does).
+pub(crate) struct SymbolGroups {
+    pub locals: Vec<SymbolId>,
+    pub globals: Vec<SymbolId>,
+    pub undefined: Vec<SymbolId>,
+}
+
+pub(crate) fn symbol_groups(m: &ObjModule) -> SymbolGroups {
+    let mut referenced = vec![false; m.symbols.len()];
+    for r in m.sections.iter().flat_map(|s| &s.relocs) {
+        referenced[r.symbol] = true;
+    }
+    let mut g = SymbolGroups { locals: Vec::new(), globals: Vec::new(), undefined: Vec::new() };
+    for (id, s) in m.symbols.iter().enumerate() {
+        match (s.definition, s.binding) {
+            (Some(_), Binding::Local) if !s.temporary => g.locals.push(id),
+            (Some(_), Binding::Global) => g.globals.push(id),
+            (None, b) if referenced[id] || b == Binding::Global => g.undefined.push(id),
+            _ => {}
+        }
+    }
+    g
 }

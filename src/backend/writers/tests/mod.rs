@@ -176,3 +176,33 @@ pub fn program_input(name: &str) -> Option<(Vec<&'static str>, &'static [u8])> {
         _ => None,
     }
 }
+
+pub fn le32(b: &[u8], off: usize) -> u32 {
+    u32::from_le_bytes(b[off..off + 4].try_into().unwrap())
+}
+
+pub fn le64(b: &[u8], off: usize) -> u64 {
+    u64::from_le_bytes(b[off..off + 8].try_into().unwrap())
+}
+
+/// The NUL-terminated string at the start of `b`.
+pub fn cstr(b: &[u8]) -> String {
+    String::from_utf8_lossy(b.split(|&c| c == 0).next().unwrap()).into_owned()
+}
+
+/// A section of an ELF file as `(address, contents)`.
+pub fn elf_section(b: &[u8], name: &str) -> Option<(u64, Vec<u8>)> {
+    let shoff = le64(b, 0x28) as usize;
+    let (entsize, num, strndx) =
+        (u16::from_le_bytes([b[0x3a], b[0x3b]]) as usize, u16::from_le_bytes([b[0x3c], b[0x3d]]) as usize, u16::from_le_bytes([b[0x3e], b[0x3f]]) as usize);
+    let shdr = |i: usize| shoff + i * entsize;
+    let strtab = le64(b, shdr(strndx) + 0x18) as usize;
+    (0..num).find_map(|i| {
+        let h = shdr(i);
+        if cstr(&b[strtab + le32(b, h) as usize..]) != name {
+            return None;
+        }
+        let (addr, off, size) = (le64(b, h + 0x10), le64(b, h + 0x18) as usize, le64(b, h + 0x20) as usize);
+        Some((addr, b[off..off + size].to_vec()))
+    })
+}
