@@ -1,0 +1,180 @@
+//! Test helper: turns a GNU as ELF relocatable object back into an [`ObjModule`], so the
+//! writers can be checked against gas (and other assemblers) without the real assembler.
+use crate::backend::module::*;
+
+fn u16_at(b: &[u8], o: usize) -> u16 {
+    u16::from_le_bytes(b[o..o + 2].try_into().unwrap())
+}
+fn u32_at(b: &[u8], o: usize) -> u32 {
+    u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
+}
+fn u64_at(b: &[u8], o: usize) -> u64 {
+    u64::from_le_bytes(b[o..o + 8].try_into().unwrap())
+}
+fn cstr(b: &[u8], o: usize) -> String {
+    let end = b[o..].iter().position(|&c| c == 0).unwrap() + o;
+    String::from_utf8(b[o..end].to_vec()).unwrap()
+}
+
+struct Sh {
+    name: String,
+    ty: u32,
+    off: usize,
+    size: usize,
+    info: u32,
+    align: u64,
+}
+
+pub fn import(b: &[u8]) -> ObjModule {
+    assert_eq!(&b[..4], b"\x7fELF");
+    assert_eq!(u16_at(b, 16), 1, "not a relocatable object");
+    let shoff = u64_at(b, 0x28) as usize;
+    let shnum = u16_at(b, 0x3c) as usize;
+    let shstrndx = u16_at(b, 0x3e) as usize;
+    let raw: Vec<_> = (0..shnum)
+        .map(|i| {
+            let h = shoff + 64 * i;
+            (u32_at(b, h), u32_at(b, h + 4), u64_at(b, h + 0x18) as usize, u64_at(b, h + 0x20) as usize, u32_at(b, h + 0x2c), u64_at(b, h + 0x30))
+        })
+        .collect();
+    let shstr_off = raw[shstrndx].2;
+    let shs: Vec<Sh> = raw
+        .iter()
+        .map(|&(n, ty, off, size, info, align)| Sh { name: cstr(b, shstr_off + n as usize), ty, off, size, info, align })
+        .collect();
+    let find = |n: &str| shs.iter().position(|s| s.name == n);
+    let text_i = find(".text").unwrap();
+    let data_i = find(".data").unwrap();
+    let to_mod = |shndx: usize| -> Option<usize> {
+        if shndx == text_i {
+            Some(0)
+        } else if shndx == data_i {
+            Some(1)
+        } else {
+            None
+        }
+    };
+    let mut m = ObjModule::default();
+    for (i, kind) in [(text_i, SectionKind::Text), (data_i, SectionKind::Data)] {
+        let s = &shs[i];
+        m.sections.push(Section { kind, data: b[s.off..s.off + s.size].to_vec(), relocs: Vec::new(), align: s.align.max(1) });
+    }
+
+    // Symbols. ELF index -> module symbol (None for the null/section symbols).
+    let symtab = &shs[find(".symtab").unwrap()];
+    let strtab = &shs[find(".strtab").unwrap()];
+    let nsyms = symtab.size / 24;
+    let mut map: Vec<Option<SymbolId>> = vec![None; nsyms];
+    let mut section_of_sym: Vec<Option<usize>> = vec![None; nsyms];
+    for i in 1..nsyms {
+        let e = symtab.off + 24 * i;
+        let name = cstr(b, strtab.off + u32_at(b, e) as usize);
+        let info = b[e + 4];
+        let shndx = u16_at(b, e + 6) as usize;
+        let value = u64_at(b, e + 8);
+        if info & 0xf == 3 {
+            section_of_sym[i] = to_mod(shndx);
+            continue;
+        }
+        let binding = if info >> 4 == 0 { Binding::Local } else { Binding::Global };
+        let definition = if shndx == 0 { None } else { Some((to_mod(shndx).expect("symbol in unknown section"), value)) };
+        map[i] = Some(m.symbols.len());
+        m.symbols.push(Symbol { name, binding, definition, temporary: false });
+    }
+    // Temporary labels standing in for "section symbol + offset".
+    let temp = |m: &mut ObjModule, sec: usize, off: u64| -> SymbolId {
+        let name = format!(".Ltmp_{sec}_{off}");
+        if let Some(id) = m.symbol_by_name(&name) {
+            return id;
+        }
+        m.symbols.push(Symbol { name, binding: Binding::Local, definition: Some((sec, off)), temporary: true });
+        m.symbols.len() - 1
+    };
+
+    let relocs = |name: &str| -> Vec<(u64, u32, usize, i64)> {
+        match find(name) {
+            None => Vec::new(),
+            Some(i) => {
+                let s = &shs[i];
+                assert_eq!(s.ty, 4);
+                (0..s.size / 24)
+                    .map(|k| {
+                        let e = s.off + 24 * k;
+                        let info = u64_at(b, e + 8);
+                        (u64_at(b, e), info as u32, (info >> 32) as usize, u64_at(b, e + 16) as i64)
+                    })
+                    .collect()
+            }
+        }
+    };
+    for (si, name) in [(0usize, ".rela.text"), (1, ".rela.data")] {
+        if let Some(i) = find(name) {
+            assert_eq!(shs[i].info as usize, if si == 0 { text_i } else { data_i });
+        }
+        for (off, ty, symi, addend) in relocs(name) {
+            let kind = match ty {
+                1 => RelocKind::Abs64,
+                2 => RelocKind::Pc32,
+                4 => RelocKind::Branch32,
+                10 => RelocKind::Abs32,
+                _ => panic!("unsupported relocation type {ty}"),
+            };
+            let (symbol, addend) = match map[symi] {
+                Some(id) => (id, addend),
+                None => {
+                    let sec = section_of_sym[symi].expect("relocation against unknown section");
+                    let len = m.sections[sec].data.len() as i64;
+                    // Guess the label the way source code usually references it.
+                    let guess = if super::super::is_pcrel(kind) { addend + 4 } else { addend }.clamp(0, len);
+                    (temp(&mut m, sec, guess as u64), addend - guess)
+                }
+            };
+            m.sections[si].relocs.push(Reloc { offset: off, kind, symbol, addend });
+        }
+    }
+
+    // `-g` fixtures of the original compiler carry STABS; turn their line/function entries into
+    // the equivalent `DebugInfo` (what the Rust frontend produces for DWARF).
+    if let (Some(stab_i), Some(stabstr_i)) = (find(".stab"), find(".stabstr")) {
+        let (stab, stabstr) = (&shs[stab_i], &shs[stabstr_i]);
+        let rel: std::collections::HashMap<u64, (usize, i64)> =
+            relocs(".rela.stab").into_iter().map(|(off, _, symi, a)| (off, (symi, a))).collect();
+        let text_len = m.sections[0].data.len() as u64;
+        let mut d = DebugInfo { comp_dir: "/tmp/memeasm-fixture".into(), producer: "MemeAssembly test".into(), ..Default::default() };
+        let mut funcs: Vec<(String, u64)> = Vec::new();
+        for k in 1..stab.size / 12 {
+            let e = stab.off + 12 * k;
+            let n_type = b[e + 4];
+            let desc = u16_at(b, e + 6);
+            // Resolved .text offset of the value field.
+            let Some(&(symi, a)) = rel.get(&(12 * k as u64 + 8)) else { continue };
+            let value = match map[symi] {
+                Some(id) => m.symbols[id].definition.map(|(_, off)| off as i64 + a),
+                None => (section_of_sym[symi] == Some(0)).then_some(a),
+            };
+            let Some(value) = value else { continue };
+            let string = cstr(b, stabstr.off + u32_at(b, e) as usize);
+            match n_type {
+                100 if d.files.is_empty() && !string.is_empty() => d.files.push(string),
+                68 => d.lines.push(LineRow { offset: value as u64, file: 0, line: desc as u32 }),
+                36 => {
+                    let name = string.split(':').next().unwrap().to_string();
+                    if !funcs.iter().any(|f| f.0 == name) {
+                        funcs.push((name, value as u64));
+                    }
+                }
+                _ => {}
+            }
+        }
+        d.lines.sort_by_key(|r| r.offset);
+        d.lines.dedup_by_key(|r| r.offset);
+        funcs.sort_by_key(|f| f.1);
+        for (i, (name, low)) in funcs.iter().enumerate() {
+            let high = funcs.get(i + 1).map_or(text_len, |f| f.1);
+            let line = d.lines.iter().find(|r| r.offset >= *low).map_or(1, |r| r.line);
+            d.functions.push(DebugFunction { name: name.clone(), file: 0, line, low: *low, high });
+        }
+        m.debug = Some(d);
+    }
+    m
+}
