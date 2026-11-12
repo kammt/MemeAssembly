@@ -283,19 +283,25 @@ pub fn pointer_use(opcode: Opcode, index: usize) -> PointerUse {
     }
 }
 
-/// Where the commands of a function live. Regular functions alias a slice of the file's
-/// command array; bully mode's injected functions own a copy (exactly like the C code, which
-/// matters for which array "perfectly balanced" modifies).
-#[derive(Debug, Clone)]
-pub enum FunctionCommands {
-    InFile(usize),
-    Owned(Vec<ParsedCommand>),
-}
-
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub number_of_commands: usize,
-    pub commands: FunctionCommands,
+    /// The definition (`commands[0]`, which holds the name) and the rest of the function.
+    pub commands: Vec<ParsedCommand>,
+    /// A function that bully mode made up for orphaned commands: its definition and return
+    /// statement are not lines of the file.
+    pub injected: bool,
+}
+
+impl Function {
+    /// The commands that are lines of the file.
+    fn lines_mut(&mut self) -> &mut [ParsedCommand] {
+        let n = self.commands.len();
+        if self.injected {
+            &mut self.commands[1..n - 1]
+        } else {
+            &mut self.commands
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -304,9 +310,21 @@ pub struct File {
     /// lines of code
     pub loc: usize,
     pub functions: Vec<Function>,
-    pub parsed_commands: Vec<ParsedCommand>,
+    /// Commands outside of any function (an error; bully mode puts them into injected
+    /// functions instead).
+    pub orphans: Vec<ParsedCommand>,
     /// A variable necessary for the "confused stonks" command
     pub random_index: usize,
+}
+
+impl File {
+    /// The commands of the file's `loc` lines of code, in source order.
+    pub fn lines_mut(&mut self) -> Vec<&mut ParsedCommand> {
+        let mut lines: Vec<_> =
+            self.functions.iter_mut().flat_map(Function::lines_mut).chain(&mut self.orphans).collect();
+        lines.sort_by_key(|c| c.line_num);
+        lines
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -378,27 +396,12 @@ impl CompileState {
         }
     }
 
-    pub fn function_commands(&self, file: usize, func: usize) -> &[ParsedCommand] {
-        let f = &self.files[file];
-        let function = &f.functions[func];
-        match &function.commands {
-            FunctionCommands::InFile(start) => {
-                &f.parsed_commands[*start..*start + function.number_of_commands]
-            }
-            FunctionCommands::Owned(v) => v,
-        }
-    }
-
     pub fn cmd(&self, l: CmdLoc) -> &ParsedCommand {
-        &self.function_commands(l.file, l.func)[l.k]
+        &self.files[l.file].functions[l.func].commands[l.k]
     }
 
     pub fn cmd_mut(&mut self, l: CmdLoc) -> &mut ParsedCommand {
-        let f = &mut self.files[l.file];
-        match &mut f.functions[l.func].commands {
-            FunctionCommands::InFile(start) => &mut f.parsed_commands[*start + l.k],
-            FunctionCommands::Owned(v) => &mut v[l.k],
-        }
+        &mut self.files[l.file].functions[l.func].commands[l.k]
     }
 
     /// Name of the `main` function on the current target.

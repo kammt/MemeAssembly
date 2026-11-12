@@ -152,10 +152,8 @@ fn is_translated(state: &CompileState, cmd: &ParsedCommand) -> bool {
 /// Whether no command produces any code after bully mode's injected main (no functions at all,
 /// everything deleted, or `-O69420`).
 fn bully_main_is_empty(state: &CompileState) -> bool {
-    !(0..state.files.len()).any(|file| {
-        (0..state.files[file].functions.len())
-            .any(|func| state.function_commands(file, func).iter().any(|cmd| is_translated(state, cmd)))
-    })
+    let mut commands = state.files.iter().flat_map(|f| &f.functions).flat_map(|f| &f.commands);
+    !commands.any(|cmd| is_translated(state, cmd))
 }
 
 // ---- operands ----
@@ -663,12 +661,10 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     let target = state.target;
 
     // Define all functions as global
-    for file in 0..state.files.len() {
-        for func in 0..state.files[file].functions.len() {
-            let def = &state.function_commands(file, func)[0];
-            if def.translate {
-                a.global(&def.param_text(0, target));
-            }
+    for function in state.files.iter().flat_map(|f| &f.functions) {
+        let def = &function.commands[0];
+        if def.translate {
+            a.global(&def.param_text(0, target));
         }
     }
 
@@ -745,16 +741,15 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
         last_debug_file = debug_file.or(last_debug_file);
 
         // The confused stonks label is only needed if the file jumps to it
-        let uses_confused_stonks = (0..file.functions.len()).any(|func| {
-            state
-                .function_commands(i, func)
-                .iter()
-                .any(|cmd| cmd.opcode == Opcode::ConfusedStonks && is_translated(state, cmd))
-        });
+        let uses_confused_stonks = file
+            .functions
+            .iter()
+            .flat_map(|f| &f.commands)
+            .any(|cmd| cmd.opcode == Opcode::ConfusedStonks && is_translated(state, cmd));
 
         let mut line = 0usize;
-        for func in 0..file.functions.len() {
-            let commands = state.function_commands(i, func);
+        for function in &file.functions {
+            let commands = &function.commands;
             let function_name = commands[0].param_text(0, target);
             if let Some(f) = debug_file {
                 a.debug_function_begin(&function_name, f, commands[0].line_num as u32);

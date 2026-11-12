@@ -16,7 +16,7 @@ pub fn analyse_commands(state: &mut CompileState) {
 
     for file in 0..state.files.len() {
         for func in 0..state.files[file].functions.len() {
-            for k in 0..state.files[file].functions[func].number_of_commands {
+            for k in 0..state.files[file].functions[func].commands.len() {
                 let loc = CmdLoc { file, func, k };
                 let file_name = state.files[file].file_name.clone();
                 parameters::check_parameters(loc, &file_name, state);
@@ -58,10 +58,8 @@ fn analyse_functions(definitions: &[CmdLoc], state: &mut CompileState) {
 /// Checks if a main function was defined anywhere.
 pub fn main_function_exists(state: &CompileState) -> bool {
     let main_name = state.main_function_name();
-    (0..state.files.len()).any(|file| {
-        (0..state.files[file].functions.len())
-            .any(|func| *state.function_commands(file, func)[0].param_text(0, state.target) == *main_name)
-    })
+    let mut functions = state.files.iter().flat_map(|f| &f.functions);
+    functions.any(|f| *f.commands[0].param_text(0, state.target) == *main_name)
 }
 
 fn analyse_monke_markers(markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
@@ -125,23 +123,19 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
         lines_to_be_kept /= 2;
     }
     let lines_to_be_deleted = loc - lines_to_be_kept;
+    let mut lines: Vec<Vec<&mut ParsedCommand>> = state.files.iter_mut().map(File::lines_mut).collect();
     // In bully mode, lines may already be excluded from translation (e.g. duplicate jump
     // markers). The C loop then never found enough lines and hung; stop once every line is gone.
-    let deletable: usize = state
-        .files
-        .iter()
-        .map(|f| f.parsed_commands.iter().take(f.loc).filter(|c| c.translate).count())
-        .sum();
+    let deletable = lines.iter().flatten().filter(|c| c.translate).count();
 
     print_debug(ll, "\tamount of lines to be deleted: %lu", &[Arg::U(lines_to_be_deleted as u64)]);
     if lines_to_be_deleted > 0 {
         print_thanos_ascii(lines_to_be_deleted);
 
-        let file_count = state.files.len();
         let mut selected_lines = 0;
         while selected_lines < lines_to_be_deleted.min(deletable) {
-            let random_file = rng.below(file_count);
-            let file_loc = state.files[random_file].loc;
+            let random_file = rng.below(lines.len());
+            let file_loc = lines[random_file].len();
             if file_loc == 0 {
                 // A file without code (possible in bully mode) has no line to delete; the C code
                 // computed `rand() % 0` and crashed here. Draw another file instead.
@@ -154,7 +148,7 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
                 &[Arg::U(random_line as u64), Arg::U(random_file as u64)],
             );
 
-            let cmd = &mut state.files[random_file].parsed_commands[random_line];
+            let cmd = &mut lines[random_file][random_line];
             if !cmd.translate {
                 print_debug(ll, "\t\tLine was already generated", &[]);
                 continue;
@@ -163,5 +157,29 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
             print_debug(ll, "\t\tLine was added to the list", &[]);
             selected_lines += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::parser::parse_file;
+    use crate::target::Target;
+
+    #[test]
+    fn perfectly_balanced_deletes_orphaned_lines() {
+        // Bully mode moves orphaned lines into an injected function; deleting such a line must
+        // remove it from there (the C code deleted it from the file's array, without effect)
+        let mut state = CompileState::new(Target::Linux);
+        state.compile_mode = CompileMode::Bully;
+        state.output_mode = OutputMode::AssemblyFile;
+        let src = b"perfectly balanced as all things should be\nupvote rax\nupvote rbx\nupvote rcx\n";
+        let file = parse_file(b"t.memeasm", src, &mut state);
+        state.files.push(file);
+        analyse_commands(&mut state);
+        let functions = &state.files[0].functions;
+        assert_eq!((functions.len(), functions[0].injected, functions[0].commands.len()), (1, true, 6));
+        // 4 lines, half of them deleted
+        assert_eq!(functions[0].commands.iter().filter(|c| !c.translate).count(), 2);
     }
 }
