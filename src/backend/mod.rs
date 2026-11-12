@@ -3,7 +3,6 @@
 //! and [`writers`] turn the resulting [`module::ObjModule`] into object files / executables.
 
 pub mod emitter;
-pub mod fadec;
 pub mod module;
 pub mod writers;
 

@@ -317,3 +317,44 @@ fn write_golden_cases() {
     }
     std::fs::write(path, out).unwrap();
 }
+
+/// The writers' extra forms (`call`/`jmp` r/m64, indexed `lea`), checked against GNU as.
+#[test]
+fn writer_stub_forms_match_gas() {
+    use x86::BranchKind::{Call, Jcc, Jmp};
+    use Reg::R64;
+    let rip = Operand::Mem(mem(None, Base::Rip("sym".into()), 0));
+    let indirect = [
+        (Call, Operand::Reg(R64(0)), "ffd0"),
+        (Call, Operand::Reg(R64(9)), "41ffd1"),
+        (Jmp, Operand::Reg(R64(15)), "41ffe7"),
+        (Call, rip.clone(), "ff1500000000"),
+        (Jmp, rip.clone(), "ff2500000000"),
+        (Call, Operand::Mem(mem(Some(Size::Qword), Base::Reg(R64(4)), 8)), "ff542408"),
+        (Jmp, Operand::Mem(mem(None, Base::Reg(R64(13)), 0)), "41ff6500"),
+    ];
+    for (kind, target, want) in indirect {
+        let e = x86::encode_indirect(kind, &target).unwrap();
+        assert_eq!(hex(&e.bytes), want, "{kind:?} {target:?}");
+        assert_eq!(e.rip.map(|(f, ..)| f), (target == rip).then_some(2));
+    }
+    assert!(x86::encode_indirect(Jcc(super::Cond::E), &Operand::Reg(R64(0))).is_err());
+    assert!(x86::encode_indirect(Call, &Operand::Reg(Reg::R32(0))).is_err());
+    assert!(x86::encode_indirect(Call, &Operand::Mem(mem(Some(Size::Dword), Base::Reg(R64(0)), 0))).is_err());
+
+    let lea = [
+        ((2, 6, 7, 8, 8), "488d54fe08"),
+        ((12, 13, 14, 1, 0), "4f8d643500"),
+        ((0, 5, 1, 2, 0x1000), "488d844d00100000"),
+        ((0, 3, 1, 4, 0), "488d048b"),
+        ((8, 12, 9, 2, -1), "4f8d444cff"),
+    ];
+    for ((d, b, i, s, disp), want) in lea {
+        let e = x86::encode_lea_indexed(R64(d), R64(b), R64(i), s, disp).unwrap();
+        assert_eq!(hex(&e.bytes), want);
+        assert!(e.rip.is_none());
+    }
+    assert!(x86::encode_lea_indexed(R64(0), R64(0), R64(4), 1, 0).is_err());
+    assert!(x86::encode_lea_indexed(R64(0), R64(0), R64(1), 3, 0).is_err());
+    assert!(x86::encode_lea_indexed(Reg::R32(0), R64(0), R64(1), 1, 0).is_err());
+}

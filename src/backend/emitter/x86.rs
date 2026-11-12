@@ -10,7 +10,7 @@
 use super::{Base, Cond, Mem, Op, Operand, Reg, Size};
 
 /// An encoded instruction plus the location of its RIP-relative displacement, if any.
-pub(super) struct Encoded {
+pub(crate) struct Encoded {
     pub bytes: Vec<u8>,
     /// `(offset of the disp32 field, symbol, displacement)`: the field (left zero) must hold
     /// `symbol + displacement - end_of_instruction`.
@@ -229,7 +229,7 @@ fn op8(sz: Sz, b: u8) -> u8 {
 }
 
 /// Encode a non-branch instruction (Intel operand order, destination first).
-pub(super) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
+pub(crate) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
     select(op, ops)
         .map(|i| Encoded { bytes: i.bytes, rip: i.rip })
         .ok_or_else(|| {
@@ -392,7 +392,7 @@ fn select(op: Op, ops: &[Operand]) -> Option<Insn> {
 
 /// Branch kinds, see [`branch`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum BranchKind {
+pub(crate) enum BranchKind {
     Jmp,
     Jcc(Cond),
     Call,
@@ -410,7 +410,7 @@ impl BranchKind {
 }
 
 /// A relative branch; `rel` is relative to the end of the instruction and must fit.
-pub(super) fn branch(kind: BranchKind, long: bool, rel: i32) -> Vec<u8> {
+pub(crate) fn branch(kind: BranchKind, long: bool, rel: i32) -> Vec<u8> {
     let cc = |c: Cond| match c {
         Cond::E | Cond::Z => 0x4,
         Cond::L => 0xc,
@@ -430,4 +430,51 @@ pub(super) fn branch(kind: BranchKind, long: bool, rel: i32) -> Vec<u8> {
         out.extend_from_slice(&rel.to_le_bytes());
     }
     out
+}
+
+/// `call`/`jmp` through a 64-bit register or a memory operand (`ff /2`, `ff /4`), e.g.
+/// `call rax` or `jmp [rip + slot]`. The translator never emits these; the object writers'
+/// entry stubs and import thunks do.
+pub(crate) fn encode_indirect(kind: BranchKind, target: &Operand) -> Result<Encoded, String> {
+    let digit = match kind {
+        BranchKind::Call => Some(2),
+        BranchKind::Jmp => Some(4),
+        BranchKind::Jcc(_) => None,
+    };
+    let insn = digit.and_then(|d| match target {
+        Operand::Reg(r @ Reg::R64(_)) => modrm(None, &[0xff], Field::Digit(d), Rm::Reg(*r), Imm::None),
+        Operand::Mem(m) if matches!(m.size, None | Some(Size::Qword)) => {
+            modrm(None, &[0xff], Field::Digit(d), Rm::Mem(m), Imm::None)
+        }
+        _ => None,
+    });
+    insn.map(|i| Encoded { bytes: i.bytes, rip: i.rip })
+        .ok_or_else(|| format!("internal error: unsupported indirect {kind:?} to {target:?}"))
+}
+
+/// `lea dst, [base + index * scale + disp]` with 64-bit registers ([`Mem`] has no index
+/// register; the ELF entry stub needs one). `index` can't be `rsp`; `scale` is 1, 2, 4 or 8.
+pub(crate) fn encode_lea_indexed(dst: Reg, base: Reg, index: Reg, scale: u8, disp: i32) -> Result<Encoded, String> {
+    let (Reg::R64(d), Reg::R64(b), Reg::R64(i)) = (dst, base, index) else {
+        return Err(format!("internal error: lea needs 64-bit registers, not {dst:?}, {base:?}, {index:?}"));
+    };
+    let ss = [1, 2, 4, 8].iter().position(|&s| s == scale).filter(|_| i != 4);
+    let Some(ss) = ss else {
+        return Err(format!("internal error: unsupported lea index {index:?} * {scale}"));
+    };
+    let md = if disp == 0 && b & 7 != 5 {
+        0x00
+    } else if fits_i8(disp as i64) {
+        0x40
+    } else {
+        0x80
+    };
+    let rex = 0x48 | (d >> 3) << 2 | (i >> 3) << 1 | b >> 3;
+    let mut bytes = vec![rex, 0x8d, md | (d & 7) << 3 | 4, (ss as u8) << 6 | (i & 7) << 3 | (b & 7)];
+    match md {
+        0x40 => bytes.push(disp as u8),
+        0x80 => bytes.extend_from_slice(&disp.to_le_bytes()),
+        _ => {}
+    }
+    Ok(Encoded { bytes, rip: None })
 }

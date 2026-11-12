@@ -15,6 +15,8 @@
 //! logic and the format modules for their entry stubs.
 use std::collections::HashMap;
 
+use super::emitter::x86;
+use super::emitter::{Base, Mem, Op, Operand, Reg, Size};
 use super::module::{Binding, ObjModule, RelocKind, Symbol, SymbolId};
 use super::OutputKind;
 use crate::target::Target;
@@ -169,8 +171,8 @@ pub(crate) fn put_u64(buf: &mut [u8], off: usize, v: u64) {
     buf[off..off + 8].copy_from_slice(&v.to_le_bytes());
 }
 
-/// Encodes a short instruction sequence with fadec. Every element is `(mnemonic, operands)`;
-/// branches go through [`Asm::branch`].
+/// Assembles the short fixed instruction sequences of the entry stubs and import thunks with
+/// the emitter's encoder. Operands are written with [`reg`], [`mem`] and [`rip`].
 pub(crate) struct Asm {
     pub code: Vec<u8>,
 }
@@ -180,39 +182,43 @@ impl Asm {
         Asm { code: Vec::new() }
     }
 
-    pub fn ins(&mut self, mnem: u64, ops: &[super::fadec::FeOp]) -> &mut Self {
-        let bytes = super::fadec::encode(mnem, ops)
-            .unwrap_or_else(|_| panic!("fadec failed to encode stub instruction {mnem:#x}"));
-        self.code.extend_from_slice(&bytes);
-        self
+    /// Appends an instruction (from [`x86`]'s encoders); returns the offset of its
+    /// `[rip + disp32]` field, left zero, if it has one.
+    pub fn put(&mut self, insn: Result<x86::Encoded, String>) -> Option<usize> {
+        let e = insn.unwrap_or_else(|e| panic!("entry stub instruction: {e}"));
+        let field = e.rip.map(|(at, ..)| self.code.len() + at);
+        self.code.extend_from_slice(&e.bytes);
+        field
     }
 
-    /// Emits a rel32 call/jmp (`mnem` = `FE_CALL`/`FE_JMP`) whose displacement is filled in
-    /// later; returns the offset of the 4-byte displacement field.
-    pub fn branch_placeholder(&mut self, mnem: u64) -> usize {
-        let at = self.code.len() as u64;
-        let bytes = super::fadec::encode_branch(mnem | super::fadec::FE_JMPL, at, at)
-            .expect("fadec failed to encode stub branch");
-        self.code.extend_from_slice(&bytes);
-        self.code.len() - 4
+    /// Appends `op ops` (Intel operand order); see [`Asm::put`].
+    pub fn ins(&mut self, op: Op, ops: &[Operand]) -> Option<usize> {
+        self.put(x86::encode(op, ops))
     }
 
-    /// Emits an instruction with a `[rip + disp32]` memory operand at operand position
-    /// `mem_index` and returns the offset of the displacement field (left zero). The
-    /// displacement must be the last 4 bytes of the instruction (no trailing immediate).
-    pub fn rip_placeholder(&mut self, mnem: u64, ops: &[super::fadec::FeOp], mem_index: usize) -> usize {
-        use super::fadec::{mem, FE_IP, FE_NOREG};
-        let mut o = ops.to_vec();
-        // fadec's rip-relative offsets are relative to the instruction start; a large value
-        // forces the disp32 form.
-        o[mem_index] = mem(FE_IP, 0, FE_NOREG, 0x1000_0000);
-        let bytes = super::fadec::encode(mnem, &o).expect("fadec failed to encode stub instruction");
-        let disp = 0x1000_0000i32.wrapping_sub(bytes.len() as i32);
-        assert_eq!(&bytes[bytes.len() - 4..], &disp.to_le_bytes(), "disp32 must end the instruction");
-        self.code.extend_from_slice(&bytes[..bytes.len() - 4]);
-        self.code.extend_from_slice(&[0; 4]);
+    /// Appends a rel32 `call` whose displacement is filled in later; returns the offset of the
+    /// displacement field.
+    pub fn call_rel32(&mut self) -> usize {
+        self.code.extend_from_slice(&x86::branch(x86::BranchKind::Call, true, 0));
         self.code.len() - 4
     }
+}
+
+/// A register operand by name (`"rax"`, `"r9d"`, ...).
+pub(crate) fn reg(name: &str) -> Operand {
+    Operand::Reg(Reg::parse(name).unwrap_or_else(|| panic!("no register {name}")))
+}
+
+/// `[base + disp]`, of `size` when the other operand doesn't imply it.
+pub(crate) fn mem(size: Option<Size>, base: &str, disp: i64) -> Operand {
+    let base = Reg::parse(base).unwrap_or_else(|| panic!("no register {base}"));
+    Operand::Mem(Mem { size, base: Base::Reg(base), disp })
+}
+
+/// `[rip + sym]`, of `size` when the other operand doesn't imply it. The writers resolve the
+/// displacement themselves, so their `sym` is empty.
+pub(crate) fn rip(size: Option<Size>, sym: &str) -> Operand {
+    Operand::Mem(Mem { size, base: Base::Rip(sym.into()), disp: 0 })
 }
 
 /// A string table: each distinct string once, NUL terminated, in insertion order, after a

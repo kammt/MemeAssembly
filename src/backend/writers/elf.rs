@@ -1,10 +1,11 @@
 //! ELF64 x86-64: relocatable objects (the sections, symbols and relocations GNU as would
 //! write) and static, non-PIE, libc-free executables.
-use super::super::fadec::*;
+use super::super::emitter::x86::{encode_indirect, encode_lea_indexed, BranchKind};
+use super::super::emitter::{Op, Operand, Reg};
 use super::super::module::{ObjModule, Reloc, RelocKind};
 use super::dwarf::{self, RelTarget};
 use super::link;
-use super::{align_up, is_global, symbol_groups, Asm, Le, StrTab};
+use super::{align_up, is_global, mem, reg, rip, symbol_groups, Asm, Le, StrTab};
 
 const SHT_PROGBITS: u32 = 1;
 const SHT_SYMTAB: u32 = 2;
@@ -260,17 +261,18 @@ pub fn write_object(m: &ObjModule) -> Vec<u8> {
 /// displacement to `main`.
 fn entry_stub() -> (Vec<u8>, usize) {
     let mut a = Asm::new();
-    a.ins(FE_XOR32rr, &[FE_BP, FE_BP]); // mark the outermost frame, like crt1
-    a.ins(FE_MOV64rm, &[FE_DI, mem(FE_SP, 0, FE_NOREG, 0)]); // argc
-    a.ins(FE_LEA64rm, &[FE_SI, mem(FE_SP, 0, FE_NOREG, 8)]); // argv
-    a.ins(FE_LEA64rm, &[FE_DX, mem(FE_SI, 8, FE_DI, 8)]); // envp = argv + argc + 1
-    a.ins(FE_AND64ri, &[FE_SP, -16]);
-    let call = a.rip_placeholder(FE_LEA64rm, &[FE_AX, 0], 1); // lea rax, [rip + main]
-    a.ins(FE_CALLr, &[FE_AX]);
-    a.ins(FE_MOV32rr, &[FE_DI, FE_AX]);
-    a.ins(FE_MOV32ri, &[FE_AX, 231]); // exit_group
-    a.ins(FE_SYSCALL, &[]);
-    a.ins(FE_HLT, &[]);
+    a.ins(Op::Xor, &[reg("ebp"), reg("ebp")]); // mark the outermost frame, like crt1
+    a.ins(Op::Mov, &[reg("rdi"), mem(None, "rsp", 0)]); // argc
+    a.ins(Op::Lea, &[reg("rsi"), mem(None, "rsp", 8)]); // argv
+    // envp = argv + argc + 1: lea rdx, [rsi + rdi * 8 + 8]
+    a.put(encode_lea_indexed(Reg::R64(2), Reg::R64(6), Reg::R64(7), 8, 8));
+    a.ins(Op::And, &[reg("rsp"), Operand::Imm(-16)]);
+    let call = a.ins(Op::Lea, &[reg("rax"), rip(None, "")]).unwrap(); // lea rax, [rip + main]
+    a.put(encode_indirect(BranchKind::Call, &reg("rax")));
+    a.ins(Op::Mov, &[reg("edi"), reg("eax")]);
+    a.ins(Op::Mov, &[reg("eax"), Operand::Imm(231)]); // exit_group
+    a.ins(Op::Syscall, &[]);
+    a.ins(Op::Hlt, &[]);
     (a.code, call)
 }
 

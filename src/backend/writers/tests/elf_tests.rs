@@ -374,16 +374,18 @@ fn elf_hand_built_hello_world() {
 /// `_start` calls `main` through rax, which holds `main`'s address on entry (like crt1).
 #[test]
 fn elf_start_passes_main_in_rax() {
-    use crate::backend::fadec::*;
+    use crate::backend::emitter::x86::{branch, BranchKind};
+    use crate::backend::emitter::{Cond, Op, Operand};
+    use crate::backend::writers::{reg, rip};
     let mut b = samples::Builder::new();
     b.global("main");
     b.label(0, "main");
-    b.rip(FE_LEA64rm, &[FE_CX, 0], 1, 0, "main");
-    b.ins(FE_SUB64rr, &[FE_AX, FE_CX]);
-    b.ins(FE_NEG64r, &[FE_AX]); // CF = (rax != &main)
-    b.ins(FE_SBB32rr, &[FE_AX, FE_AX]);
-    b.ins(FE_NEG32r, &[FE_AX]);
-    b.ins(FE_RET, &[]);
+    b.ins(Op::Lea, &[reg("rcx"), rip(None, "main")]);
+    b.ins(Op::Cmp, &[reg("rax"), reg("rcx")]);
+    b.ins(Op::Mov, &[reg("eax"), Operand::Imm(0)]); // (5 bytes, keeps the flags)
+    b.code(&branch(BranchKind::Jcc(Cond::E), false, 5)); // je over the next mov
+    b.ins(Op::Mov, &[reg("eax"), Operand::Imm(1)]);
+    b.ins(Op::Ret, &[]);
     let p = scratch("elf_start_rax").join("rax");
     write_file(&p, &write(&b.finish(), Target::Linux, OutputKind::Executable).unwrap());
     if !host_x86_64() && tool(&["qemu-x86_64"]).is_none() {

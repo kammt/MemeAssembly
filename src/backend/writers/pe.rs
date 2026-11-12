@@ -11,13 +11,14 @@
 //!
 //! Undefined symbols may only name the kernel32 functions MemeAssembly programs use: a call
 //! to `X` goes through a `jmp [rip + __imp_X]` thunk, `__imp_X` is the IAT slot itself.
-use super::super::fadec::*;
+use super::super::emitter::x86::{encode_indirect, BranchKind};
+use super::super::emitter::{Op, Operand, Size};
 use super::super::module::ObjModule;
 use super::coff::{
     IMAGE_FILE_MACHINE_AMD64, IMAGE_SCN_CNT_CODE, IMAGE_SCN_CNT_INITIALIZED_DATA, IMAGE_SCN_MEM_EXECUTE,
     IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
 };
-use super::{align_up, link, put_u32, Asm, Le};
+use super::{align_up, link, mem, put_u32, reg, rip, Asm, Le};
 
 const IMAGE_BASE: u64 = 0x1_4000_0000;
 const SECTION_ALIGN: u64 = 0x1000;
@@ -59,22 +60,22 @@ fn entry_stub() -> (Vec<u8>, usize, usize, usize) {
     let mut a = Asm::new();
     // On entry rsp = 8 (mod 16); 72 bytes realign it and hold the shadow space (32), the 5th
     // argument (8), argc/argv/envp (24) and _startupinfo (4).
-    a.ins(FE_SUB64ri, &[FE_SP, 72]);
-    a.ins(FE_LEA64rm, &[FE_CX, mem(FE_SP, 0, FE_NOREG, 40)]); // &argc
-    a.ins(FE_LEA64rm, &[FE_DX, mem(FE_SP, 0, FE_NOREG, 48)]); // &argv
-    a.ins(FE_LEA64rm, &[FE_R8, mem(FE_SP, 0, FE_NOREG, 56)]); // &envp
-    a.ins(FE_XOR32rr, &[FE_R9, FE_R9]); // no wildcard expansion
-    a.ins(FE_MOV32mi, &[mem(FE_SP, 0, FE_NOREG, 64), 0]); // _startupinfo.newmode = 0
-    a.ins(FE_LEA64rm, &[FE_AX, mem(FE_SP, 0, FE_NOREG, 64)]);
-    a.ins(FE_MOV64mr, &[mem(FE_SP, 0, FE_NOREG, 32), FE_AX]);
-    let getmainargs = a.rip_placeholder(FE_CALLm, &[0], 0);
-    a.ins(FE_MOV32rm, &[FE_CX, mem(FE_SP, 0, FE_NOREG, 40)]);
-    a.ins(FE_MOV64rm, &[FE_DX, mem(FE_SP, 0, FE_NOREG, 48)]);
-    a.ins(FE_MOV64rm, &[FE_R8, mem(FE_SP, 0, FE_NOREG, 56)]);
-    let main = a.branch_placeholder(FE_CALL);
-    a.ins(FE_MOV32rr, &[FE_CX, FE_AX]);
-    let exit = a.rip_placeholder(FE_CALLm, &[0], 0);
-    a.ins(FE_INT3, &[]);
+    a.ins(Op::Sub, &[reg("rsp"), Operand::Imm(72)]);
+    a.ins(Op::Lea, &[reg("rcx"), mem(None, "rsp", 40)]); // &argc
+    a.ins(Op::Lea, &[reg("rdx"), mem(None, "rsp", 48)]); // &argv
+    a.ins(Op::Lea, &[reg("r8"), mem(None, "rsp", 56)]); // &envp
+    a.ins(Op::Xor, &[reg("r9d"), reg("r9d")]); // no wildcard expansion
+    a.ins(Op::Mov, &[mem(Some(Size::Dword), "rsp", 64), Operand::Imm(0)]); // _startupinfo.newmode = 0
+    a.ins(Op::Lea, &[reg("rax"), mem(None, "rsp", 64)]);
+    a.ins(Op::Mov, &[mem(None, "rsp", 32), reg("rax")]);
+    let getmainargs = a.put(encode_indirect(BranchKind::Call, &rip(None, ""))).unwrap();
+    a.ins(Op::Mov, &[reg("ecx"), mem(None, "rsp", 40)]);
+    a.ins(Op::Mov, &[reg("rdx"), mem(None, "rsp", 48)]);
+    a.ins(Op::Mov, &[reg("r8"), mem(None, "rsp", 56)]);
+    let main = a.call_rel32();
+    a.ins(Op::Mov, &[reg("ecx"), reg("eax")]);
+    let exit = a.put(encode_indirect(BranchKind::Call, &rip(None, ""))).unwrap();
+    a.ins(Op::Int3, &[]);
     (a.code, main, getmainargs, exit)
 }
 
@@ -151,7 +152,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         if direct.contains(&imp.name) {
             thunks.code.resize(align_up(thunks.code.len() as u64, 8) as usize, 0xcc);
             let at = thunks.code.len() as u64;
-            let field = thunks.rip_placeholder(FE_JMPm, &[0], 0);
+            let field = thunks.put(encode_indirect(BranchKind::Jmp, &rip(None, ""))).unwrap();
             imp.thunk = Some(stub_off + stub.len() as u64 + at);
             thunk_fields.push(field);
         }

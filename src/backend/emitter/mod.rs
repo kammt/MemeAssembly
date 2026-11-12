@@ -11,7 +11,7 @@ mod layout;
 mod regs;
 #[cfg(test)]
 mod tests;
-mod x86;
+pub(crate) mod x86;
 #[cfg(test)]
 mod x86_tests;
 
