@@ -181,7 +181,7 @@ fn elf_executable_headers_are_sane() {
     let text = String::from_utf8(out.stdout).unwrap();
     assert!(text.contains("EXEC (Executable file)"));
     assert!(text.contains("GNU_STACK") && text.contains(" RWE "), "{text}");
-    assert!(text.contains(" main") && text.contains(" _start") && text.contains(" writechar"));
+    assert!(text.contains(" main") && text.contains(" _start"));
     for s in [".debug_info", ".debug_abbrev", ".debug_line "] {
         assert!(text.contains(s), "missing {s}: {text}");
     }

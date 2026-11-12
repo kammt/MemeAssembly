@@ -469,35 +469,76 @@ pub fn find_difference(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
 pub fn same_picture_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
     a.label(&c.file_label(".LSamePicture"))
 }
-/// Calls `function` with a 16-byte aligned stack (assuming `rsp` is a multiple of 8): pushes and
-/// pops in the program leave the alignment at a command unknown, and on Windows the helpers call
-/// the Windows API, which requires it. The Linux/macOS helpers only make a syscall and would not
-/// need it, but the same sequence is emitted for every target.
-fn aligned_call(a: &mut dyn Asm, function: &str) -> AsmResult {
-    a.insn(Op::Test, &[RSP, hex(0xF)])?;
-    a.jump_local(Some(Cond::Z), 1, true)?;
-    a.insn(Op::Sub, &[RSP, dec(8)])?;
-    a.call(function.as_bytes())?;
-    a.insn(Op::Add, &[RSP, dec(8)])?;
-    a.jump_local(None, 2, true)?;
-    a.local_label(1);
-    a.call(function.as_bytes())?;
-    a.local_label(2);
-    a.end_line();
-    Ok(())
-}
-/// Stores the character in `.LCharacter` and calls the `writechar` helper.
+/// `what can I say except c`: stores the character in `.LCharacter` and writes that byte to
+/// stdout ([`io_syscall`]).
 pub fn write_char(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
     a.insn(Op::Mov, &[rip(Some(Size::Byte), ".LCharacter"), c.op(0)?])?;
-    aligned_call(a, "writechar")?;
+    io_syscall(a, c.state.target, false)?;
     a.gap();
     Ok(())
 }
-/// Calls the `readchar` helper, which reads one byte into `.LCharacter`.
+/// `let me in. LET ME IIIIIIIIN c`: reads one byte from stdin into `.LCharacter` and from there
+/// into the register. `.LCharacter` is zeroed first, so at the end of input (or on an error),
+/// where nothing is read, the register gets 0.
 pub fn read_char(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    aligned_call(a, "readchar")?;
+    a.insn(Op::Mov, &[rip(Some(Size::Byte), ".LCharacter"), dec(0)])?;
+    io_syscall(a, c.state.target, true)?;
     a.insn(Op::Mov, &[c.op(0)?, rip(Some(Size::Byte), ".LCharacter")])?;
     a.gap();
+    Ok(())
+}
+/// Writes (`read` = false) or reads one byte at `.LCharacter` to stdout / from stdin, preserving
+/// every register it uses or the call clobbers.
+///
+/// Linux / macOS: the `write`/`read` syscall (macOS: BSD class `0x2000000`).
+///
+/// Windows: `GetStdHandle`, then `WriteFile`/`ReadFile`, the byte count going to `.Ltmp64`. The
+/// stack alignment at a command is unknown (pushes and pops in the program), but the Windows API
+/// needs it 16-byte aligned: rsp is saved in rbx (callee-saved, so the calls keep it) and rounded
+/// down. The 48-byte frame holds the 32 bytes of shadow space plus the 5th argument
+/// (`lpOverlapped` = NULL at `[rsp + 32]`) above them.
+fn io_syscall(a: &mut dyn Asm, target: Target, read: bool) -> AsmResult {
+    if target == Target::Windows {
+        let saved = [RCX, RAX, RDX, R8, R9, R10, R11, RBX];
+        for r in &saved {
+            a.insn(Op::Push, &[r.clone()])?;
+        }
+        a.insn(Op::Mov, &[RBX, RSP])?;
+        a.insn(Op::And, &[RSP, dec(-16)])?;
+        a.insn(Op::Sub, &[RSP, dec(48)])?;
+        a.insn(Op::Mov, &[RCX, dec(if read { -10 } else { -11 })])?;
+        a.call(b"GetStdHandle")?;
+        a.insn(Op::Mov, &[RCX, RAX])?;
+        a.insn(Op::Lea, &[RDX, rip(None, ".LCharacter")])?;
+        a.insn(Op::Mov, &[R8, dec(1)])?;
+        a.insn(Op::Lea, &[R9, rip(None, ".Ltmp64")])?;
+        a.insn(Op::Mov, &[stack(Some(Size::Qword), 32), dec(0)])?;
+        a.call(if read { b"ReadFile".as_slice() } else { b"WriteFile" })?;
+        a.insn(Op::Mov, &[RSP, RBX])?;
+        for r in saved.iter().rev() {
+            a.insn(Op::Pop, &[r.clone()])?;
+        }
+        return Ok(());
+    }
+    let linux = target == Target::Linux;
+    let saved = [RCX, R11, RAX, RDI, RSI, RDX];
+    for r in &saved {
+        a.insn(Op::Push, &[r.clone()])?;
+    }
+    a.insn(Op::Mov, &[RDX, dec(1)])?;
+    a.insn(Op::Lea, &[RSI, rip(None, ".LCharacter")])?;
+    a.insn(Op::Mov, &[RDI, dec(if read { 0 } else { 1 })])?;
+    let syscall = match (linux, read) {
+        (true, true) => dec(0),
+        (true, false) => dec(1),
+        (false, true) => hex(0x2000003),
+        (false, false) => hex(0x2000004),
+    };
+    a.insn(Op::Mov, &[RAX, syscall])?;
+    a.insn(Op::Syscall, &[])?;
+    for r in saved.iter().rev() {
+        a.insn(Op::Pop, &[r.clone()])?;
+    }
     Ok(())
 }
 /// `guess I'll die`: crashes by loading from the unmapped absolute address 69.
@@ -628,68 +669,6 @@ fn kill_parent(a: &mut dyn Asm, target: Target) -> AsmResult {
     Ok(())
 }
 
-/// `writechar` / `readchar` via the Windows API (`GetStdHandle`, then `WriteFile`/`ReadFile` of
-/// one byte at `.LCharacter`, the byte count going to `.Ltmp64`). The volatile general-purpose
-/// registers are preserved. The 48-byte frame holds the 32 bytes of shadow space plus the 5th
-/// argument (`lpOverlapped` = NULL at `[rsp + 32]`) above them, and keeps the stack 16-byte
-/// aligned for the calls: the helper is entered with rsp ≡ 8 (mod 16) and pushes 7 registers.
-fn windows_io_function(a: &mut dyn Asm, name: &str, std_handle: i64, api: &str) -> AsmResult {
-    a.blank();
-    a.blank();
-    a.indent("");
-    a.label(name.as_bytes())?;
-    a.indent("\t");
-    for r in [RCX, RAX, RDX, R8, R9, R10, R11] {
-        a.insn(Op::Push, &[r])?;
-    }
-    a.insn(Op::Sub, &[RSP, dec(48)])?;
-    a.insn(Op::Mov, &[RCX, dec(std_handle)])?;
-    a.call(b"GetStdHandle")?;
-    a.insn(Op::Mov, &[RCX, RAX])?;
-    a.insn(Op::Lea, &[RDX, rip(None, ".LCharacter")])?;
-    a.insn(Op::Mov, &[R8, dec(1)])?;
-    a.insn(Op::Lea, &[R9, rip(None, ".Ltmp64")])?;
-    a.insn(Op::Mov, &[stack(Some(Size::Qword), 32), dec(0)])?;
-    a.call(api.as_bytes())?;
-    a.insn(Op::Add, &[RSP, dec(48)])?;
-    for r in [R11, R10, R9, R8, RDX, RAX, RCX] {
-        a.insn(Op::Pop, &[r])?;
-    }
-    a.insn(Op::Ret, &[])
-}
-
-/// `writechar` / `readchar` via the `write`/`read` syscall of one byte at `.LCharacter` (Linux,
-/// macOS). The registers the syscall uses or clobbers are preserved.
-fn unix_io_function(a: &mut dyn Asm, name: &str, fd: i64, syscall: Opnd) -> AsmResult {
-    let read = fd == 0;
-    a.blank();
-    a.blank();
-    a.indent("");
-    a.label(name.as_bytes())?;
-    a.indent("\t");
-    for r in [RCX, R11, RAX, RDI, RSI, RDX] {
-        a.insn(Op::Push, &[r])?;
-    }
-    if read {
-        a.blank();
-    }
-    a.insn(Op::Mov, &[RDX, dec(1)])?;
-    a.insn(Op::Lea, &[RSI, rip(None, ".LCharacter")])?;
-    a.insn(Op::Mov, &[RDI, dec(fd)])?;
-    a.insn(Op::Mov, &[RAX, syscall])?;
-    a.insn(Op::Syscall, &[])?;
-    if read {
-        a.blank();
-    }
-    for r in [RDX, RSI, RDI, RAX, R11, RCX] {
-        a.insn(Op::Pop, &[r])?;
-    }
-    if !read {
-        a.gap();
-    }
-    a.insn(Op::Ret, &[])
-}
-
 /// Translates one command: its line-table row, its code and the filler instructions of the
 /// optimisation level (`-O69420` translates only function definitions, as `return 0`).
 fn translate_command(
@@ -739,8 +718,8 @@ fn translate_command(
 
 /// Generates the whole program: the global function symbols, `.data` (the I/O byte, a scratch
 /// qword and the martyrdom `sigaction` struct), `killParent`, bully mode's injected main, the
-/// commands of every file and the `writechar`/`readchar` helpers. Windows gets no `sigaction`
-/// struct or `killParent`: martyrdom is not implemented there.
+/// commands of every file. Windows gets no `sigaction` struct or `killParent`: martyrdom is not
+/// implemented there.
 pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     let target = state.target;
 
@@ -810,8 +789,8 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
         if target != Target::Windows {
             martyrdom_code(a, target)?;
         }
-        // Without any code to fall into, main would run into writechar (or off the end of the
-        // text section): return 0 instead.
+        // Without any code to fall into, main would run off the end of the text section:
+        // return 0 instead.
         if bully_main_is_empty(state) {
             a.insn(Op::Xor, &[RAX, RAX])?;
             a.insn(Op::Ret, &[])?;
@@ -819,10 +798,8 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     }
 
     let main_name = state.main_function_name();
-    let mut last_debug_file = None;
     for (i, file) in state.files.iter().enumerate() {
         let debug_file = state.use_debug_info.then(|| a.debug_file(&debug_file_path(&file.file_name)));
-        last_debug_file = debug_file.or(last_debug_file);
 
         // The confused stonks label is only needed if the file jumps to it
         let uses_confused_stonks = file
@@ -859,22 +836,6 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
             if debug_file.is_some() {
                 a.debug_function_end();
             }
-        }
-    }
-
-    // With -O69420 all commands are optimised out, so these are not needed
-    if state.optimisation_level != OPT_69420 {
-        // The helpers are not source code: line 0 instead of the last command's line
-        if let Some(f) = last_debug_file {
-            a.debug_line(f, 0);
-        }
-        if target == Target::Windows {
-            windows_io_function(a, "writechar", -11, "WriteFile")?;
-            windows_io_function(a, "readchar", -10, "ReadFile")?;
-        } else {
-            let linux = target == Target::Linux;
-            unix_io_function(a, "writechar", 1, if linux { dec(1) } else { hex(0x2000004) })?;
-            unix_io_function(a, "readchar", 0, if linux { dec(0) } else { hex(0x2000003) })?;
         }
     }
 

@@ -89,7 +89,7 @@ pub enum Operand {
 }
 
 /// Non-branch instructions used by the translation patterns, the optimisation-level filler and
-/// the runtime helpers (writechar/readchar/killParent/martyrdom/main stub).
+/// the runtime code (I/O, killParent, martyrdom, main stub).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
     Mov, Movups, Lea, Push, Pop,
@@ -107,7 +107,7 @@ pub enum Cond {
 /// Target of [`Emitter::jump`] and [`Emitter::call`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BranchTarget {
-    /// A named label/function (`.LUpgradeMarker_0`, `writechar`, `GetStdHandle`, user function),
+    /// A named label/function (`.LUpgradeMarker_0`, `GetStdHandle`, user function),
     /// taken verbatim (`$` or `rax` are ordinary symbol names here).
     /// Undefined names become undefined globals with a Branch32 reloc (like gas). Branches to
     /// defined symbols are resolved or keep a Branch32 reloc per object format (ELF: calls to
