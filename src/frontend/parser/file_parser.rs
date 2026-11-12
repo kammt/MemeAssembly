@@ -3,7 +3,6 @@
 use crate::frontend::commands::*;
 use crate::frontend::libc::{cstr, strncmp_eq, StrTok};
 use crate::frontend::log::{print_debug, print_error, Arg};
-use crate::target::Target;
 
 /// Reads the file line by line exactly like the C `getLine()`: a line includes its `\n`, and a
 /// `\r` in the second to last position is turned into the line end (CRLF handling — the C code
@@ -81,7 +80,7 @@ fn parse_line(
     for (i, command) in COMMAND_LIST.iter().enumerate().take(NUMBER_OF_COMMANDS - 2) {
         let mut pattern_tok = StrTok::new(command.pattern.as_bytes());
         let mut line_tok = StrTok::new(line);
-        let mut parameters: Vec<Vec<u8>> = Vec::new();
+        let mut parameters: Vec<Param> = Vec::new();
         parsed.is_pointer = 0;
 
         let mut command_token = pattern_tok.next_token(b" \t").map(|t| t.to_vec());
@@ -101,12 +100,9 @@ fn parse_line(
                 if strncmp_eq(ct, lt, chars_before) && tail_matches {
                     print_debug(log_level, "\t\t%s contains a parameter", &[Arg::S(lt)]);
                     let parameter_length = lt.len().saturating_sub(chars_before + chars_after);
-                    let mut variable = Vec::with_capacity(parameter_length + 1);
-                    if state.target == Target::MacOS && (i == 0 || i == 4) {
-                        variable.push(b'_');
-                    }
-                    variable.extend_from_slice(&lt[..parameter_length]);
-                    parameters.push(variable);
+                    // Function names (definitions and calls) get a `_` prefix on macOS
+                    let mangle = i == 0 || i == 4;
+                    parameters.push(Param::Raw { text: lt[..parameter_length].to_vec(), mangle });
 
                     // If the line after this parameter contains "do you know de wey", mark it as a pointer
                     if line_tok.rest().len() >= POINTER_SUFFIX.len()
@@ -186,12 +182,13 @@ fn parse_line(
         parsed.opcode = (ci % (NUMBER_OF_COMMANDS as u64 - 1)) as u8;
         let used = COMMAND_LIST[parsed.opcode as usize].used_parameters;
         let count = RANDOM_PARAMS.len() as u64;
+        // (no macOS `_` prefix for these)
+        let random_param = |i: u64| Some(Param::Raw { text: RANDOM_PARAMS[i as usize].as_bytes().to_vec(), mangle: false });
         if used > 0 {
-            parsed.parameters[0] = Some(RANDOM_PARAMS[(ci % count) as usize].as_bytes().to_vec());
+            parsed.parameters[0] = random_param(ci % count);
         }
         if used > 1 {
-            let idx = (ci.wrapping_mul(first) % count) as usize;
-            parsed.parameters[1] = Some(RANDOM_PARAMS[idx].as_bytes().to_vec());
+            parsed.parameters[1] = random_param(ci.wrapping_mul(first) % count);
         }
     } else {
         parsed.opcode = INVALID_COMMAND_OPCODE;

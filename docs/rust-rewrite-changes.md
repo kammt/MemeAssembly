@@ -3,8 +3,10 @@
 The Rust frontend (`src/main.rs`, `src/frontend/`) reproduces the C compiler (`compiler/`):
 the `-S` output, the diagnostics on each of stdout and stderr, and the exit codes match for
 every compile mode, optimisation level and target. The exceptions are listed here. The
-command line itself is new (clap, see "Command line"), and random choices are not
-reproducible (see "Randomness").
+command line itself is new (clap, see "Command line"), random choices are not
+reproducible (see "Randomness"), and the confused stonks label is only emitted in files that
+use `confused stonks` (see "Possible bugs, kept"). The code is generated once
+(`src/frontend/translator.rs`), either as `-S` text or directly into an object file.
 `tests/frontend_parity.sh` checks parity against the C reference builds, passing the clap
 spelling of each option to the Rust compiler. It whitelists exactly these differences: the
 per-fix rewrite rules are in `tests/frontend_parity_whitelist.pl`, `check_fixed` covers the
@@ -40,7 +42,7 @@ Rust port implements the intended behaviour instead.
 | 16 | `compiler/translator/translator.c:300-304` | Bully mode, executable, a program with no code at all (e.g. an empty file) | The injected `main` has nothing to fall into except `writechar`, which prints a character and returns an uninitialised rax as exit code. | After the martyrdom code (which is kept, see "Possible bugs, kept") the injected `main` returns 0 (`xor rax, rax` / `ret`). Executables only, so not visible in `-S`. |
 | 17 | `compiler/translator/translator.c:355-412` | Windows, any print or read (`what can I say except`, `let me in. LET ME IIIIIIIIN`) | `sub rsp, 32` reserves only the shadow space, so the 5th API argument (`mov QWORD PTR [rsp + 32], 0`) overwrites the saved r9. r10 and r11, which the Windows API may clobber, are not saved. | `push rcx, rax, rdx, r8, r9, r10, r11` / `sub rsp, 48` (shadow space plus the 5th argument slot, 16-byte alignment unchanged) and the reverse on exit: prints do not modify any register, as on Linux. Both paths. |
 | 18 | `compiler/analyser/parameters.c:556-585` (checks 3/4, skipped in bully mode), `compiler/translator/translator.c:166-178` | Parameter combinations the analyser accepts but gas rejects (`tests/frontend_cases/fixes/{high_byte_with_*,pointer_*,push_imm*}.memeasm`): a pointer whose base is not a 64/32-bit register (`al do you know de wey`); a pointer where the instruction cannot take memory (memory-to-memory `sneak 100`, the divisor of a division, the exponent of a power, `rdrand`, a label name); a pointer in a one-operand command (`not`, `upvote`, `downvote`, `upgrades`, `they had us…`, `it's over 9000`: ambiguous operand size); `ah`/`bh`/`ch`/`dh` together with a register that needs a REX prefix (`spl`, `bpl`, `sil`, `dil`, `r8b`-`r15b`, or a pointer based on `r8`-`r15`); `stonks` with a decimal that is not sign-extendable from 32 bits | gas fails (`ambiguous operand size`, `invalid use of register`, `too many memory references`, `can't encode register 'ah' in an instruction requiring REX prefix`, `operand type mismatch`). | noob/obfuscated: a compile error at the line, `invalid parameter combination: a pointer must be a 64 or 32 bit register` / `…: this command cannot use a pointer here` / `…: operand size unknown` (the message of check 4) / `…: 'ah' cannot be combined with 'spl'` / `…: pushed decimal numbers must be sign-extendable from 32 Bits`. Bully mode never produces an assembler error: an unusable pointer is dropped (`isPointer = 0`, as the C code does for decimals and characters), a one-operand pointer gets the random bully operand size of #3 (an immediate stored through it is truncated to that size), the high register is replaced by a random non-high 8-bit register, and pushed decimals are shortened like #9. An enumeration of every command with 54 parameter kinds in every position (registers of all sizes, high/REX bytes, decimals around every size limit, characters, pointers), in noob and bully mode (three seeds) for Linux and Windows, checks that every accepted line assembles without warnings and that `-O` produces the same `.text` bytes. |
-| 19 | `compiler/compiler.c:69` | Calling a function whose name gas reads as something else: `$`, `.`, a register name (`rax`, `r8d`, `xmm0`, …), an operator (`and`, `not`, …) or a size/segment keyword (`byte`, `near`, `fs`, `rip`, …), e.g. `$: whomst has summoned the almighty one` | `call $` calls the current address (endless recursion, SIGSEGV), `call rax` is an indirect call, `call byte` a call to address 1. | `call "$"`: gas's quoted symbol syntax. The function label and `.global` keep the plain name (gas reads those correctly), and every name that worked before is unchanged. The direct path calls the same quoted symbol. |
+| 19 | `compiler/compiler.c:69` | Calling a function whose name gas reads as something else: `$`, `.`, a register name (`rax`, `r8d`, `xmm0`, …), an operator (`and`, `not`, …) or a size/segment keyword (`byte`, `near`, `fs`, `rip`, …), e.g. `$: whomst has summoned the almighty one` | `call $` calls the current address (endless recursion, SIGSEGV), `call rax` is an indirect call, `call byte` a call to address 1. | `call "$"`: gas's quoted symbol syntax. The function label and `.global` keep the plain name (gas reads those correctly), and every name that worked before is unchanged. The direct path calls the same symbol. |
 | 20 | `compiler/translator/translator.c:472` | `-O-s` for macOS | `.align 536870912`: Apple's `as` (and llvm-mc) read `.align n` as 2^n on Mach-O and reject n >= 32 ("invalid alignment value"), so `-O-s` never assembled for macOS. | `.p2align 29` (the intended 512 MiB) for macOS, in `-S` and on the direct path. Linux and Windows keep `.align 536870912`. |
 
 ## Undefined behaviour given a defined result (no visible change)
@@ -76,8 +78,11 @@ behaviour is kept.
 - `x UNLIMITED POWER y` with `x` = `rsp` overwrites the stack pointer while the stack is in
   use (C: `push rsp` / `imul rsp, [rsp]`; now `push rsp` / `mov rsp, 1`). Using rsp as a
   number is not meaningful, so this stays unsupported.
-- The confused stonks label is always emitted at a random line of every file, even when no
-  `confused stonks` is used (`randomCommands.c:36-45` always chose the line).
+- The confused stonks label is still placed at a random line of the file (it is a jump
+  target, so where it lands changes the program). Unlike the C code, which always chose the
+  line (`randomCommands.c:36-45`), the label is only emitted in files that use
+  `confused stonks`: an unused label changed nothing but the `-S` text and, on macOS, where
+  `.L` labels are real symbols, the encoding of branches across it.
 - Bully mode's injected fake functions (for orphaned commands) get no `_` prefix on macOS.
   They are local helper names, so this is harmless.
 
@@ -182,8 +187,10 @@ Rust results with the set of reference results sampled at several frozen times.
 - The `-S` header no longer contains the compile date: `# Generated by the MemeAssembly
   compiler v1.6` instead of `… v1.6 on Mon Jan  1 00:00:00 2024`. The output is the same on
   every run (apart from the random choices above).
-- `-O`/executable output no longer pipes text through gcc. The frontend drives
-  `backend::emitter::Emitter` directly, instruction for instruction like the `-S` text.
+- `-O`/executable output no longer pipes text through gcc. The code generation
+  (`src/frontend/translator.rs`) is written once against a small assembler trait and drives
+  either the `-S` text printer (`src/frontend/asm_text.rs`) or `backend::emitter::Emitter`,
+  so both outputs contain the same instructions.
   - Assembler errors are reported as gas would report them (`{standard input}: Assembler
     messages:` / `{standard input}: Error: ...`), but without line numbers and only the first
     one, followed by the usual "Assembling/linking failed..." message (exit 1).

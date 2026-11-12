@@ -100,7 +100,7 @@ pub fn parse_functions(file: &mut File, state: &mut CompileState) {
 
             let mut def = ParsedCommand::new(69);
             def.opcode = 0;
-            def.parameters[0] = Some(func_name.as_bytes().to_vec());
+            def.parameters[0] = Some(Param::Raw { text: func_name.as_bytes().to_vec(), mangle: false });
             owned.push(def);
 
             owned.extend_from_slice(&commands[start_index..command_array_index]);

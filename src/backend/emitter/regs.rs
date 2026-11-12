@@ -49,7 +49,6 @@ pub fn parse(name: &str) -> Option<Reg> {
     None
 }
 
-#[cfg(test)]
 pub fn name(r: Reg) -> String {
     match r {
         Reg::R64(i) => R64[i as usize].into(),
@@ -59,48 +58,4 @@ pub fn name(r: Reg) -> String {
         Reg::R8H(i) => R8H[i as usize].into(),
         Reg::Xmm(i) => format!("xmm{i}"),
     }
-}
-
-/// Whether gas reads the bare identifier `name` as a symbol when it is a `call`/`jmp` operand
-/// (and not as a register, the `flat` pseudo register, an operator like `and`/`not` or a
-/// constant like `byte`/`near`). Mirrors `gas_misreads_symbol` in the translator, which passes
-/// such names as [`super::BranchTarget::Quoted`].
-pub fn is_symbol(name: &str) -> bool {
-    let l = name.to_ascii_lowercase();
-    // `<prefix>N` with min <= N <= max, without leading zeros
-    let numbered = |prefix: &str, min: u32, max: u32| {
-        l.strip_prefix(prefix).is_some_and(|n| {
-            !n.is_empty()
-                && (n.len() == 1 || !n.starts_with('0'))
-                && n.chars().all(|c| c.is_ascii_digit())
-                && n.parse::<u32>().is_ok_and(|v| (min..=max).contains(&v))
-        })
-    };
-    // APX registers r16..r31 (+ w/d/b forms)
-    let apx = ["", "w", "d", "b"].iter().any(|suffix| {
-        let base = l.strip_suffix(suffix).unwrap_or("");
-        base.strip_prefix('r').is_some_and(|n| {
-            !n.is_empty()
-                && !n.starts_with('0')
-                && n.chars().all(|c| c.is_ascii_digit())
-                && n.parse::<u32>().is_ok_and(|v| (16..=31).contains(&v))
-        })
-    });
-    !(parse(&l).is_some()
-        || apx
-        || numbered("xmm", 0, 31)
-        || numbered("ymm", 0, 31)
-        || numbered("zmm", 0, 31)
-        || numbered("tmm", 0, 7)
-        || numbered("mm", 0, 7)
-        || numbered("k", 0, 7)
-        || numbered("cr", 0, 15)
-        || numbered("dr", 0, 15)
-        || matches!(
-            l.as_str(),
-            "st" | "es" | "cs" | "ss" | "ds" | "fs" | "gs" | "rip" | "eip" | "flat"
-                | "and" | "or" | "xor" | "mod" | "shl" | "shr" | "eq" | "ne" | "lt" | "le" | "gt"
-                | "ge" | "not" | "byte" | "word" | "dword" | "fword" | "qword" | "mmword" | "tbyte"
-                | "oword" | "xmmword" | "ymmword" | "zmmword" | "offset" | "short" | "near" | "far"
-        ))
 }

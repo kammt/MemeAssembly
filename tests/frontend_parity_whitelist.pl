@@ -102,7 +102,7 @@ sub power {
         'imul rax, rax', 'mov QWORD PTR [rsp + 8], rax', 'pop rax', 'jmp 2b', '3: add rsp, 8');
 }
 
-# Mirrors gas_misreads_symbol in src/frontend/translator.rs.
+# Mirrors gas_reads_as_symbol in src/frontend/asm_text.rs (negated).
 sub misread {
     my $l = lc shift;
     return 1 if $l eq '$' || $l eq '.';

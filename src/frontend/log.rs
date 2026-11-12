@@ -53,7 +53,6 @@ pub fn err_str(s: &str) {
 pub enum Arg<'a> {
     S(&'a [u8]),
     U(u64),
-    C(u8),
 }
 
 impl<'a> From<&'a [u8]> for Arg<'a> {
@@ -69,7 +68,7 @@ impl<'a> From<&'a str> for Arg<'a> {
 }
 
 /// Minimal `printf` supporting the conversions used by the compiler's messages
-/// (`%s %u %lu %d %c %llX %%`).
+/// (`%s %u %lu %d %llX %%`).
 pub fn cformat(fmt: &str, args: &[Arg]) -> Vec<u8> {
     let f = fmt.as_bytes();
     let mut res = Vec::with_capacity(f.len() + 16);
@@ -94,10 +93,8 @@ pub fn cformat(fmt: &str, args: &[Arg]) -> Vec<u8> {
         let arg = args.next().copied().unwrap_or(Arg::S(b"(null)"));
         match (conv, arg) {
             (b's', Arg::S(s)) => res.extend_from_slice(s),
-            (b'c', Arg::C(c)) => res.push(c),
             (b'X', Arg::U(n)) => res.extend_from_slice(format!("{n:X}").as_bytes()),
             (_, Arg::U(n)) => res.extend_from_slice(n.to_string().as_bytes()),
-            (_, Arg::C(c)) => res.extend_from_slice(c.to_string().as_bytes()),
             (_, Arg::S(s)) => res.extend_from_slice(s),
         }
     }

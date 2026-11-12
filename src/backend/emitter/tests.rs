@@ -6,7 +6,7 @@
 use super::*;
 use crate::backend::module::RelocKind;
 
-use BranchTarget::{Local, Quoted};
+use BranchTarget::Local;
 use Operand::{Imm, Reg as R};
 use Reg::{R64, R8, R8H};
 
@@ -146,18 +146,18 @@ fn local_labels() {
 
 #[test]
 fn branch_targets() {
+    // Symbol names are taken verbatim: `$` and `rax` are ordinary symbols here (the -S text
+    // writes them quoted).
     let mut em = Emitter::new(Target::Linux);
     em.call(sym("$")).unwrap();
-    em.call(Quoted("$".into())).unwrap();
-    em.call(Quoted("rax".into())).unwrap();
-    assert_eq!(em.call(Quoted(String::new())).unwrap_err(), "empty symbol name");
-    assert_eq!(em.call(sym("rax")).unwrap_err(), "internal error: `rax' is not a symbol name");
-    assert_eq!(em.call(sym("byte")).unwrap_err(), "internal error: `byte' is not a symbol name");
+    em.call(sym("rax")).unwrap();
+    assert_eq!(em.call(sym("")).unwrap_err(), "internal error: invalid symbol name `'");
+    assert_eq!(em.jump(None, sym("a b")).unwrap_err(), "internal error: invalid symbol name `a b'");
     let m = em.finish().unwrap();
-    assert_eq!(m.sections[0].data, hex("e8 fb ff ff ff e8 00000000 e8 00000000"));
+    assert_eq!(m.sections[0].data, hex("e8 00000000 e8 00000000"));
     assert_eq!(
         text_relocs(&m),
-        [(6, RelocKind::Branch32, "$".into(), -4), (11, RelocKind::Branch32, "rax".into(), -4)]
+        [(1, RelocKind::Branch32, "$".into(), -4), (6, RelocKind::Branch32, "rax".into(), -4)]
     );
 }
 
@@ -187,22 +187,16 @@ fn errors() {
 }
 
 #[test]
-fn raw_label_text() {
-    // The frontend passes label text exactly as it prints it with -S; gas converts the
-    // character constants.
+fn label_names() {
+    // Label names are taken verbatim (no gas character-constant scrubbing).
     let mut em = Emitter::new(Target::Linux);
-    em.label(".L'a'Wins_0").unwrap();
+    em.label(".L97Wins_0").unwrap();
     em.jump(Some(Cond::G), sym(".L97Wins_0")).unwrap();
-    em.jump(None, sym(".L' 'Wins_0")).unwrap();
-    em.label(".L32Wins_0").unwrap();
-    em.label(".L' 'Wins_0").unwrap(); // same position: tolerated like gas
-    em.insn(Op::Nop, &[]).unwrap();
-    assert_eq!(em.label(".L32Wins_0").unwrap_err(), "symbol `.L32Wins_0' is already defined");
-    em.label(".L'\\n'x").unwrap();
-    em.jump(None, sym(".L10x")).unwrap();
+    assert_eq!(em.label(".L'a'Wins_0").unwrap_err(), "internal error: invalid label name `.L'a'Wins_0'");
     assert_eq!(em.label("a b").unwrap_err(), "internal error: invalid label name `a b'");
+    assert_eq!(em.label("1x").unwrap_err(), "internal error: invalid label name `1x'");
     let m = em.finish().unwrap();
-    assert_eq!(m.sections[0].data, hex("7f fe eb 00 90 eb fe"));
+    assert_eq!(m.sections[0].data, hex("7f fe"));
 }
 
 #[test]
@@ -253,20 +247,16 @@ fn coff_alignment() {
 
 #[test]
 fn macho_align() {
-    // Apple's `as` reads `.align n` as 2**n.
+    // `align` takes a byte count on every target (the -S text writes `.p2align` for Mach-O).
     let mut em = Emitter::new(Target::MacOS);
     em.insn(Op::Nop, &[]).unwrap();
-    em.align(5).unwrap();
+    em.align(32).unwrap();
     em.insn(Op::Ret, &[]).unwrap();
     let m = em.finish().unwrap();
     let mut want = vec![0x90; 32];
     want.push(0xc3);
     assert_eq!(m.sections[0].data, want);
     assert_eq!(m.sections[0].align, 32);
-    let mut em = Emitter::new(Target::MacOS);
-    assert_eq!(em.align(536_870_912).unwrap_err(), "invalid alignment value");
-    assert_eq!(em.align(32).unwrap_err(), "invalid alignment value");
-    em.align(29).unwrap();
 }
 
 /// `.global gf; gf: ret; lf: ret; start: call gf; call lf; jmp gf; lea rax, [rip + gf];

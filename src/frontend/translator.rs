@@ -1,43 +1,85 @@
-//! Port of compiler/translator/translator.c
+//! Port of compiler/translator/translator.c: the code generation, written once for both kinds
+//! of output. It drives an [`Asm`]: the `-S` text printer ([`super::asm_text`]) or the
+//! backend's [`Emitter`](crate::backend::emitter::Emitter) for object files and executables
+//! ([`super::encoder`]).
 
 use super::analyser::main_function_exists;
 use super::commands::*;
-use super::libc::decimal_value;
-use super::log::{print_debug, print_internal_compiler_error, Arg, VERSION_STRING};
+use super::log::print_debug;
+use crate::backend::emitter::{Base, Cond, Mem, Op, Reg, SectionKind, Size};
 use crate::target::Target;
 
-fn martyrdom_code(target: Target) -> String {
-    let mut s = String::from(
-        "push rax\n    push rdi\n    push rsi\n    push rdx\n    push r10\n    push rcx\n    push r11\n    \n    lea rax, [rip + killParent]\n    mov [rip + .Lsa_handler], rax\n",
-    );
-    if target == Target::MacOS {
-        // Signaling SIGINT on MacOS segfaults unless the second qword of the sigaction struct
-        // contains the address as well
-        s.push_str("    mov [rip + .Lsa_handler_2], rax\n");
-    }
-    s.push('\n');
-    if target == Target::Linux {
-        s.push_str("    mov rax, 13\n");
-    } else {
-        s.push_str("    mov rax, 0x200002E\n");
-    }
-    s.push_str(
-        "    mov rdi, 2\n    lea rsi, [rip + .LsigStruct]\n    xor rdx, rdx\n    mov r10, 8\n    syscall\n    \n    pop r11\n    pop rcx\n    pop r10\n    pop rdx\n    pop rsi\n    pop rdi\n    pop rax\n\n",
-    );
-    s
+pub type AsmResult = Result<(), String>;
+
+/// Generates the code of one command (the `code` of its [`COMMAND_LIST`] entry).
+pub type CodeGen = fn(&mut dyn Asm, &Ctx) -> AsmResult;
+
+/// An immediate operand. The variants only differ in how the `-S` text writes the value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Imm<'a> {
+    Dec(i64),
+    /// `0x...`, negative values in two's complement (the C code's `%llX`).
+    Hex(i64),
+    /// The value with its source spelling (`'a'`, `65`).
+    Text(i64, &'a [u8]),
 }
 
-struct Writer {
-    buf: Vec<u8>,
+impl Imm<'_> {
+    pub fn value(self) -> i64 {
+        match self {
+            Imm::Dec(v) | Imm::Hex(v) | Imm::Text(v, _) => v,
+        }
+    }
 }
 
-impl Writer {
-    fn s(&mut self, s: &str) {
-        self.buf.extend_from_slice(s.as_bytes());
-    }
-    fn b(&mut self, b: &[u8]) {
-        self.buf.extend_from_slice(b);
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Opnd<'a> {
+    Reg(Reg),
+    Imm(Imm<'a>),
+    Mem(Mem),
+}
+
+/// What the code generation needs from an assembler. Symbol names are bytes: the `-S` text
+/// writes character parameters inside label names as they were written (see
+/// [`Asm::char_in_symbol`]).
+pub trait Asm {
+    /// A non-branch instruction, destination first.
+    fn insn(&mut self, op: Op, ops: &[Opnd]) -> AsmResult;
+    /// `jmp`/`jcc` to a named label.
+    fn jump(&mut self, cond: Option<Cond>, target: &[u8]) -> AsmResult;
+    /// `jmp`/`jcc` to the numeric local label `n` (`nf` / `nb`).
+    fn jump_local(&mut self, cond: Option<Cond>, n: u32, forward: bool) -> AsmResult;
+    fn call(&mut self, target: &[u8]) -> AsmResult;
+    fn label(&mut self, name: &[u8]) -> AsmResult;
+    fn local_label(&mut self, n: u32);
+    fn global(&mut self, name: &[u8]);
+    fn extern_symbol(&mut self, name: &str);
+    fn section(&mut self, kind: SectionKind);
+    fn ascii(&mut self, data: &[u8]);
+    /// `n` zero bytes (`.byte 0, ...`)
+    fn zeros(&mut self, n: usize);
+    fn quad(&mut self, values: &[Imm]);
+    /// Align to `bytes` bytes.
+    fn align(&mut self, bytes: u64) -> AsmResult;
+    /// Registers an input file for the debug line information; returns its number for
+    /// `debug_line`.
+    fn debug_file(&mut self, path: &[u8]) -> usize;
+    fn debug_line(&mut self, file: usize, line: u32);
+    fn debug_function_begin(&mut self, _name: &[u8], _file: usize, _line: u32) {}
+    fn debug_function_end(&mut self) {}
+    /// The spelling of a character parameter inside a symbol name: gas reads the character
+    /// constant in `.L'a'Wins_0` as its value (`.L97Wins_0`).
+    fn char_in_symbol(&self, value: u8, text: &[u8], verbatim: bool) -> Vec<u8>;
+
+    // Layout of the `-S` text; no effect on the code.
+    /// Indentation of the following lines.
+    fn indent(&mut self, _indent: &'static str) {}
+    /// An empty line.
+    fn blank(&mut self) {}
+    /// A line containing only the indentation.
+    fn gap(&mut self) {}
+    /// Ends the current line (a local label not followed by an instruction stands alone).
+    fn end_line(&mut self) {}
 }
 
 /// The current working directory as `getcwd()` returns it (`(null)` on failure, like glibc's
@@ -57,7 +99,7 @@ pub(super) fn getcwd_bytes() -> Vec<u8> {
 
 /// The absolute path of an input file as written into the debug information (the C code
 /// prefixed relative names with `getcwd()` for its STABS `N_SO` entry).
-pub(super) fn debug_file_path(input_file: &[u8]) -> Vec<u8> {
+fn debug_file_path(input_file: &[u8]) -> Vec<u8> {
     let mut path = Vec::new();
     if input_file.first() != Some(&b'/') {
         path.extend_from_slice(&getcwd_bytes());
@@ -67,24 +109,12 @@ pub(super) fn debug_file_path(input_file: &[u8]) -> Vec<u8> {
     path
 }
 
-/// `.file N "path"` for gas' DWARF line tables (replaces the C compiler's STABS `N_SO`).
-fn write_debug_file(w: &mut Writer, file_number: usize, input_file: &[u8]) {
-    w.s(&format!(".file {file_number} \""));
-    for &c in &debug_file_path(input_file) {
-        if c == b'"' || c == b'\\' {
-            w.buf.push(b'\\');
-        }
-        w.buf.push(c);
-    }
-    w.s("\"\n");
-}
-
 /// Operand sizes a bully-mode pointer can get, in bytes (index = `computedIndex % 4`).
 pub(super) const BULLY_POINTER_SIZES: [u32; 4] = [1, 2, 4, 8];
 
 /// In bully mode, the "operand size unknown" checks of the analyser are skipped and the operand
 /// size of a pointer is chosen here (in bytes), if it is needed.
-pub(super) fn bully_pointer_size(state: &CompileState, cmd: &ParsedCommand) -> Option<u32> {
+fn bully_pointer_size(state: &CompileState, cmd: &ParsedCommand) -> Option<u32> {
     let index = (cmd.is_pointer as usize).checked_sub(1)?;
     (state.compile_mode == CompileMode::Bully && cmd.bully_pointer_needs_size(index))
         .then(|| BULLY_POINTER_SIZES[(state.computed_index % 4) as usize])
@@ -92,11 +122,11 @@ pub(super) fn bully_pointer_size(state: &CompileState, cmd: &ParsedCommand) -> O
 
 /// `it's over 9000` compares with the immediate 9000, which an 8-bit operand can never exceed
 /// (gas silently truncated it to 0x28): the command then always halts.
-pub(super) fn over_9000_always_halts(state: &CompileState, cmd: &ParsedCommand) -> bool {
+fn over_9000_always_halts(state: &CompileState, cmd: &ParsedCommand) -> bool {
     cmd.opcode == OP_OVER_9000
         && match bully_pointer_size(state, cmd) {
             Some(size) => size == 1,
-            None => cmd.is_pointer == 0 && cmd.param_types[0] == PARAM_REG8,
+            None => cmd.is_pointer == 0 && cmd.param_type(0) == PARAM_REG8,
         }
 }
 
@@ -112,240 +142,582 @@ fn truncate_to_operand_size(value: i64, size: u32) -> i64 {
     }
 }
 
-/// Whether gas reads the identifier `name` as something other than a symbol when it is used as
-/// a `call` operand (`$` and `.` are the current address, register names make the call
-/// indirect, `byte`/`near`/... are constants, `and`/`not`/... operators). Mirrors the
-/// emitter's identifier classification.
-pub(super) fn gas_misreads_symbol(name: &[u8]) -> bool {
-    let l = String::from_utf8_lossy(name).to_ascii_lowercase();
-    if l == "$" || l == "." {
-        return true;
-    }
-    let numbered = |prefix: &str, max: u32| -> bool {
-        l.strip_prefix(prefix).is_some_and(|n| {
-            !n.is_empty()
-                && (n.len() == 1 || !n.starts_with('0'))
-                && n.chars().all(|c| c.is_ascii_digit())
-                && n.parse::<u32>().is_ok_and(|v| v <= max)
-        })
-    };
-    // General purpose registers, including r8-r31 with their b/w/d forms
-    const LEGACY: [&str; 36] = [
-        "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "eax", "ecx", "edx", "ebx", "esp",
-        "ebp", "esi", "edi", "ax", "cx", "dx", "bx", "sp", "bp", "si", "di", "al", "cl", "dl", "bl",
-        "spl", "bpl", "sil", "dil", "ah", "ch", "dh", "bh",
-    ];
-    if LEGACY.contains(&l.as_str()) {
-        return true;
-    }
-    if let Some(rest) = l.strip_prefix('r') {
-        let rest = rest.strip_suffix(['b', 'w', 'd']).unwrap_or(rest);
-        if !rest.is_empty()
-            && (rest.len() == 1 || !rest.starts_with('0'))
-            && rest.chars().all(|c| c.is_ascii_digit())
-            && rest.parse::<u32>().is_ok_and(|v| (8..=31).contains(&v))
-        {
-            return true;
-        }
-    }
-    if numbered("xmm", 31)
-        || numbered("ymm", 31)
-        || numbered("zmm", 31)
-        || numbered("tmm", 7)
-        || numbered("mm", 7)
-        || numbered("k", 7)
-        || numbered("cr", 15)
-        || numbered("dr", 15)
-    {
-        return true;
-    }
-    matches!(
-        l.as_str(),
-        "st" | "es" | "cs" | "ss" | "ds" | "fs" | "gs" | "rip" | "eip" | "flat"
-            | "and" | "or" | "xor" | "mod" | "shl" | "shr" | "eq" | "ne" | "lt" | "le" | "gt" | "ge"
-            | "not"
-            | "byte" | "word" | "dword" | "fword" | "qword" | "mmword" | "tbyte" | "oword"
-            | "xmmword" | "ymmword" | "zmmword" | "offset" | "short" | "near" | "far"
-    )
-}
-
-/// The value of a character parameter, if gas would read its C text differently: `'\v'` (gas
-/// has no `\v` escape and reads 'v'), `'\'` (the single character backslash; gas reads the
-/// escaped quote) and ASCII codes with leading zeros (validated as decimal numbers,
-/// but octal to gas).
-fn char_fixup(parameter: &[u8]) -> Option<i64> {
-    match parameter {
-        b"'\\v'" => Some(11),
-        b"'\\'" => Some(b'\\' as i64),
-        [b'\'', ..] => None,
-        _ => {
-            let digits = parameter.strip_prefix(b"-").or(parameter.strip_prefix(b"+")).unwrap_or(parameter);
-            (digits.len() > 1 && digits[0] == b'0').then(|| decimal_value(parameter))
-        }
-    }
-}
-
-/// The text substituted for `{index}` in a translation pattern.
-pub(super) fn param_text(state: &CompileState, cmd: &ParsedCommand, index: usize) -> Vec<u8> {
-    let parameter = cmd.param(index);
-    let mut text = Vec::new();
-    if cmd.is_pointer as usize == index + 1 {
-        if let Some(size) = bully_pointer_size(state, cmd) {
-            const OPERAND_SIZES: [&str; 4] = ["BYTE PTR", "WORD PTR", "DWORD PTR", "QWORD PTR"];
-            let i = BULLY_POINTER_SIZES.iter().position(|s| *s == size).unwrap_or(3);
-            text.extend_from_slice(OPERAND_SIZES[i].as_bytes());
-            text.extend_from_slice(b" [");
-        } else {
-            text.push(b'[');
-        }
-        text.extend_from_slice(parameter);
-        text.push(b']');
-    } else if cmd.param_types[index] == PARAM_DECIMAL {
-        let mut value = decimal_value(parameter);
-        if let Some(size) = bully_pointer_size(state, cmd) {
-            value = truncate_to_operand_size(value, size);
-        }
-        // Decimal numbers are written as hex (issue #73)
-        text.extend_from_slice(format!("0x{:X}", value as u64).as_bytes());
-    } else if let Some(value) = (cmd.param_types[index] == PARAM_CHAR).then(|| char_fixup(parameter)).flatten() {
-        text.extend_from_slice(value.to_string().as_bytes());
-    } else if cmd.opcode == OP_CALL && gas_misreads_symbol(parameter) {
-        text.push(b'"');
-        text.extend_from_slice(parameter);
-        text.push(b'"');
-    } else {
-        text.extend_from_slice(parameter);
-    }
-    text
+/// Whether the command is translated (with `-O69420` only the function definitions are).
+fn is_translated(state: &CompileState, cmd: &ParsedCommand) -> bool {
+    cmd.translate
+        && (state.optimisation_level != OPT_69420
+            || COMMAND_LIST[cmd.opcode as usize].command_type == COMMAND_TYPE_FUNC_DEF)
 }
 
 /// Whether no command produces any code after bully mode's injected main (no functions at all,
 /// everything deleted, or `-O69420`).
-pub(super) fn bully_main_is_empty(state: &CompileState) -> bool {
+fn bully_main_is_empty(state: &CompileState) -> bool {
     !(0..state.files.len()).any(|file| {
-        (0..state.files[file].functions.len()).any(|func| {
-            state.function_commands(file, func).iter().any(|cmd| {
-                cmd.translate
-                    && (state.optimisation_level != OPT_69420
-                        || COMMAND_LIST[cmd.opcode as usize].command_type == COMMAND_TYPE_FUNC_DEF)
-            })
-        })
+        (0..state.files[file].functions.len())
+            .any(|func| state.function_commands(file, func).iter().any(|cmd| is_translated(state, cmd)))
     })
 }
 
-fn translate_to_assembly(
+// ---- operands ----
+
+const RAX: Opnd = Opnd::Reg(Reg::R64(0));
+const RCX: Opnd = Opnd::Reg(Reg::R64(1));
+const RDX: Opnd = Opnd::Reg(Reg::R64(2));
+const RBX: Opnd = Opnd::Reg(Reg::R64(3));
+const RSP: Opnd = Opnd::Reg(Reg::R64(4));
+const RBP: Opnd = Opnd::Reg(Reg::R64(5));
+const RSI: Opnd = Opnd::Reg(Reg::R64(6));
+const RDI: Opnd = Opnd::Reg(Reg::R64(7));
+const R8: Opnd = Opnd::Reg(Reg::R64(8));
+const R9: Opnd = Opnd::Reg(Reg::R64(9));
+const R10: Opnd = Opnd::Reg(Reg::R64(10));
+const R11: Opnd = Opnd::Reg(Reg::R64(11));
+const R12: Opnd = Opnd::Reg(Reg::R64(12));
+const R13: Opnd = Opnd::Reg(Reg::R64(13));
+const EAX: Opnd = Opnd::Reg(Reg::R32(0));
+const XMM0: Opnd = Opnd::Reg(Reg::Xmm(0));
+
+fn dec(v: i64) -> Opnd<'static> {
+    Opnd::Imm(Imm::Dec(v))
+}
+
+fn hex(v: i64) -> Opnd<'static> {
+    Opnd::Imm(Imm::Hex(v))
+}
+
+/// `[rip + symbol]`
+fn rip(size: Option<Size>, symbol: &str) -> Opnd<'static> {
+    Opnd::Mem(Mem { size, base: Base::Rip(symbol.to_string()), disp: 0 })
+}
+
+/// `[rsp + disp]`
+fn stack(size: Option<Size>, disp: i64) -> Opnd<'static> {
+    Opnd::Mem(Mem { size, base: Base::Reg(Reg::R64(4)), disp })
+}
+
+/// `QWORD PTR [rip + .Ltmp64]`
+fn tmp64() -> Opnd<'static> {
+    rip(Some(Size::Qword), ".Ltmp64")
+}
+
+/// The command being translated.
+pub struct Ctx<'a> {
+    state: &'a CompileState,
+    cmd: &'a ParsedCommand,
+    /// Index of the current file (the suffix of its labels).
+    file: usize,
+}
+
+impl<'a> Ctx<'a> {
+    /// Parameter `i` as an instruction operand.
+    fn op(&self, i: usize) -> Result<Opnd<'a>, String> {
+        let size = bully_pointer_size(self.state, self.cmd);
+        Ok(match &self.cmd.parameters[i] {
+            Some(Param::Reg(r)) if self.cmd.is_pointer as usize == i + 1 => {
+                let size = size.map(|bytes| match bytes {
+                    1 => Size::Byte,
+                    2 => Size::Word,
+                    4 => Size::Dword,
+                    _ => Size::Qword,
+                });
+                Opnd::Mem(Mem { size, base: Base::Reg(*r), disp: 0 })
+            }
+            Some(Param::Reg(r)) => Opnd::Reg(*r),
+            // Decimal numbers are written as hex (issue #73)
+            Some(Param::Decimal { value, .. }) => {
+                hex(size.map_or(*value, |size| truncate_to_operand_size(*value, size)))
+            }
+            Some(Param::Char { value, text, verbatim: true }) => Opnd::Imm(Imm::Text(*value as i64, text)),
+            Some(Param::Char { value, .. }) => dec(*value as i64),
+            _ => return Err(self.bad_parameter(i)),
+        })
+    }
+
+    /// A symbol name containing parameter `i`.
+    fn sym(&self, a: &dyn Asm, prefix: &str, i: usize, suffix: &str) -> Result<Vec<u8>, String> {
+        let mut name = prefix.as_bytes().to_vec();
+        match &self.cmd.parameters[i] {
+            Some(Param::Char { value, text, verbatim }) => {
+                name.extend_from_slice(&a.char_in_symbol(*value, text, *verbatim))
+            }
+            Some(Param::Decimal { value, .. }) => {
+                name.extend_from_slice(format!("0x{:X}", *value as u64).as_bytes())
+            }
+            Some(p @ (Param::Reg(_) | Param::MonkeLabel(_) | Param::FuncName { .. })) => {
+                name.extend_from_slice(&p.text(self.state.target))
+            }
+            _ => return Err(self.bad_parameter(i)),
+        }
+        name.extend_from_slice(suffix.as_bytes());
+        Ok(name)
+    }
+
+    /// `name_{file}`
+    fn file_label(&self, name: &str) -> Vec<u8> {
+        format!("{name}_{}", self.file).into_bytes()
+    }
+
+    fn bad_parameter(&self, i: usize) -> String {
+        format!("internal error: unexpected parameter {:?} for opcode {}", self.cmd.parameters[i], self.cmd.opcode)
+    }
+}
+
+// ---- the commands of COMMAND_LIST ----
+
+pub fn func_def(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, "", 0, "")?;
+    a.label(&name)
+}
+pub fn ret(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Ret, &[])
+}
+pub fn ret_one(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Mov, &[RAX, dec(1)])?;
+    a.insn(Op::Ret, &[])
+}
+pub fn ret_zero(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Xor, &[RAX, RAX])?;
+    a.insn(Op::Ret, &[])
+}
+pub fn call(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, "", 0, "")?;
+    a.call(&name)
+}
+pub fn push(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Push, &[c.op(0)?])
+}
+pub fn pop(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Pop, &[c.op(0)?])
+}
+pub fn and(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::And, &[c.op(0)?, c.op(1)?])
+}
+pub fn not(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Not, &[c.op(0)?])
+}
+pub fn zero(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Xor, &[c.op(0)?, c.op(0)?])
+}
+pub fn mov(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Mov, &[c.op(0)?, c.op(1)?])
+}
+pub fn upvote(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Add, &[c.op(0)?, dec(1)])
+}
+pub fn downvote(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Sub, &[c.op(0)?, dec(1)])
+}
+pub fn parry(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Sub, &[c.op(1)?, c.op(0)?])
+}
+pub fn add(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Add, &[c.op(0)?, c.op(1)?])
+}
+pub fn shl(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Shl, &[c.op(0)?, dec(1)])
+}
+pub fn shr(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Shr, &[c.op(0)?, dec(1)])
+}
+pub fn imul(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Imul, &[c.op(0)?, c.op(1)?])
+}
+/// The C code ran `cqo` before loading the dividend into rax (sign-extending the old rax). The
+/// dividend is now pushed first and read back from the stack, so every combination with
+/// rax/rdx/rsp as either operand works.
+pub fn divide(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Mov, &[tmp64(), c.op(0)?])?;
+    a.insn(Op::Push, &[c.op(1)?])?;
+    a.insn(Op::Push, &[RDX])?;
+    a.insn(Op::Push, &[RAX])?;
+    a.insn(Op::Mov, &[RAX, stack(Some(Size::Qword), 16)])?;
+    a.insn(Op::Cqo, &[])?;
+    a.insn(Op::Idiv, &[tmp64()])?;
+    a.insn(Op::Mov, &[stack(Some(Size::Qword), 16), RAX])?;
+    a.insn(Op::Pop, &[RAX])?;
+    a.insn(Op::Pop, &[RDX])?;
+    a.insn(Op::Pop, &[c.op(1)?])?;
+    a.gap();
+    Ok(())
+}
+/// Square-and-multiply. The C code looped ~2^64 times for the exponents 1 and < 0. Negative
+/// exponents: 1 for a base of 1, ±1 for -1 (by parity), 0 otherwise.
+pub fn power(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let base = || stack(Some(Size::Qword), 0);
+    a.insn(Op::Mov, &[tmp64(), c.op(1)?])?;
+    a.insn(Op::Push, &[c.op(0)?])?;
+    a.insn(Op::Mov, &[c.op(0)?, dec(1)])?;
+    a.insn(Op::Cmp, &[tmp64(), dec(0)])?;
+    a.jump_local(Some(Cond::Ge), 2, true)?;
+    a.insn(Op::And, &[tmp64(), dec(1)])?;
+    a.insn(Op::Cmp, &[base(), dec(1)])?;
+    a.jump_local(Some(Cond::E), 2, true)?;
+    a.insn(Op::Cmp, &[base(), dec(-1)])?;
+    a.jump_local(Some(Cond::E), 2, true)?;
+    a.insn(Op::Xor, &[c.op(0)?, c.op(0)?])?;
+    a.jump_local(None, 3, true)?;
+    a.local_label(2);
+    a.insn(Op::Test, &[tmp64(), dec(1)])?;
+    a.jump_local(Some(Cond::Z), 1, true)?;
+    a.insn(Op::Imul, &[c.op(0)?, base()])?;
+    a.local_label(1);
+    a.insn(Op::Shr, &[tmp64(), dec(1)])?;
+    a.jump_local(Some(Cond::Z), 3, true)?;
+    a.insn(Op::Push, &[RAX])?;
+    a.insn(Op::Mov, &[RAX, stack(Some(Size::Qword), 8)])?;
+    a.insn(Op::Imul, &[RAX, RAX])?;
+    a.insn(Op::Mov, &[stack(Some(Size::Qword), 8), RAX])?;
+    a.insn(Op::Pop, &[RAX])?;
+    a.jump_local(None, 2, false)?;
+    a.local_label(3);
+    a.insn(Op::Add, &[RSP, dec(8)])?;
+    a.gap();
+    Ok(())
+}
+pub fn upgrade_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.label(&c.file_label(".LUpgradeMarker"))
+}
+pub fn upgrade_jump(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.jump(None, &c.file_label(".LUpgradeMarker"))
+}
+pub fn banana_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.label(&c.file_label(".LBananaMarker"))
+}
+pub fn banana_jump(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.jump(None, &c.file_label(".LBananaMarker"))
+}
+pub fn monke_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, ".L", 0, "")?;
+    a.label(&name)
+}
+pub fn monke_jump(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, ".L", 0, "")?;
+    a.jump(None, &name)
+}
+pub fn who_would_win(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let suffix = format!("Wins_{}", c.file);
+    let (first, second) = (c.sym(a, ".L", 0, &suffix)?, c.sym(a, ".L", 1, &suffix)?);
+    a.insn(Op::Cmp, &[c.op(0)?, c.op(1)?])?;
+    a.jump(Some(Cond::G), &first)?;
+    a.jump(Some(Cond::L), &second)
+}
+pub fn wins_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, ".L", 0, &format!("Wins_{}", c.file))?;
+    a.label(&name)
+}
+pub fn find_difference(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Cmp, &[c.op(0)?, c.op(1)?])?;
+    a.jump(Some(Cond::E), &c.file_label(".LSamePicture"))
+}
+pub fn same_picture_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.label(&c.file_label(".LSamePicture"))
+}
+/// Calls `function` with a 16-byte aligned stack.
+fn aligned_call(a: &mut dyn Asm, function: &str) -> AsmResult {
+    a.insn(Op::Test, &[RSP, hex(0xF)])?;
+    a.jump_local(Some(Cond::Z), 1, true)?;
+    a.insn(Op::Sub, &[RSP, dec(8)])?;
+    a.call(function.as_bytes())?;
+    a.insn(Op::Add, &[RSP, dec(8)])?;
+    a.jump_local(None, 2, true)?;
+    a.local_label(1);
+    a.call(function.as_bytes())?;
+    a.local_label(2);
+    a.end_line();
+    Ok(())
+}
+pub fn write_char(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Mov, &[rip(Some(Size::Byte), ".LCharacter"), c.op(0)?])?;
+    aligned_call(a, "writechar")?;
+    a.gap();
+    Ok(())
+}
+pub fn read_char(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    aligned_call(a, "readchar")?;
+    a.insn(Op::Mov, &[c.op(0)?, rip(Some(Size::Byte), ".LCharacter")])?;
+    a.gap();
+    Ok(())
+}
+pub fn die(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Mov, &[RAX, Opnd::Mem(Mem { size: None, base: Base::Abs, disp: 69 })])
+}
+pub fn confused_stonks(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.jump(None, &c.file_label(".LConfusedStonks"))
+}
+pub fn perfectly_balanced(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.gap();
+    Ok(())
+}
+pub fn illegal(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Xor, &[RBX, RBX])?;
+    a.insn(Op::Xor, &[RBP, RBP])?;
+    a.insn(Op::Xor, &[R12, R12])?;
+    // The C translation pattern said `xor r13 r13` (missing comma), which gas rejected.
+    a.insn(Op::Xor, &[R13, R13])
+}
+pub fn oh_no(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Nop, &[])
+}
+pub fn over_9000(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    if over_9000_always_halts(c.state, c.cmd) {
+        return a.insn(Op::Hlt, &[]);
+    }
+    a.insn(Op::Cmp, &[c.op(0)?, dec(9000)])?;
+    a.jump_local(Some(Cond::G), 1, true)?;
+    a.insn(Op::Hlt, &[])?;
+    a.local_label(1);
+    Ok(())
+}
+pub fn refuses_to_elaborate(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Mov, &[RBP, RSP])?;
+    a.insn(Op::Pop, &[RSP])
+}
+pub fn shall_not_pass(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.local_label(1);
+    a.insn(Op::Xor, &[RAX, RAX])?;
+    a.jump_local(None, 1, false)
+}
+pub fn houston(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Xor, &[RSP, RSP])
+}
+pub fn rdrand(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    a.insn(Op::Rdrand, &[c.op(0)?])
+}
+pub fn air_support(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Syscall, &[])
+}
+pub fn trap(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Int3, &[])
+}
+pub fn draw_25(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.insn(Op::Add, &[EAX, dec(25)])
+}
+/// The placeholder entry for invalid commands; never translated because invalid commands are
+/// compile errors.
+pub fn invalid(_: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    Err(format!("internal error: invalid command in line {}", c.cmd.line_num))
+}
+
+// ---- runtime helpers ----
+
+/// Installs `killParent` as the SIGINT handler (`--martyrdom`, at the start of main).
+fn martyrdom_code(a: &mut dyn Asm, target: Target) -> AsmResult {
+    a.indent("");
+    a.insn(Op::Push, &[RAX])?;
+    a.indent("    ");
+    for r in [RDI, RSI, RDX, R10, RCX, R11] {
+        a.insn(Op::Push, &[r])?;
+    }
+    a.gap();
+    a.insn(Op::Lea, &[RAX, rip(None, "killParent")])?;
+    a.insn(Op::Mov, &[rip(None, ".Lsa_handler"), RAX])?;
+    if target == Target::MacOS {
+        // Signaling SIGINT on MacOS segfaults unless the second qword of the sigaction struct
+        // contains the address as well
+        a.insn(Op::Mov, &[rip(None, ".Lsa_handler_2"), RAX])?;
+    }
+    a.blank();
+    a.insn(Op::Mov, &[RAX, if target == Target::Linux { dec(13) } else { hex(0x200002E) }])?;
+    a.insn(Op::Mov, &[RDI, dec(2)])?;
+    a.insn(Op::Lea, &[RSI, rip(None, ".LsigStruct")])?;
+    a.insn(Op::Xor, &[RDX, RDX])?;
+    a.insn(Op::Mov, &[R10, dec(8)])?;
+    a.insn(Op::Syscall, &[])?;
+    a.gap();
+    for r in [R11, RCX, R10, RDX, RSI, RDI, RAX] {
+        a.insn(Op::Pop, &[r])?;
+    }
+    a.blank();
+    Ok(())
+}
+
+fn kill_parent(a: &mut dyn Asm, target: Target) -> AsmResult {
+    let linux = target == Target::Linux;
+    a.indent("");
+    a.label(b"killParent")?;
+    a.indent("    ");
+    a.insn(Op::Mov, &[RAX, if linux { dec(110) } else { hex(0x2000027) }])?;
+    a.insn(Op::Syscall, &[])?;
+    a.blank();
+    a.insn(Op::Mov, &[RDI, RAX])?;
+    a.insn(Op::Mov, &[RSI, dec(9)])?;
+    a.insn(Op::Mov, &[RAX, if linux { dec(62) } else { hex(0x2000025) }])?;
+    a.insn(Op::Syscall, &[])?;
+    a.blank();
+    a.insn(Op::Mov, &[RDI, dec(0)])?;
+    // exit(0). The C code used the Linux syscall number 60 on macOS as well.
+    a.insn(Op::Mov, &[RAX, if linux { dec(60) } else { hex(0x2000001) }])?;
+    a.insn(Op::Syscall, &[])?;
+    a.insn(Op::Ret, &[])?;
+    a.blank();
+    Ok(())
+}
+
+/// `writechar` / `readchar` via the Windows API. All caller-saved registers are preserved.
+/// 48 bytes = shadow space + the 5th argument's slot, keeping the stack 16-byte aligned (the C
+/// code reserved only the 32 bytes of shadow space, so the 5th argument overwrote the saved r9).
+fn windows_io_function(a: &mut dyn Asm, name: &str, std_handle: i64, api: &str) -> AsmResult {
+    a.blank();
+    a.blank();
+    a.indent("");
+    a.label(name.as_bytes())?;
+    a.indent("\t");
+    for r in [RCX, RAX, RDX, R8, R9, R10, R11] {
+        a.insn(Op::Push, &[r])?;
+    }
+    a.insn(Op::Sub, &[RSP, dec(48)])?;
+    a.insn(Op::Mov, &[RCX, dec(std_handle)])?;
+    a.call(b"GetStdHandle")?;
+    a.insn(Op::Mov, &[RCX, RAX])?;
+    a.insn(Op::Lea, &[RDX, rip(None, ".LCharacter")])?;
+    a.insn(Op::Mov, &[R8, dec(1)])?;
+    a.insn(Op::Lea, &[R9, rip(None, ".Ltmp64")])?;
+    a.insn(Op::Mov, &[stack(Some(Size::Qword), 32), dec(0)])?;
+    a.call(api.as_bytes())?;
+    a.insn(Op::Add, &[RSP, dec(48)])?;
+    for r in [R11, R10, R9, R8, RDX, RAX, RCX] {
+        a.insn(Op::Pop, &[r])?;
+    }
+    a.insn(Op::Ret, &[])
+}
+
+/// `writechar` / `readchar` via syscalls (Linux, macOS).
+fn unix_io_function(a: &mut dyn Asm, name: &str, fd: i64, syscall: Opnd) -> AsmResult {
+    let read = fd == 0;
+    a.blank();
+    a.blank();
+    a.indent("");
+    a.label(name.as_bytes())?;
+    a.indent("\t");
+    for r in [RCX, R11, RAX, RDI, RSI, RDX] {
+        a.insn(Op::Push, &[r])?;
+    }
+    if read {
+        a.blank();
+    }
+    a.insn(Op::Mov, &[RDX, dec(1)])?;
+    a.insn(Op::Lea, &[RSI, rip(None, ".LCharacter")])?;
+    a.insn(Op::Mov, &[RDI, dec(fd)])?;
+    a.insn(Op::Mov, &[RAX, syscall])?;
+    a.insn(Op::Syscall, &[])?;
+    if read {
+        a.blank();
+    }
+    for r in [RDX, RSI, RDI, RAX, R11, RCX] {
+        a.insn(Op::Pop, &[r])?;
+    }
+    if !read {
+        a.gap();
+    }
+    a.insn(Op::Ret, &[])
+}
+
+/// Translates one command (C: `translateToAssembly`).
+fn translate_command(
+    a: &mut dyn Asm,
     state: &CompileState,
-    w: &mut Writer,
     cmd: &ParsedCommand,
-    file_num: usize,
-) {
+    file: usize,
+    debug_file: Option<usize>,
+) -> AsmResult {
     let command = &COMMAND_LIST[cmd.opcode as usize];
     let is_def = command.command_type == COMMAND_TYPE_FUNC_DEF;
     if !is_def && state.optimisation_level == OPT_69420 {
         print_debug(state.log_level, "\tCommand is not a function declaration, abort.", &[]);
-        return;
+        return Ok(());
     }
 
     // Function definitions get a row too, so the martyrdom prologue that follows `main:` and
     // `break <function>` are attributed to the definition line.
-    if state.use_debug_info {
-        w.s(&format!("\t.loc {} {}\n", file_num + 1, cmd.line_num));
+    if let Some(f) = debug_file {
+        a.debug_line(f, cmd.line_num as u32);
     }
 
-    if !is_def {
-        w.s("\t");
-    }
-    let pattern = if over_9000_always_halts(state, cmd) {
-        "hlt".as_bytes()
-    } else {
-        command.translation_pattern.as_bytes()
-    };
-    let mut i = 0;
-    while i < pattern.len() {
-        if pattern[i] == b'{' && pattern.get(i + 2) == Some(&b'}') {
-            let format_specifier = pattern[i + 1];
-            if format_specifier == b'F' {
-                w.s(&file_num.to_string());
-            } else if format_specifier >= b'0' && format_specifier < command.used_parameters + b'0' {
-                let index = (format_specifier - b'0') as usize;
-                w.b(&param_text(state, cmd, index));
-            } else {
-                print_internal_compiler_error(
-                    "Invalid translation format specifier '%c' for opcode %u",
-                    true,
-                    &[Arg::C(format_specifier), Arg::U(cmd.opcode as u64)],
-                );
-                std::process::exit(1);
-            }
-            i += 3;
-        } else {
-            w.buf.push(pattern[i]);
-            i += 1;
-        }
-    }
-    w.s("\n");
+    a.indent(if is_def { "" } else { "\t" });
+    (command.code)(a, &Ctx { state, cmd, file })?;
+    a.end_line();
 
+    a.indent("\t");
     match state.optimisation_level {
-        OPT_1 => w.s("\tnop\n"),
-        OPT_2 => w.s("\tpush rax\n\tpop rax\n"),
-        OPT_3 => w.s("\tmovups [rsp + 8], xmm0\n\tmovups xmm0, [rsp + 8]\n"),
+        OPT_1 => a.insn(Op::Nop, &[])?,
+        OPT_2 => {
+            a.insn(Op::Push, &[RAX])?;
+            a.insn(Op::Pop, &[RAX])?;
+        }
+        OPT_3 => {
+            a.insn(Op::Movups, &[stack(None, 8), XMM0])?;
+            a.insn(Op::Movups, &[XMM0, stack(None, 8)])?;
+        }
         // If we get here, this was a function declaration
-        OPT_69420 => w.s("\txor rax, rax\n\tret\n"),
+        OPT_69420 => {
+            a.insn(Op::Xor, &[RAX, RAX])?;
+            a.insn(Op::Ret, &[])?;
+        }
         _ => {}
     }
+    Ok(())
 }
 
-/// Generates the complete assembly text (what `-S` writes).
-pub fn write_to_string(state: &CompileState) -> Vec<u8> {
+/// Generates the whole program.
+pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     let target = state.target;
-    let mut w = Writer { buf: Vec::with_capacity(16 * 1024) };
-
-    w.s(&format!("#\n# Generated by the MemeAssembly compiler {VERSION_STRING}\n#\n"));
-    w.s(".intel_syntax noprefix\n");
 
     // Define all functions as global
     for file in 0..state.files.len() {
         for func in 0..state.files[file].functions.len() {
             let def = &state.function_commands(file, func)[0];
             if def.translate {
-                w.s(".global ");
-                w.b(def.param(0));
-                w.s("\n");
+                a.global(&def.param_text(0, target));
             }
         }
     }
 
     if target == Target::Windows {
         // To interact with the Windows API, we need to reference the needed functions
-        w.s("\n.extern GetStdHandle\n.extern WriteFile\n.extern ReadFile\n");
+        a.blank();
+        for name in ["GetStdHandle", "WriteFile", "ReadFile"] {
+            a.extern_symbol(name);
+        }
     }
 
-    w.s("\n.data\n\t");
-    w.s(".LCharacter: .ascii \"a\"\n\t.Ltmp64: .byte 0, 0, 0, 0, 0, 0, 0, 0\n");
-
+    a.blank();
+    a.section(SectionKind::Data);
+    a.indent("\t");
+    a.label(b".LCharacter")?;
+    a.ascii(b"a");
+    a.label(b".Ltmp64")?;
+    a.zeros(8);
     // Struct for martyrdom command
-    match target {
-        Target::Linux => w.s("\t.LsigStruct:\n\t\t.Lsa_handler: .quad 0\n\t\t.quad 0x04000000\n\t\t.quad 0, 0\n\n"),
-        Target::MacOS => w.s("\t.LsigStruct:\n\t\t.Lsa_handler: .quad 0\n\t\t.Lsa_handler_2: .quad 0\n\t\t.quad 0, 0\n\n"),
-        Target::Windows => {}
+    if target != Target::Windows {
+        a.label(b".LsigStruct")?;
+        a.indent("\t\t");
+        a.label(b".Lsa_handler")?;
+        a.quad(&[Imm::Dec(0)]);
+        if target == Target::Linux {
+            a.quad(&[Imm::Text(0x04000000, b"0x04000000")]);
+        } else {
+            a.label(b".Lsa_handler_2")?;
+            a.quad(&[Imm::Dec(0)]);
+        }
+        a.quad(&[Imm::Dec(0), Imm::Dec(0)]);
+        a.blank();
     }
 
-    w.s("\n\n.text\n\t");
-    w.s("\n\n.Ltext0:\n");
+    a.blank();
+    a.blank();
+    a.section(SectionKind::Text);
+    a.indent("\t");
+    a.gap();
+    a.blank();
+    a.indent("");
+    a.label(b".Ltext0")?;
 
     if target != Target::Windows {
-        let linux = target == Target::Linux;
-        w.s("killParent:\n");
-        w.s(if linux { "    mov rax, 110\n" } else { "    mov rax, 0x2000027\n" });
-        w.s("    syscall\n\n    mov rdi, rax\n    mov rsi, 9\n");
-        w.s(if linux { "    mov rax, 62\n" } else { "    mov rax, 0x2000025\n" });
-        w.s("    syscall\n\n    mov rdi, 0\n");
-        // exit(0). The C code used the Linux syscall number 60 on macOS as well.
-        w.s(if linux { "    mov rax, 60\n" } else { "    mov rax, 0x2000001\n" });
-        w.s("    syscall\n    ret\n\n");
+        kill_parent(a, target)?;
     }
 
     // In bully mode, a missing main function is "fixed" by making the code at the start main
+    // (only for executables, so never part of the -S text).
     if state.compile_mode == CompileMode::Bully
         && state.output_mode == OutputMode::Executable
         && !main_function_exists(state)
@@ -353,46 +725,60 @@ pub fn write_to_string(state: &CompileState) -> Vec<u8> {
         // The C code always named it `main` (macOS needs `_main`) and also inserted the
         // martyrdom code on Windows, where killParent/.LsigStruct do not exist.
         let main_name = state.main_function_name();
-        w.s("\n.global ");
-        w.b(main_name);
-        w.s("\n\t\n");
-        w.b(main_name);
-        w.s(":\n\t");
+        a.global(main_name);
+        a.label(main_name)?;
         if target != Target::Windows {
-            w.s(&martyrdom_code(target));
+            martyrdom_code(a, target)?;
         }
         // Without any code to fall into, the C version ran into writechar (or off the end of
         // the text section) and returned garbage: return 0 instead.
         if bully_main_is_empty(state) {
-            w.s("xor rax, rax\n\tret\n");
+            a.insn(Op::Xor, &[RAX, RAX])?;
+            a.insn(Op::Ret, &[])?;
         }
     }
 
     let main_name = state.main_function_name();
+    let mut last_debug_file = None;
     for (i, file) in state.files.iter().enumerate() {
-        if state.use_debug_info {
-            write_debug_file(&mut w, i + 1, &file.file_name);
-        }
+        let debug_file = state.use_debug_info.then(|| a.debug_file(&debug_file_path(&file.file_name)));
+        last_debug_file = debug_file.or(last_debug_file);
+
+        // The confused stonks label is only needed if the file jumps to it
+        let uses_confused_stonks = (0..file.functions.len()).any(|func| {
+            state
+                .function_commands(i, func)
+                .iter()
+                .any(|cmd| cmd.opcode == OP_CONFUSED_STONKS && is_translated(state, cmd))
+        });
 
         let mut line = 0usize;
         for func in 0..file.functions.len() {
             let commands = state.function_commands(i, func);
-            let function_name = commands[0].param(0);
+            let function_name = commands[0].param_text(0, target);
+            if let Some(f) = debug_file {
+                a.debug_function_begin(&function_name, f, commands[0].line_num as u32);
+            }
 
             for (k, current_command) in commands.iter().enumerate() {
-                if target != Target::Windows && state.martyrdom && k == 1 && function_name == main_name {
-                    w.s(&martyrdom_code(target));
+                if target != Target::Windows && state.martyrdom && k == 1 && *function_name == *main_name {
+                    martyrdom_code(a, target)?;
                 }
 
-                // Print the confused stonks label now if it should be at this position
-                if line == file.random_index {
-                    w.s(&format!("\t.LConfusedStonks_{i}: \n"));
+                // Place the confused stonks label now if it should be at this position
+                if uses_confused_stonks && line == file.random_index {
+                    a.indent("\t");
+                    a.label(format!(".LConfusedStonks_{i}").as_bytes())?;
                 }
 
                 if current_command.translate {
-                    translate_to_assembly(state, &mut w, current_command, i);
+                    translate_command(a, state, current_command, i, debug_file)?;
                 }
                 line += 1;
+            }
+
+            if debug_file.is_some() {
+                a.debug_function_end();
             }
         }
     }
@@ -400,65 +786,29 @@ pub fn write_to_string(state: &CompileState) -> Vec<u8> {
     // With -O69420 all commands are optimised out, so these are not needed
     if state.optimisation_level != OPT_69420 {
         // The helpers are not source code: line 0 instead of the last command's line
-        if state.use_debug_info && !state.files.is_empty() {
-            w.s(&format!("\t.loc {} 0\n", state.files.len()));
+        if let Some(f) = last_debug_file {
+            a.debug_line(f, 0);
         }
         if target == Target::Windows {
-            // All caller-saved registers are preserved. 48 bytes = shadow space + the 5th
-            // argument's slot, keeping the stack 16-byte aligned (the C code reserved only the
-            // 32 bytes of shadow space, so the 5th argument overwrote the saved r9).
-            for (name, handle, api) in [("writechar", -11, "WriteFile"), ("readchar", -10, "ReadFile")] {
-                w.s(&format!(
-                    "\n\n{name}:\n\tpush rcx\n\tpush rax\n\tpush rdx\n\tpush r8\n\tpush r9\n\tpush r10\n\tpush r11\n\tsub rsp, 48\n\tmov rcx, {handle}\n\tcall GetStdHandle\n\tmov rcx, rax\n\tlea rdx, [rip + .LCharacter]\n\tmov r8, 1\n\tlea r9, [rip + .Ltmp64]\n\tmov QWORD PTR [rsp + 32], 0\n\tcall {api}\n\tadd rsp, 48\n\tpop r11\n\tpop r10\n\tpop r9\n\tpop r8\n\tpop rdx\n\tpop rax\n\tpop rcx\n\tret\n"
-                ));
-            }
+            windows_io_function(a, "writechar", -11, "WriteFile")?;
+            windows_io_function(a, "readchar", -10, "ReadFile")?;
         } else {
             let linux = target == Target::Linux;
-            w.s("\n\nwritechar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rdi, 1\n\t");
-            w.s(if linux { "mov rax, 1\n\t" } else { "mov rax, 0x2000004\n\t" });
-            w.s("syscall\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\t\n\tret\n");
-
-            w.s("\n\nreadchar:\n\tpush rcx\n\tpush r11\n\tpush rax\n\tpush rdi\n\tpush rsi\n\tpush rdx\n\n\tmov rdx, 1\n\tlea rsi, [rip + .LCharacter]\n\tmov rdi, 0\n\t");
-            w.s(if linux { "mov rax, 0\n\t" } else { "mov rax, 0x2000003\n\t" });
-            w.s("syscall\n\n\tpop rdx\n\tpop rsi\n\tpop rdi\n\tpop rax\n\tpop r11\n\tpop rcx\n\tret\n");
+            unix_io_function(a, "writechar", 1, if linux { dec(1) } else { hex(0x2000004) })?;
+            unix_io_function(a, "readchar", 0, if linux { dec(0) } else { hex(0x2000003) })?;
         }
     }
 
     if state.optimisation_level == OPT_S {
-        // On Mach-O `.align n` means 2**n (and n >= 32 is rejected), so the C code's directive
-        // never assembled for macOS; `.p2align 29` is the intended 512 MiB.
-        w.s(if target == Target::MacOS { ".p2align 29\n" } else { ".align 536870912\n" });
+        // 512 MiB (on Windows, COFF can't represent the section alignment: an error like gas's)
+        a.align(1 << 29)?;
     }
-
-    w.buf
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn char_values_gas_would_misread() {
-        assert_eq!(char_fixup(b"'\\v'"), Some(11));
-        assert_eq!(char_fixup(b"'\\'"), Some(92));
-        assert_eq!(char_fixup(b"'\\n'"), None);
-        assert_eq!(char_fixup(b"'a'"), None);
-        assert_eq!(char_fixup(b"010"), Some(10));
-        assert_eq!(char_fixup(b"-010"), Some(-10));
-        assert_eq!(char_fixup(b"0065"), Some(65));
-        assert_eq!(char_fixup(b"0"), None);
-        assert_eq!(char_fixup(b"65"), None);
-    }
-
-    #[test]
-    fn misread_call_symbols() {
-        for name in ["$", ".", "rax", "RAX", "r8", "r15d", "r31b", "xmm0", "ah", "and", "byte", "QWORD", "st", "fs", "rip", "flat", "near"] {
-            assert!(gas_misreads_symbol(name.as_bytes()), "{name}");
-        }
-        for name in ["main", "foo", "r32", "r08", "r", "xmm32", "rax1", "st0", "_and", "bytes", "foo$bar"] {
-            assert!(!gas_misreads_symbol(name.as_bytes()), "{name}");
-        }
-    }
 
     #[test]
     fn immediate_truncation() {
@@ -470,5 +820,38 @@ mod tests {
         assert_eq!(truncate_to_operand_size(4294967296, 4), 0);
         assert_eq!(truncate_to_operand_size(2147483648, 8), i32::MIN as i64);
         assert_eq!(truncate_to_operand_size(-5, 8), -5);
+    }
+
+    fn command(opcode: u8, params: [Option<Param>; 2], is_pointer: u8) -> ParsedCommand {
+        let mut c = ParsedCommand::new(1);
+        c.opcode = opcode;
+        c.parameters = params;
+        c.is_pointer = is_pointer;
+        c
+    }
+
+    fn decimal(value: i64) -> Option<Param> {
+        Some(Param::Decimal { value, text: value.to_string().into_bytes() })
+    }
+
+    #[test]
+    fn operands() {
+        let mut state = CompileState::new(Target::Linux);
+        let c = command(OP_MOV, [Some(Param::Reg(Reg::R64(0))), decimal(-5)], 0);
+        let ctx = Ctx { state: &state, cmd: &c, file: 0 };
+        assert_eq!(ctx.op(0), Ok(RAX));
+        assert_eq!(ctx.op(1), Ok(hex(-5)));
+
+        let c = command(OP_MOV, [Some(Param::Reg(Reg::R64(3))), Some(Param::Reg(Reg::R32(0)))], 1);
+        let ctx = Ctx { state: &state, cmd: &c, file: 0 };
+        assert_eq!(ctx.op(0), Ok(Opnd::Mem(Mem { size: None, base: Base::Reg(Reg::R64(3)), disp: 0 })));
+
+        // Bully mode guesses the operand size from computedIndex (69 % 4 == 1 → WORD PTR) and
+        // truncates the immediate to it
+        state.compile_mode = CompileMode::Bully;
+        let c = command(OP_MOV, [Some(Param::Reg(Reg::R64(3))), decimal(65537)], 1);
+        let ctx = Ctx { state: &state, cmd: &c, file: 0 };
+        assert_eq!(ctx.op(0), Ok(Opnd::Mem(Mem { size: Some(Size::Word), base: Base::Reg(Reg::R64(3)), disp: 0 })));
+        assert_eq!(ctx.op(1), Ok(hex(1)));
     }
 }
