@@ -17,6 +17,7 @@ pub enum RelTarget {
     Section(&'static str),
 }
 
+/// A field of a debug section that depends on where other sections end up.
 #[derive(Debug, Clone)]
 pub struct DebugReloc {
     pub offset: u64,
@@ -24,6 +25,7 @@ pub struct DebugReloc {
     pub addend: i64,
 }
 
+/// One generated debug section: its contents and the fields still to be relocated.
 #[derive(Debug, Clone)]
 pub struct DebugSection {
     pub name: &'static str,
@@ -79,6 +81,7 @@ const DW_LNS_SET_FILE: u8 = 4;
 const DW_LNE_END_SEQUENCE: u8 = 1;
 const DW_LNE_SET_ADDRESS: u8 = 2;
 
+/// SLEB128.
 fn sleb(b: &mut Vec<u8>, mut v: i64) {
     loop {
         let byte = (v & 0x7f) as u8;
@@ -106,7 +109,9 @@ fn split_path(p: &[u8]) -> (&[u8], &[u8]) {
     }
 }
 
-/// Builds the DWARF sections describing a `.text` of `text_size` bytes.
+/// Builds the DWARF sections describing a `.text` of `text_size` bytes: one compile unit
+/// covering all of it, a `DW_TAG_subprogram` per [`DebugInfo::functions`] entry, and one
+/// line-number sequence from the first line row to the end of `.text`.
 pub fn build(d: &DebugInfo, text_size: u64) -> Vec<DebugSection> {
     // ---- .debug_line ----
     // Directory 0 is the compilation directory; file 0 is the primary source file and is

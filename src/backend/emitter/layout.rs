@@ -1,4 +1,9 @@
 //! Section contents as a list of items, branch relaxation and final module assembly.
+//!
+//! The [`Emitter`] records each section as [`Item`]s whose size may still change (branches
+//! not yet relaxed, alignment padding). [`finish`] decides per object format which references
+//! the assembler resolves itself, relaxes the branches, then writes the bytes and relocations
+//! and converts symbol positions and line rows from item indices to section offsets.
 
 use super::x86::{self, BranchKind};
 use super::Emitter;
@@ -7,6 +12,7 @@ use crate::backend::module::{
 };
 use crate::target::Target;
 
+/// One piece of a section.
 pub(super) enum Item {
     /// Fixed bytes (an instruction or data), possibly with RIP-relative fixups.
     Bytes { data: Vec<u8>, fixups: Vec<Fixup> },
@@ -25,6 +31,7 @@ pub(super) struct Fixup {
     pub disp: i64,
 }
 
+/// The size of `item` at offset `off` (`long`: a branch encoded with rel32).
 fn item_size(item: &Item, long: bool, off: u64) -> u64 {
     match item {
         Item::Bytes { data, .. } => data.len() as u64,
@@ -33,6 +40,7 @@ fn item_size(item: &Item, long: bool, off: u64) -> u64 {
     }
 }
 
+/// The offset of every item, plus the section's size at the end.
 fn offsets(items: &[Item], long: &[bool]) -> Vec<u64> {
     let mut offs = Vec::with_capacity(items.len() + 1);
     let mut off = 0u64;
@@ -70,6 +78,8 @@ fn atoms(em: &Emitter) -> (Vec<Vec<Option<usize>>>, Vec<Option<usize>>) {
     (pos_atom, sym_atom)
 }
 
+/// Lays out the emitter's sections and produces the module (see the module docs). Fails on
+/// undefined numeric local labels, out-of-range references and alignments COFF can't represent.
 pub(super) fn finish(em: Emitter) -> Result<ObjModule, String> {
     // Undefined numeric local labels (gas reports them at the end of assembly).
     let mut errors = Vec::new();

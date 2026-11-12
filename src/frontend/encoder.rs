@@ -1,5 +1,6 @@
-//! Direct code generation for object files and executables: the backend's [`Emitter`] as the
-//! [`Asm`] of the code generation (the C compiler piped the `-S` text into gcc instead).
+//! Direct code generation for object files and executables: the backend's [`Emitter`]
+//! implements the translator's [`Asm`], so the same [`translate`] that prints the `-S` text
+//! encodes machine code into an [`ObjModule`] for the backend to write.
 
 use super::state::CompileState;
 use super::log::VERSION_STRING;

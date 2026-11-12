@@ -1,9 +1,9 @@
-//! Object/executable file writers. OWNED BY: writers agent.
+//! Object and executable file writers.
 //!
-//! [`write`] turns the format-independent [`ObjModule`] produced by the assembler into the bytes
-//! of the file that `gcc` produced in the original compiler:
+//! [`write()`] turns the format-independent [`ObjModule`] produced by the emitter into the bytes
+//! of an object file or a linked executable:
 //!
-//! | target  | `OutputKind::Object` (`gcc -c`)      | `OutputKind::Executable` (`gcc`)          |
+//! | target  | `OutputKind::Object`                 | `OutputKind::Executable`                  |
 //! |---------|--------------------------------------|-------------------------------------------|
 //! | Linux   | ELF64 relocatable ([`elf`])          | static non-PIE ELF64 executable ([`elf`]) |
 //! | Windows | COFF x86-64 object ([`coff`])        | PE32+ console executable ([`pe`])         |
@@ -11,8 +11,13 @@
 //!
 //! Object files carry the same sections, symbols and relocations as GNU as (or, for Mach-O,
 //! the Apple/LLVM assembler) would produce for the same source, in a simpler layout.
-//! Executables are linked here directly (no crt/libc): see [`link`] for the shared relocation
-//! logic and the format modules for their entry stubs.
+//! Executables are linked here directly, without crt or libc: ELF and PE images get a small
+//! entry stub that calls `main` and exits with its result, Mach-O images enter `_main` through
+//! `LC_MAIN`. [`link`] holds the relocation logic they share. The only external symbols an
+//! executable may reference are the kernel32 functions imported by PE images.
+//!
+//! Every writer relies on the module invariants checked by `validate`: exactly the sections
+//! `.text` and `.data`, and relocations, symbols and debug rows that stay inside them.
 use std::collections::HashMap;
 
 use super::emitter::x86;
@@ -31,6 +36,9 @@ mod pe;
 #[cfg(test)]
 pub(crate) mod tests;
 
+/// Serialises `module` as an object file or links it into an executable for `target`.
+/// Errors are link errors (undefined symbols, a missing entry point, relocations that don't
+/// fit, worded like ld's) or relocations the object format cannot express.
 pub fn write(module: &ObjModule, target: Target, kind: OutputKind) -> Result<Vec<u8>, String> {
     validate(module)?;
     match (target, kind) {
@@ -114,6 +122,7 @@ pub(crate) fn is_global(s: &Symbol) -> bool {
     s.definition.is_none() || s.binding == Binding::Global
 }
 
+/// Rounds `v` up to a multiple of `align` (a power of two).
 pub(crate) fn align_up(v: u64, align: u64) -> u64 {
     debug_assert!(align.is_power_of_two());
     (v + align - 1) & !(align - 1)
@@ -163,10 +172,12 @@ impl Le for Vec<u8> {
     }
 }
 
+/// Overwrites the little-endian `u32` at `buf[off..]`.
 pub(crate) fn put_u32(buf: &mut [u8], off: usize, v: u32) {
     buf[off..off + 4].copy_from_slice(&v.to_le_bytes());
 }
 
+/// Overwrites the little-endian `u64` at `buf[off..]`.
 pub(crate) fn put_u64(buf: &mut [u8], off: usize, v: u64) {
     buf[off..off + 8].copy_from_slice(&v.to_le_bytes());
 }
@@ -234,6 +245,7 @@ impl StrTab {
         StrTab { data: prefix.to_vec(), offsets: HashMap::from([(String::new(), 0)]) }
     }
 
+    /// Offset of `s`, appending it on first use.
     pub fn add(&mut self, s: &str) -> u32 {
         if let Some(&o) = self.offsets.get(s) {
             return o;
@@ -268,6 +280,8 @@ pub(crate) struct SymbolGroups {
     pub undefined: Vec<SymbolId>,
 }
 
+/// Partitions the symbols of `m` into [`SymbolGroups`]; temporary and unused undefined symbols
+/// are left out.
 pub(crate) fn symbol_groups(m: &ObjModule) -> SymbolGroups {
     let mut referenced = vec![false; m.symbols.len()];
     for r in m.sections.iter().flat_map(|s| &s.relocs) {

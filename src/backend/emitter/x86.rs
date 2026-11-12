@@ -26,6 +26,7 @@ enum Sz {
     Q,
 }
 
+/// `None` for the XMM registers, which have no general-purpose operand size.
 fn reg_size(r: Reg) -> Option<Sz> {
     match r {
         Reg::R64(_) => Some(Sz::Q),
@@ -116,6 +117,7 @@ impl Imm {
     }
 }
 
+/// The result of an encoding helper; `rip` as in [`Encoded`].
 struct Insn {
     bytes: Vec<u8>,
     rip: Option<(usize, String, i64)>,
@@ -215,6 +217,7 @@ fn plus_reg(sz: Option<Sz>, opcode: u8, r: Reg, imm: Imm) -> Option<Insn> {
     Some(Insn { bytes: out, rip: None })
 }
 
+/// An instruction without operands.
 fn fixed(bytes: &[u8]) -> Option<Insn> {
     Some(Insn { bytes: bytes.to_vec(), rip: None })
 }
@@ -238,6 +241,7 @@ pub(crate) fn encode(op: Op, ops: &[Operand]) -> Result<Encoded, String> {
         })
 }
 
+/// The encoding of `op` with `ops`, or `None` if the combination isn't supported.
 fn select(op: Op, ops: &[Operand]) -> Option<Insn> {
     use Operand as O;
     match (op, ops) {

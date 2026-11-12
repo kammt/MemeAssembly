@@ -43,6 +43,7 @@ fn cstr(b: &[u8]) -> String {
     String::from_utf8_lossy(b.split(|&c| c == 0).next().unwrap()).into_owned()
 }
 
+/// Reads the header, load command list, section headers and `LC_MAIN` entry offset.
 fn parse(b: &[u8]) -> MachO {
     assert_eq!(u32_at(b, 0), 0xfeed_facf, "not a 64-bit Mach-O file");
     assert_eq!(u32_at(b, 4), 0x0100_0007, "not x86-64");

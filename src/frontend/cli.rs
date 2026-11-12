@@ -85,8 +85,9 @@ pub enum OptLevel {
     Max,
 }
 
-/// Rewrites the C spellings `-O-1`, `-O-2`, `-O-3`, `-O-s` and `-O69420` (an attached value
-/// clap can't express next to the `-O` flag) to `--opt-level=…`, up to a `--`.
+/// Rewrites the short spellings `-O-1`, `-O-2`, `-O-3`, `-O-s` and `-O69420` to
+/// `--opt-level=…` before clap sees them: clap can't express a value attached to `-O`, which is
+/// also the object-file flag. Arguments after a `--` are input files and stay unchanged.
 pub fn legacy_opt_args(args: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
     let mut options_ended = false;
     args.into_iter()

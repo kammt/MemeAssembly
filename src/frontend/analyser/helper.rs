@@ -1,15 +1,20 @@
-//! Port of compiler/analyser/analysisHelper.c
+//! The two checks the analyses in [`super`] are built from: duplicate definitions (of
+//! functions, jump markers and comparison labels) and definitions missing for calls and jumps.
 
 use crate::frontend::commands::ParsedCommand;
 use crate::frontend::state::{CmdLoc, CompileState};
 use crate::frontend::log::{format_c, print_debug, print_error_fmt, print_error_with_key, ErrorKey};
 
-/// Labels match by their text, as in the C code.
+/// Whether parameter `i` of `a` and parameter `j` of `b` have the same text
+/// ([`ParsedCommand::param_text`]). Labels match by text, not by value: `7` and `07` differ.
 fn param_eq(state: &CompileState, a: &ParsedCommand, i: usize, b: &ParsedCommand, j: usize) -> bool {
     a.param_text(i, state.target) == b.param_text(j, state.target)
 }
 
-/// Checks for duplicate definitions of commands and prints an error if there is one.
+/// Checks `list` for duplicate definitions and reports each later one. Two definitions are
+/// duplicates if their first `parameters_to_check` parameters (0 to 2) have the same text and,
+/// with `once_per_file`, they are in the same file. Bully mode excludes the later one from
+/// translation instead.
 pub fn check_duplicate_definition(
     list: &[CmdLoc],
     state: &mut CompileState,
@@ -35,7 +40,9 @@ pub fn check_duplicate_definition(
                     let dup_line = duplicate.line_num;
                     let format = "%s defined twice (already defined in %s:%lu)";
                     let message = format_c(format, &[item_name.as_bytes(), &item_file, line_num.to_string().as_bytes()]);
-                    // (the C code passed 2 as the argument count)
+                    // The obfuscated-mode key uses an argument count of 2 although the format
+                    // has 3 arguments. The key only selects which fake message obfuscated mode
+                    // prints; a different count would select a different one.
                     print_error_with_key(state, &dup_file, dup_line, ErrorKey::new(format, 2), &message);
                 } else {
                     // In bully mode, only the first definition is valid
@@ -47,7 +54,11 @@ pub fn check_duplicate_definition(
 }
 
 /// Checks that for every parent command (e.g. "where banana") a companion command
-/// (e.g. "banana") exists.
+/// (e.g. "banana") exists, in the same file if `same_file`. With `parameters_to_check` = 0 any
+/// companion will do; otherwise each of the parent's first `parameters_to_check` parameters needs
+/// a companion whose first parameter has its text. A companion counts for the parent's first
+/// parameter before its second, so a parent with two equal parameters always lacks one for the
+/// second. Bully mode excludes the parent from translation instead of reporting it.
 pub fn check_companion_command_existence(
     parents: &[CmdLoc],
     children: &[CmdLoc],
@@ -102,3 +113,4 @@ pub fn check_companion_command_existence(
         }
     }
 }
+

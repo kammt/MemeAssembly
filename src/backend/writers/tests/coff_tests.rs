@@ -1,3 +1,5 @@
+//! COFF: objects are compared with what `x86_64-w64-mingw32-as` writes for the same fixture
+//! (via `llvm-readobj` and the raw section contents) and linked with mingw-w64 gcc.
 use std::process::Command;
 
 use super::*;
@@ -31,6 +33,7 @@ struct CoffStructure {
     relocs: Vec<String>,
 }
 
+/// Parses `llvm-readobj --sections --symbols --relocations` of `obj` into a [`CoffStructure`].
 fn coff_structure(readobj: &Path, obj: &Path) -> CoffStructure {
     let out = run_ok(Command::new(readobj).args(["--sections", "--symbols", "--relocations"]).arg(obj));
     assert!(out.stderr.is_empty(), "llvm-readobj {}: {}", obj.display(), String::from_utf8_lossy(&out.stderr));

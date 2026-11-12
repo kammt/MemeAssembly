@@ -1,4 +1,6 @@
-//! Splits the commands of a file into functions.
+//! Splits the parsed commands of a file into functions. A function runs from its definition to
+//! its last return statement before the next definition; commands outside of any function are
+//! errors (bully mode wraps them into made-up functions instead).
 
 use crate::frontend::commands::*;
 use crate::frontend::log::{print_debug, print_error};
@@ -26,7 +28,8 @@ fn function_length(commands: &[ParsedCommand], input_file_name: &[u8], state: &m
 }
 
 /// A function that bully mode makes up for commands outside of any function, named after the
-/// number of commands up to the end of `commands`.
+/// number of commands up to the end of `commands`. Its definition and return statement are no
+/// lines of the file and get the made-up line numbers 69 and 420.
 fn injected_function(commands: Vec<ParsedCommand>, end_index: usize) -> Function {
     let func_name = FUNCTION_NAMES[end_index % FUNCTION_NAMES.len()];
     let mut def = ParsedCommand::new(69);
@@ -38,6 +41,7 @@ fn injected_function(commands: Vec<ParsedCommand>, end_index: usize) -> Function
     Function { commands, injected: true }
 }
 
+/// The line range of `commands` for debug messages.
 fn lines(commands: &[ParsedCommand]) -> String {
     match commands {
         [first, .., last] => format!("lines {}-{}", first.line_num, last.line_num),
@@ -117,7 +121,7 @@ mod tests {
     fn missing_return_before_next_definition() {
         let ret = "right back at ya, buckaroo";
         // "expected a return statement" and "function does not return", also for the first
-        // function of the file (the C code missed that one)
+        // function of the file
         assert_eq!(split(&format!("{DEF} a\n{DEF} b\n{ret}\n")), (vec![1, 2], 0, 2));
         assert_eq!(split(&format!("{DEF} x\n{ret}\n{DEF} a\n{DEF} b\n{ret}\n")), (vec![2, 1, 2], 0, 2));
         assert_eq!(split(&format!("{DEF} a\nupvote rax\n{DEF} b\n{ret}\n")), (vec![1, 2], 1, 3));

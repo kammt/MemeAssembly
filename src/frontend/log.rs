@@ -1,4 +1,6 @@
-//! Port of compiler/logger/log.c.
+//! Console output: writing to stdout/stderr, the ASCII-art banners, notes, debug messages and
+//! compile errors (including the made-up messages of obfuscated mode). Compile errors, notes
+//! and debug messages go to stdout; I/O failures and internal errors go to stderr.
 
 use std::io::{ErrorKind, Write};
 
@@ -12,6 +14,8 @@ pub const BLU: &str = "\x1B[34m";
 pub const MAG: &str = "\x1B[35m";
 pub const RESET: &str = "\x1B[0m";
 
+/// The compiler version, shown in the help header and by `-v` (without the `v`), and written
+/// into the `-S` header and the debug information.
 pub const VERSION_STRING: &str = "v1.6";
 
 /// Exit code when stdout is a closed pipe (what shells report for a process killed by SIGPIPE).
@@ -46,6 +50,7 @@ pub(super) fn strip_os_error(s: &str) -> String {
     }
 }
 
+/// [`out`] for text.
 pub fn out_str(s: &str) {
     out(s.as_bytes());
 }
@@ -57,6 +62,7 @@ pub fn err(bytes: &[u8]) {
     let _ = se.flush();
 }
 
+/// [`err`] for text.
 pub fn err_str(s: &str) {
     err(s.as_bytes());
 }
@@ -69,6 +75,7 @@ fn platform_suffix(target: Target) -> &'static str {
     }
 }
 
+/// The fake error messages that obfuscated mode prints instead of the real ones.
 const RANDOM_ERROR_MESSAGES: &[&str] = &[
     //sudo
     "you are not in the sudoers file. This incident will be reported.",
@@ -178,9 +185,10 @@ pub fn print_debug(log_level: LogLevel, message: impl AsRef<[u8]>) {
     }
 }
 
-/// Selects the fake message that obfuscated mode shows instead of an error. The C code summed
-/// the bytes of the error's format string and added the number of its arguments (`varArgNum`),
-/// so the key of an error with parameters is made from its C format string.
+/// Selects the fake message that obfuscated mode shows instead of an error: the sum of the bytes
+/// of the error's printf-style format string (with its `%s`/`%u`/`%lu`, not the substituted
+/// text) plus `argument_count`. It depends on the kind of error, not on its parameters;
+/// [`print_error_with_key`] adds the file name and line number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ErrorKey(u64);
 
@@ -197,13 +205,14 @@ impl ErrorKey {
     }
 }
 
-/// `printError` for an error without parameters (its text is its C format string).
+/// Reports a compile error without parameters (its text is also its format string for the
+/// [`ErrorKey`]).
 pub fn print_error(state: &mut CompileState, input_file_name: &[u8], line_num: usize, message: &str) {
     print_error_with_key(state, input_file_name, line_num, ErrorKey::new(message, 0), message.as_bytes());
 }
 
-/// `printError` for an error with parameters: `c_format` is the C format string, whose `%s`,
-/// `%u` and `%lu` are replaced by `args` in order. The obfuscated-mode key counts `args`.
+/// Reports a compile error with parameters: `c_format` is a printf-style format string whose
+/// `%s`, `%u` and `%lu` are replaced by `args` in order. The obfuscated-mode key counts `args`.
 pub fn print_error_fmt(state: &mut CompileState, input_file_name: &[u8], line_num: usize, c_format: &str, args: &[&[u8]]) {
     let key = ErrorKey::new(c_format, args.len() as u64);
     print_error_with_key(state, input_file_name, line_num, key, &format_c(c_format, args));
@@ -226,7 +235,9 @@ pub fn format_c(c_format: &str, args: &[&[u8]]) -> Vec<u8> {
     message
 }
 
-/// `printError` for an error message that contains parameters (see [`ErrorKey`]).
+/// Reports a compile error as `file:line: error: message` on stdout and counts it in
+/// [`CompileState::compiler_errors`]. In obfuscated mode a fake message, chosen from the file
+/// name, the line number and `key`, replaces `message`.
 pub fn print_error_with_key(
     state: &mut CompileState,
     input_file_name: &[u8],
@@ -255,13 +266,13 @@ pub fn print_error_with_key(
     out(&m);
 }
 
-/// `printNote`.
+/// Prints `note: message` to stdout, indented by a tab if `indent`.
 pub fn print_note(message: &str, indent: bool) {
     let tab = if indent { "\t" } else { "" };
     out_str(&format!("{tab}{MAG}note: {RESET}{message}\n"));
 }
 
-/// `printInternalCompilerError`.
+/// Prints an internal compiler error to stderr, with a request to report it if `report`.
 pub fn print_internal_compiler_error(message: &str, report: bool) {
     let mut m = format!("{RED}Internal compiler error: {RESET}{message}\n");
     if report {

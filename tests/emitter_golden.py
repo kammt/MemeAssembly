@@ -21,7 +21,10 @@ OBJDUMP = os.environ.get("OBJDUMP", "x86_64-linux-gnu-objdump")
 
 
 def assemble(lines, workdir):
-    """Assemble `lines` (each preceded by a label c<i>); returns (error line indices, object)."""
+    """Assemble `(i, text)` pairs, each preceded by a label c<i>.
+
+    Returns (indices of the cases gas rejects, object path or None if assembly failed).
+    """
     src = os.path.join(workdir, "golden.s")
     obj = os.path.join(workdir, "golden.o")
     with open(src, "w") as f:
@@ -39,6 +42,7 @@ def assemble(lines, workdir):
 
 
 def main():
+    """Assemble every case and print one golden line per case, in input order."""
     cases = [l.rstrip("\n") for l in open(sys.argv[1]) if l.strip()]
     with tempfile.TemporaryDirectory() as d:
         pending = list(enumerate(cases))

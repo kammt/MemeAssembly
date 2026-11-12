@@ -1,4 +1,7 @@
-//! Port of compiler/parser/fileParser.c
+//! Turns the text of an input file into one [`ParsedCommand`] per line of code: blank lines and
+//! comments are skipped, every other line is matched against the patterns of [`COMMAND_LIST`].
+//! Parameters are stored as unclassified text ([`Param::Raw`]); the analyser classifies them.
+//! In bully mode, a line that is no command becomes a deterministic replacement command.
 
 use crate::frontend::commands::*;
 use crate::frontend::log::{print_debug, print_error, print_error_fmt};
@@ -16,8 +19,8 @@ fn lines_of_interest(data: &[u8]) -> Vec<(usize, &[u8])> {
     data.split_inclusive(|&b| b == b'\n')
         .map(|l| match l {
             [line @ .., b'\r', b'\n'] | [line @ .., b'\n'] => line,
-            // Kept from the C getLine(): a CR before the last byte of an unterminated last line
-            // ends that line, the byte after it is dropped
+            // Deliberate quirk: a CR before the last byte of an unterminated last line ends that
+            // line, and the byte after the CR is dropped
             [line @ .., b'\r', _] => line,
             _ => l,
         })
@@ -50,6 +53,7 @@ fn next_token<'a>(rest: &mut &'a [u8], delims: &[u8]) -> Option<&'a [u8]> {
     Some(&s[..end])
 }
 
+/// The parameter texts bully mode picks from (by `computed_index`) for a replacement command.
 const RANDOM_PARAMS: [&str; 41] = [
     "rax", "rcx", "rbx", "r8", "r9", "r10", "r12", "rsp", "rbp", "ax", "al", "r8b", "r9d", "r14b",
     "99", "1238", "12", "420", "987654321", "8", "9", "69", "8268", "2", "_", "a", "b", "d", "f",
@@ -128,6 +132,9 @@ fn bully_replacement(parsed: &mut ParsedCommand, line: &[u8], input_file_name: &
     }
 }
 
+/// Parses one line (as cut by [`line_text`]) as the first command in [`COMMAND_LIST`] whose
+/// pattern matches it, or as `OrDraw25` if that match ends in "or draw 25". A line that matches
+/// nothing is reported as invalid and stays `Invalid` (bully mode replaces it instead).
 fn parse_line(input_file_name: &[u8], line_num: usize, line: &[u8], state: &mut CompileState) -> ParsedCommand {
     let mut parsed = ParsedCommand::new(line_num);
     for command in &COMMAND_LIST[..Opcode::OrDraw25 as usize] {
@@ -228,7 +235,7 @@ mod tests {
         // only one CR before the LF is part of the line end; other CRs stay
         assert_eq!(lines(b"a\r\r\nb\rc\nd\r"), [(1, &b"a\r"[..]), (2, b"b\rc"), (3, b"d\r")]);
         assert_eq!(lines(b"\r\r\n  \r\n"), [(1, &b"\r"[..])]);
-        // the C getLine() quirk for an unterminated last line with a CR before its last byte
+        // an unterminated last line with a CR before its last byte ends at that CR
         assert_eq!(lines(b"a\nb\rc"), [(1, &b"a"[..]), (2, b"b")]);
         assert!(lines(b"\r\r").is_empty());
         // tabs and spaces are trimmed at the end only; other whitespace is a command

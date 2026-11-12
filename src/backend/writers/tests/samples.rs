@@ -6,6 +6,7 @@ use crate::backend::emitter::{Op, Operand, Size};
 use crate::backend::module::*;
 use crate::backend::writers::{mem, reg, rip};
 
+/// Builds an [`ObjModule`] with empty `.text` and `.data` sections, instruction by instruction.
 pub struct Builder {
     pub m: ObjModule,
     fixups: Vec<(usize, String)>,
@@ -33,16 +34,19 @@ impl Builder {
         self.m.symbols.len() - 1
     }
 
+    /// Marks `name` global.
     pub fn global(&mut self, name: &str) {
         let id = self.sym_id(name);
         self.m.symbols[id].binding = Binding::Global;
     }
 
+    /// Defines `name` at the current end of section `sec`.
     pub fn label(&mut self, sec: usize, name: &str) {
         let id = self.sym_id(name);
         self.m.symbols[id].definition = Some((sec, self.m.sections[sec].data.len() as u64));
     }
 
+    /// Appends `bytes` to `.data`.
     pub fn data(&mut self, bytes: &[u8]) {
         self.m.sections[1].data.extend_from_slice(bytes);
     }
@@ -78,6 +82,7 @@ impl Builder {
         }
     }
 
+    /// Resolves the calls to local labels and returns the module.
     pub fn finish(mut self) -> ObjModule {
         for (field, sym) in std::mem::take(&mut self.fixups) {
             let (sec, off) = self.m.symbols[self.m.symbol_by_name(&sym).unwrap()].definition.unwrap();

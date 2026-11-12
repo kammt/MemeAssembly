@@ -1,4 +1,5 @@
-//! The `-S` output: an [`Asm`] that prints GNU as text (Intel syntax).
+//! The `-S` output: an [`Asm`] that prints GNU as text (Intel syntax) instead of encoding
+//! machine code like [`encoder`](super::encoder).
 
 use super::state::CompileState;
 use super::log::VERSION_STRING;
@@ -22,6 +23,8 @@ pub fn write_to_string(state: &CompileState) -> Result<Vec<u8>, String> {
     Ok(p.out)
 }
 
+/// Collects the assembly text. Labels are kept pending so that they can share a line with the
+/// following instruction or directive.
 struct Printer {
     out: Vec<u8>,
     target: Target,
@@ -79,6 +82,7 @@ impl Printer {
     }
 }
 
+/// `jmp`, or the conditional jump for `cond` (`jge`, ...).
 fn jump_mnemonic(cond: Option<Cond>) -> String {
     match cond {
         None => "jmp".to_string(),
@@ -86,6 +90,8 @@ fn jump_mnemonic(cond: Option<Cond>) -> String {
     }
 }
 
+/// An immediate operand: decimal, `0x` and upper-case hex, or its source text (e.g. a character
+/// constant).
 fn imm_text(imm: Imm) -> Vec<u8> {
     match imm {
         Imm::Dec(v) => v.to_string().into_bytes(),
@@ -94,6 +100,7 @@ fn imm_text(imm: Imm) -> Vec<u8> {
     }
 }
 
+/// A memory operand in Intel syntax, e.g. `BYTE PTR [rip + sym + 8]`.
 fn mem_text(m: &Mem) -> String {
     let size = match m.size {
         None => "",
@@ -226,7 +233,7 @@ impl Asm for Printer {
         self.directive(directive.as_bytes());
         Ok(())
     }
-    /// `.file N "path"` for gas' DWARF line tables (replaces the C compiler's STABS `N_SO`).
+    /// `.file N "path"` for gas' DWARF line tables; `N` is the number later `.loc`s refer to.
     fn debug_file(&mut self, path: &[u8]) -> usize {
         self.files += 1;
         let mut text = format!(".file {} \"", self.files).into_bytes();

@@ -1,16 +1,19 @@
-//! PE32+ console executables, linked directly from the module (no mingw crt).
+//! PE32+ console executables, linked directly from the module (no crt).
 //!
-//! Layout: headers, `.text` (module code, entry stub, import thunks), `.data`, `.idata`,
-//! `.reloc`. Like mingw's output the image is relocatable (ASLR: `DYNAMIC_BASE`,
-//! `HIGH_ENTROPY_VA`): every absolute 64-bit address gets a `DIR64` base relocation.
+//! Layout: headers (no DOS stub program), `.text` (module code, entry stub, import thunks),
+//! `.data` (omitted when empty), `.idata`, `.reloc`, each section on its own page at image
+//! base `0x1_4000_0000`. The image is relocatable (ASLR: `DYNAMIC_BASE`, `HIGH_ENTROPY_VA`):
+//! every absolute 64-bit address gets a `DIR64` base relocation.
 //!
-//! Entry stub: like mingw's crt it obtains `argc`/`argv`/`envp` from msvcrt's
-//! `__getmainargs` (msvcrt.dll is imported by every mingw-built program, including the
-//! original compiler's output), calls `main(argc, argv, envp)` with the stack 16-byte aligned
-//! and 32 bytes of shadow space, then `ExitProcess(main's return value)`.
+//! Entry stub: like mingw-w64's crt it obtains `argc`/`argv`/`envp` from msvcrt.dll's
+//! `__getmainargs` (msvcrt.dll is a system DLL in every 64-bit Windows installation), calls
+//! `main(argc, argv, envp)` with the stack 16-byte aligned and 32 bytes of shadow space, then
+//! `ExitProcess(main's return value)`.
 //!
 //! Undefined symbols may only name the kernel32 functions MemeAssembly programs use: a call
 //! to `X` goes through a `jmp [rip + __imp_X]` thunk, `__imp_X` is the IAT slot itself.
+//! `.idata` imports exactly those, plus `ExitProcess` and `__getmainargs` for the stub; any
+//! other undefined symbol is reported by [`link::link_program`].
 use super::super::emitter::x86::{encode_indirect, BranchKind};
 use super::super::emitter::{Op, Operand, Size};
 use super::super::module::ObjModule;
@@ -45,6 +48,7 @@ const KERNEL32_FUNCTIONS: [&str; 4] = ["ExitProcess", "GetStdHandle", "ReadFile"
 const DOS_HEADER_SIZE: u64 = 64;
 const OPTIONAL_HEADER_SIZE: u64 = 240;
 
+/// One imported function.
 struct Import {
     dll: &'static str,
     name: String,
@@ -111,6 +115,9 @@ fn base_relocations(sites: &[u64], first_page: u64) -> Vec<u8> {
     }
 }
 
+/// A PE32+ image of `m` entered at the stub; fails on undefined symbols other than the
+/// supported kernel32 functions, a missing global `main`, or relocations that don't fit (any
+/// 32-bit absolute address, as the image base is above 4 GiB).
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     // Imports: everything the module references, plus the stub's.
     let mut imports: Vec<Import> = Vec::new();

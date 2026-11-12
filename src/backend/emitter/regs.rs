@@ -49,6 +49,7 @@ pub fn parse(name: &str) -> Option<Reg> {
     None
 }
 
+/// The register's lower-case name.
 pub fn name(r: Reg) -> String {
     match r {
         Reg::R64(i) => R64[i as usize].into(),

@@ -1,9 +1,9 @@
-//! Port of compiler/{compiler.c,parser,analyser,translator,logger}.
+//! The compiler front end: command line, parsing, analysis and code generation.
 //!
-//! The pipeline is the same as in C: [`parser::parse_file`] for every input file, then
-//! [`compile`], which runs the analysis and then generates the code with [`translator`]: as
-//! assembly text ([`asm_text`], `-S`) or directly into an object module ([`encoder`]) that
-//! [`crate::backend::emit`] writes (replacing the original `popen("gcc ...")`).
+//! The pipeline: [`parser::parse_file`] for every input file, then [`compile`], which runs the
+//! analysis and then generates the code with [`translator`]: as assembly text ([`asm_text`],
+//! `-S`) or directly into an object module ([`encoder`]) that [`crate::backend::emit`] writes
+//! as an object file or executable, without an external assembler or linker.
 
 pub mod analyser;
 pub mod asm_text;
@@ -24,7 +24,8 @@ use std::process::exit;
 
 use log::{err, err_str, print_error_ascii};
 
-/// Converts a C-style byte string (file name from argv) into a path.
+/// Converts a file name given as raw bytes (from the command line) into a path; on non-Unix
+/// hosts invalid UTF-8 is replaced.
 pub fn bytes_to_path(b: &[u8]) -> PathBuf {
     #[cfg(unix)]
     {
@@ -52,7 +53,8 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
 
     let output_path = bytes_to_path(output_file_name);
     if state.output_mode == OutputMode::AssemblyFile {
-        // The C code opens the output file before translating.
+        // The output file is created (and truncated) before translating, so a path that
+        // cannot be written is reported even if the translation would fail.
         let mut file = match std::fs::File::create(&output_path) {
             Ok(f) => f,
             Err(e) => {
@@ -80,7 +82,8 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
     } else {
         OutputKind::Executable
     };
-    // The C code piped the assembly text into gcc; here the program is generated directly.
+    // The machine code is encoded directly. Its errors are reported in the format GNU as
+    // uses for its standard input.
     let module = match encoder::encode_module(&state) {
         Ok(module) => module,
         Err(msg) => {
@@ -102,12 +105,14 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
     exit(0);
 }
 
+/// Reports that writing the object file or executable failed and exits with code 1.
 fn assembling_failed() -> ! {
     err_str("Assembling/linking failed. If you did not expect this to happen, please report this issue at https://github.com/kammt/MemeAssembly/issues so that it can be fixed\n");
     exit(1);
 }
 
-/// `printf` of the explanation line shown after CLI errors.
+/// Prints the `Usage: <program> -o outputFile inputFile` line shown after command line errors
+/// (to stdout).
 pub fn print_explanation_message(program_name: &[u8]) {
     let mut m = b"Usage: ".to_vec();
     m.extend_from_slice(program_name);

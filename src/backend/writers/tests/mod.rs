@@ -1,9 +1,14 @@
 //! Writer tests.
 //!
-//! Most tests compare against the real toolchain: the fixtures in `fixtures/` are the `-S`
-//! output of the original C compiler (per target), assembled with GNU as into an ELF object
-//! that [`elf_import`] turns into an [`ObjModule`]. The writers' output is then compared with
-//! what gas/mingw-as/llvm-mc produce, linked with the system linkers and executed.
+//! Most tests compare against the real toolchain. The fixtures in `fixtures/` are assembly
+//! sources, one per program and target (`<name>.<linux|windows|macos>.s`): MemeAssembly
+//! example programs compiled to assembly, plus hand-written cases (`args`, `pointers`,
+//! `edge`). At test time they are assembled with GNU as into an ELF object that
+//! [`elf_import`] turns into an [`ObjModule`]. The writers' output for that module is then
+//! compared with what gas/mingw-as/llvm-mc produce from the same source, linked with the
+//! system linkers and executed. The DWARF tests instead use modules the frontend compiles
+//! with `-g` ([`compile_with_debug`]), and [`samples`] provides hand-built modules for tests
+//! that need no tools.
 //! Tests needing a tool that isn't installed print a note and pass, so `cargo test` works on
 //! any host; `MEMEASM_REQUIRE_TOOLS=1` turns missing tools into failures.
 //!
@@ -26,6 +31,7 @@ use std::process::{Command, Output, Stdio};
 
 use crate::backend::module::ObjModule;
 
+/// `src/backend/writers/tests/fixtures`.
 pub fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/backend/writers/tests/fixtures")
 }
@@ -59,6 +65,7 @@ pub fn tool(names: &[&str]) -> Option<PathBuf> {
     None
 }
 
+/// Looks up an LLVM tool as `name` or `name-30` down to `name-14`.
 pub fn llvm(name: &str) -> Option<PathBuf> {
     let versioned: Vec<String> = (14..=30).rev().map(|v| format!("{name}-{v}")).collect();
     let mut names = vec![name];
@@ -85,11 +92,13 @@ pub fn scratch(test: &str) -> PathBuf {
     d
 }
 
+/// Runs `cmd` to completion, whatever its exit status.
 pub fn run(cmd: &mut Command) -> Output {
     let out = cmd.output().unwrap_or_else(|e| panic!("cannot run {cmd:?}: {e}"));
     out
 }
 
+/// Runs `cmd`, failing the test (with its stderr) if it exits unsuccessfully.
 pub fn run_ok(cmd: &mut Command) -> Output {
     let out = run(cmd);
     assert!(
@@ -101,6 +110,7 @@ pub fn run_ok(cmd: &mut Command) -> Output {
     out
 }
 
+/// Standard output of a successful run of `cmd`.
 pub fn stdout(cmd: &mut Command) -> String {
     String::from_utf8(run_ok(cmd).stdout).unwrap()
 }
@@ -120,9 +130,8 @@ pub fn module_for(src: &Path, dir: &Path) -> Option<ObjModule> {
 }
 
 /// `memeasm -g -O` compiled in-process: the module the frontend generates for `files` (paths
-/// relative to the repository root), with debug information. The original compiler's `-g`
-/// output (STABS) was broken, so there are no `-g` fixtures to compare with; the DWARF tests
-/// check this module's debug information with the tools instead.
+/// relative to the repository root), with debug information. There are no `-g` fixtures: the
+/// DWARF tests check this module's debug information with llvm-dwarfdump, objdump and gdb.
 pub fn compile_with_debug(files: &[&str]) -> ObjModule {
     use crate::frontend::state::{CompileState, OutputMode};
     use crate::frontend::{analyser, encoder, parser};
@@ -140,10 +149,12 @@ pub fn compile_with_debug(files: &[&str]) -> ObjModule {
     encoder::encode_module(&state).unwrap()
 }
 
+/// Where [`module_for`] keeps the GNU as object of `src`: `<dir>/<stem>.gas.o`.
 pub fn gas_obj_path(src: &Path, dir: &Path) -> PathBuf {
     dir.join(format!("{}.gas.o", src.file_stem().unwrap().to_str().unwrap()))
 }
 
+/// Whether this host runs Linux x86-64 programs natively.
 pub fn host_x86_64() -> bool {
     cfg!(all(target_arch = "x86_64", target_os = "linux"))
 }
@@ -173,6 +184,7 @@ pub fn run_with_input(mut cmd: Command, stdin: &[u8]) -> (i32, Vec<u8>) {
     (out.status.code().unwrap_or(-1), out.stdout)
 }
 
+/// Writes `bytes` to `path`, executable on Unix.
 pub fn write_file(path: &Path, bytes: &[u8]) {
     std::fs::write(path, bytes).unwrap();
     #[cfg(unix)]

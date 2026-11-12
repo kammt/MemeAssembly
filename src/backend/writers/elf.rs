@@ -1,5 +1,17 @@
 //! ELF64 x86-64: relocatable objects (the sections, symbols and relocations GNU as would
 //! write) and static, non-PIE, libc-free executables.
+//!
+//! Objects: ELF header, then `.text`, `.data`, the DWARF sections (with `-g`), `.symtab`,
+//! `.strtab`, a `.rela.*` section per section that has relocations, `.shstrtab`, and the
+//! section header table last. References to global and undefined symbols stay against the
+//! symbol; everything else is rewritten to "section symbol + offset", as gas does.
+//!
+//! Executables: three or four program headers (headers R, `.text` RX, `.data` RW if non-empty,
+//! and `PT_GNU_STACK`), each `PT_LOAD` on pages of its own from `0x400000`. `.text` is the
+//! module's code followed by the `_start` stub. [`link::link_program`] applies every
+//! relocation at the final addresses; there are no libraries, so any undefined symbol is a
+//! link error. The section headers, symbol table and DWARF sections (with final addresses)
+//! follow the segments and are not loaded.
 use super::super::emitter::x86::{encode_indirect, encode_lea_indexed, BranchKind};
 use super::super::emitter::{Op, Operand, Reg};
 use super::super::module::{ObjModule, Reloc, RelocKind};
@@ -31,6 +43,8 @@ const STT_SECTION: u8 = 3;
 const EXEC_BASE: u64 = 0x400000;
 const PAGE: u64 = 0x1000;
 
+/// A section header together with the section's contents. `offset` is the file offset, 0
+/// until [`serialize`] places the section (executables place their loaded sections first).
 struct Shdr {
     name: String,
     sh_type: u32,
@@ -61,6 +75,7 @@ impl Shdr {
     }
 }
 
+/// An `Elf64_Sym` before its name is placed in `.strtab` (size is always 0).
 struct ElfSym {
     name: String,
     info: u8,
@@ -178,6 +193,7 @@ fn section_symbol(sec: usize) -> u32 {
     sec as u32 + 1
 }
 
+/// An `ET_REL` object for `m`. Cannot fail: every relocation kind has an ELF equivalent.
 pub fn write_object(m: &ObjModule) -> Vec<u8> {
     // Sections with contents: .text, .data, the DWARF sections (`-g`).
     let debug = m.debug.as_ref().map(|d| dwarf::build(d, m.sections[0].data.len() as u64)).unwrap_or_default();
@@ -276,13 +292,16 @@ fn entry_stub() -> (Vec<u8>, usize) {
     (a.code, call)
 }
 
+/// An `ET_EXEC` image of `m` entered at `_start`; fails with ld-style messages on undefined
+/// symbols, a missing global `main`, or relocations that don't fit.
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let (stub, call_field) = entry_stub();
     let text = &m.sections[0];
     let data = &m.sections[1];
 
     // Program headers: PT_LOAD (R, ELF+program headers), PT_LOAD (RX, .text), PT_LOAD (RW,
-    // .data), PT_GNU_STACK (RWX: the original linked with `-z execstack`).
+    // .data, only if non-empty), PT_GNU_STACK (RWX: the stack is intentionally executable,
+    // as with `ld -z execstack`).
     let has_data = !data.data.is_empty();
     let nphdr = 3 + has_data as u64;
     let hdr_end = 64 + 56 * nphdr;

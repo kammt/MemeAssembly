@@ -1,3 +1,6 @@
+//! ELF: objects are compared with GNU as's (via `readelf`) and linked with GNU ld; executables
+//! are run next to ld-linked builds of the same gas object and checked with `readelf`; the
+//! DWARF of frontend-compiled `-g` modules is checked with llvm-dwarfdump, objdump and gdb.
 use std::process::Command;
 
 use super::*;
@@ -30,6 +33,7 @@ struct ElfStructure {
     relocs: Vec<String>,
 }
 
+/// Parses `readelf -SW -sW -rW` of `obj` into an [`ElfStructure`].
 fn elf_structure(readelf: &Path, obj: &Path) -> ElfStructure {
     let out = run_ok(Command::new(readelf).args(["-SW", "-sW", "-rW"]).arg(obj));
     assert!(out.stderr.is_empty(), "readelf {}: {}", obj.display(), String::from_utf8_lossy(&out.stderr));
@@ -95,8 +99,8 @@ fn elf_objects_match_gas() {
     assert!(checked >= 12, "only {checked} fixtures checked");
 }
 
-/// `readelf` has no complaints, and the object links (static, like the original) and runs
-/// when linked by GNU ld.
+/// `readelf` has no complaints, and the object links (statically, through gcc and GNU ld
+/// against glibc's crt) and runs.
 #[test]
 fn elf_objects_link_with_ld() {
     let dir = scratch("elf_objects_link_with_ld");
@@ -118,7 +122,8 @@ fn elf_objects_link_with_ld() {
     }
 }
 
-/// Our static executables behave exactly like the gas+gcc-linked reference programs.
+/// Our static executables behave exactly like reference programs linked by gcc from the gas
+/// object of the same fixture: same exit code and stdout.
 #[test]
 fn elf_executables_match_reference() {
     let dir = scratch("elf_executables_match_reference");
@@ -162,6 +167,8 @@ fn elf_executable_args_env_and_alignment() {
     assert_eq!(code, 43);
 }
 
+/// `readelf` accepts an executable with debug info: `ET_EXEC`, an executable stack, the
+/// symbols and DWARF sections, no relocations, and page-aligned R / RX / RW segments.
 #[test]
 fn elf_executable_headers_are_sane() {
     let dir = scratch("elf_executable_headers");
@@ -214,6 +221,7 @@ fn decoded_lines(objdump: &Path, file: &Path) -> Vec<(u32, u64)> {
         .collect()
 }
 
+/// The module's line rows as `(line, address)` with `.text` at `base`.
 fn expected_lines(d: &DebugInfo, base: u64) -> Vec<(u32, u64)> {
     d.lines.iter().map(|r| (r.line, base + r.offset)).collect()
 }
@@ -333,6 +341,7 @@ fn elf_dwarf_gdb_breakpoint() {
     assert!(text.contains(" in main () at /src/hello.memeasm:"), "{text}");
 }
 
+/// Undefined symbols and a missing `main` are reported with ld's messages.
 #[test]
 fn elf_executable_reports_undefined_symbols_like_ld() {
     let dir = scratch("elf_undefined");

@@ -1,6 +1,8 @@
-//! Replaces the original `popen("gcc ... -x assembler -")`: the translator drives
-//! [`emitter::Emitter`] (instructions encoded directly in Rust, no assembly text involved),
-//! and [`writers`] turn the resulting [`module::ObjModule`] into object files / executables.
+//! Object file and executable output without an external assembler or linker. The translator
+//! drives [`emitter::Emitter`], which encodes the instructions directly (no assembly text is
+//! involved) into a format-independent [`module::ObjModule`]; [`writers`] turn that into an
+//! object file or link it into an executable for the target. The `-S` text output uses only
+//! the instruction and operand types of [`emitter`].
 
 pub mod emitter;
 pub mod module;
@@ -11,6 +13,7 @@ use std::path::Path;
 use crate::target::Target;
 use module::ObjModule;
 
+/// What [`emit`] writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputKind {
     /// Relocatable object (`-O`): ELF64 on Linux, COFF on Windows, Mach-O MH_OBJECT on macOS.

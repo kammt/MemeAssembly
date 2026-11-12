@@ -1,4 +1,6 @@
-//! The commands of MemeAssembly: their patterns, parameter types and code generators.
+//! The commands of MemeAssembly: their patterns, parameter types and code generators. The
+//! parser matches lines against the patterns of [`COMMAND_LIST`], the analyser checks the
+//! parameters against `allowed_param_types`, and the translator runs each command's `code`.
 
 use super::translator::{self as tr, CodeGen};
 use crate::backend::emitter::Reg;
@@ -20,15 +22,19 @@ pub const PARAM_REG: u8 = PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8;
 pub const PARAM_IMM: u8 = PARAM_DECIMAL | PARAM_CHAR;
 pub const PARAM_REG_OR_IMM: u8 = PARAM_REG | PARAM_IMM;
 
+/// Whether the `PARAM_*` type is a register of any size.
 pub fn param_is_reg(param: u8) -> bool {
     param & PARAM_REG != 0
 }
 
+/// A line starting with this (after spaces and tabs) is a comment.
 pub const COMMENT_START: &[u8] = b"What the hell happened here?";
 pub const OR_DRAW_25_START: &[u8] = b"or";
 pub const OR_DRAW_25_END: &[u8] = b"draw 25";
+/// Follows a parameter that is a pointer (`[reg]`).
 pub const POINTER_SUFFIX: &[u8] = b"do you know de wey";
 
+/// One entry of [`COMMAND_LIST`].
 pub struct Command {
     pub opcode: Opcode,
     /// The text of the command; every `{p}` (at the start of a word) is a parameter.
@@ -40,6 +46,7 @@ pub struct Command {
 }
 
 impl Command {
+    /// The number of parameters the command takes (0 to 2).
     pub fn used_parameters(&self) -> usize {
         self.allowed_param_types.len()
     }
@@ -48,12 +55,15 @@ impl Command {
 /// Defines [`Opcode`] and [`COMMAND_LIST`] (every command at the index of its opcode).
 macro_rules! commands {
     ($($(#[$doc:meta])* $op:ident => $pattern:literal, [$($ty:expr),*], $code:expr;)*) => {
+        /// A command, numbered by its position in [`COMMAND_LIST`].
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[repr(u8)]
         pub enum Opcode {
             $($(#[$doc])* $op,)*
         }
 
+        /// Every command at the index of its opcode. The parser tries the patterns in this
+        /// order and takes the first one that matches.
         pub static COMMAND_LIST: &[Command] = &[
             $(Command { opcode: Opcode::$op, pattern: $pattern, allowed_param_types: &[$($ty),*], code: $code },)*
         ];
@@ -122,10 +132,12 @@ commands! {
 }
 
 impl Opcode {
+    /// The command's entry in [`COMMAND_LIST`].
     pub fn command(self) -> &'static Command {
         &COMMAND_LIST[self as usize]
     }
 
+    /// Whether the command returns from a function (with or without setting `rax`).
     pub fn is_return(self) -> bool {
         matches!(self, Opcode::Return | Opcode::ReturnOne | Opcode::ReturnZero)
     }
@@ -146,7 +158,8 @@ pub enum Param {
     Reg(Reg),
     /// A decimal number and its source text (shown in diagnostics; bully mode cuts digits off).
     Decimal { value: i64, text: Vec<u8> },
-    /// A character with its value and C text (`'a'`, `'\n'`, `' '` or an ASCII code like `65`).
+    /// A character with its value and its text for gas: a character literal (`'a'`, `'\n'`,
+    /// `' '`) or an ASCII code like `65`.
     /// `verbatim`: gas reads `text` as `value` (not so for `'\v'`, `'\'` and ASCII codes with
     /// leading zeros, which gas reads as octal), so the `-S` text can show it.
     Char { value: u8, text: Vec<u8>, verbatim: bool },
@@ -155,8 +168,9 @@ pub enum Param {
 }
 
 impl Param {
-    /// The parameter as the C code had it in its string: shown in diagnostics and compared by
-    /// the analyser (function names with their `_` prefix on macOS).
+    /// The text of the parameter: shown in diagnostics and compared by the analyser (function
+    /// names with their `_` prefix on macOS). Registers give their name, characters their text
+    /// for gas, everything else the text from the source.
     pub fn text(&self, target: Target) -> Cow<'_, [u8]> {
         match self {
             Param::Raw { text, mangle } | Param::FuncName { name: text, mangle } => {
@@ -189,10 +203,12 @@ impl Param {
     }
 }
 
+/// A command of the program, normally one line of code. The parser fills it in, the analyser
+/// classifies the parameters and may exclude it from translation.
 #[derive(Debug, Clone)]
 pub struct ParsedCommand {
     pub opcode: Opcode,
-    /// `None` stands for a parameter slot the C code never initialised for this command.
+    /// `None` for each slot the command does not use.
     pub parameters: [Option<Param>; 2],
     /// The index of the parameter followed by "do you know de wey" (a pointer).
     pub pointer: Option<usize>,
@@ -206,7 +222,7 @@ impl ParsedCommand {
         ParsedCommand { opcode: Opcode::Invalid, parameters: [None, None], pointer: None, line_num, translate: true }
     }
 
-    /// The text of parameter `i` (see [`Param::text`]; an uninitialised slot reads as an empty
+    /// The text of parameter `i` (see [`Param::text`]; an unused slot reads as an empty
     /// string).
     pub fn param_text(&self, i: usize, target: Target) -> Cow<'_, [u8]> {
         match &self.parameters[i] {
@@ -215,6 +231,7 @@ impl ParsedCommand {
         }
     }
 
+    /// Whether parameter `i` is a pointer.
     pub fn is_pointer(&self, i: usize) -> bool {
         self.pointer == Some(i)
     }
@@ -227,9 +244,6 @@ impl ParsedCommand {
     /// In bully mode, a pointer operand gets a (random) operand size if nothing else determines
     /// it: for commands whose other operand gives the size, only if that operand is not a
     /// register; always for the one-operand commands that need a size.
-    ///
-    /// The C code checked `paramTypes[index + 1 % 2]` (= `paramTypes[index + 1]`, reading past
-    /// the array for the second parameter); this checks the other parameter, as intended.
     pub fn bully_pointer_needs_size(&self, index: usize) -> bool {
         match pointer_use(self.opcode, index) {
             PointerUse::Sized => !param_is_reg(self.param_type(1 - index)),
@@ -254,6 +268,7 @@ pub enum PointerUse {
     Unsupported,
 }
 
+/// How the generated code for `opcode` uses parameter `index` when it is a pointer.
 pub fn pointer_use(opcode: Opcode, index: usize) -> PointerUse {
     use Opcode::*;
     match (opcode, index) {

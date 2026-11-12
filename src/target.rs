@@ -1,7 +1,8 @@
-//! Target operating system. The original C compiler selected this at *build* time via
-//! `-D LINUX` / `-D MACOS` / `-D WINDOWS`. The Rust port keeps the host as the default but
-//! makes it a runtime value so that every target can be produced (and tested) from any host.
+//! Target operating system. It is chosen at run time with `--target` and defaults to the host,
+//! so every target can be produced (and tested) from any host. It decides the object format,
+//! symbol naming and the platform-specific parts of the generated code.
 
+/// The operating system the compiled program runs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Target {
     Linux,
@@ -11,8 +12,8 @@ pub enum Target {
 }
 
 impl Target {
-    /// The target matching the operating system this compiler was built for
-    /// (equivalent to the C build's platform macro).
+    /// The target matching the operating system this compiler was built for (Linux for any
+    /// OS other than Windows and macOS).
     pub fn host() -> Target {
         if cfg!(target_os = "windows") {
             Target::Windows

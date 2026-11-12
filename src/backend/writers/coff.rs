@@ -1,6 +1,13 @@
 //! COFF x86-64 relocatable objects (`pe-x86-64`), with the sections, symbols and relocations
 //! `x86_64-w64-mingw32-as` writes: section headers for `.text`/`.data`, then raw data,
 //! relocations, symbol table and string table.
+//!
+//! COFF relocations have implicit addends: the value already in the field is added to the
+//! target. PC-relative references within one section are resolved here and get no relocation.
+//! Other references to defined symbols point at the target section's symbol, with the symbol
+//! offset folded into the field; references to undefined symbols name the symbol. The symbol
+//! table lists the two section symbols (each with an auxiliary record), then local labels,
+//! globals and undefined symbols.
 use super::super::module::{ObjModule, Reloc, RelocKind};
 use super::{is_global, put_u32, symbol_groups, Le, StrTab};
 
@@ -25,6 +32,7 @@ const MAX_ALIGN: u64 = 8192;
 
 const SECTION_NAMES: [&str; 2] = [".text", ".data"];
 
+/// The `IMAGE_SCN_ALIGN_*` bits for a power-of-two alignment.
 fn align_flag(align: u64) -> u32 {
     (align.max(1).trailing_zeros() + 1) << 20
 }
@@ -50,6 +58,8 @@ fn name_field(name: &str, strtab: &mut StrTab) -> [u8; 8] {
     f
 }
 
+/// A COFF object for `m`; fails if a section alignment exceeds [`MAX_ALIGN`] or a resolved
+/// value or addend doesn't fit its 32-bit field.
 pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     for (i, s) in m.sections.iter().enumerate() {
         if s.align > MAX_ALIGN {

@@ -1,3 +1,5 @@
+//! PE: executables are inspected with mingw-w64 objdump and, when `MEMEASM_WINE` is set, run
+//! next to mingw-w64 gcc builds of the same fixture.
 use std::process::Command;
 
 use super::*;
@@ -14,6 +16,7 @@ fn wine_runner(exe: &Path) -> Option<Command> {
     Some(c)
 }
 
+/// `x86_64-w64-mingw32-objdump -p -h -d` of `exe`; stderr must be empty.
 fn objdump_p(exe: &Path) -> Option<String> {
     let objdump = need(tool(&["x86_64-w64-mingw32-objdump"]), "x86_64-w64-mingw32-objdump")?;
     let out = run_ok(Command::new(objdump).arg("-p").arg("-h").arg("-d").arg(exe));
@@ -58,7 +61,8 @@ fn pe_executable_structure() {
     assert_eq!(p.matches("call   *0x").count(), 2, "{p}");
 }
 
-/// Our executables behave like the original toolchain's (mingw gcc on the same assembly).
+/// Our executables behave like reference programs built by mingw-w64 gcc from the same
+/// fixture source: same exit code and stdout.
 #[test]
 fn pe_executables_match_reference() {
     let dir = scratch("pe_executables_match_reference");
@@ -108,6 +112,7 @@ fn pe_executable_args_and_alignment() {
     assert_eq!(code, 51, "argc + 40 + (rsp & 15) at main");
 }
 
+/// The hand-built module gives an image that prints "Hi\n" and exits with 7 (when it can run).
 #[test]
 fn pe_hand_built_hello_world() {
     let m = samples::hello_world_windows();
@@ -122,6 +127,8 @@ fn pe_hand_built_hello_world() {
     assert_eq!(code, 7);
 }
 
+/// Undefined symbols other than the supported kernel32 imports, and a missing `main`, are
+/// link errors.
 #[test]
 fn pe_reports_unresolved_symbols() {
     let mut m = samples::hello_world_windows();

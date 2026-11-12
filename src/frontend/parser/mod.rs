@@ -1,4 +1,6 @@
-//! Port of compiler/parser/parser.c
+//! The first stage of the pipeline: turns the text of one input file into its commands
+//! ([`file_parser`]) and splits them into functions ([`function_parser`]). The resulting
+//! [`File`] is then checked by the analyser and translated.
 
 pub mod file_parser;
 pub mod function_parser;

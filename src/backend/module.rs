@@ -16,6 +16,7 @@
 //! * Platform name mangling (the leading `_` on macOS) is already done in the assembly text by
 //!   the frontend (it passes `_main` etc. to the emitter); writers emit names verbatim.
 
+/// Index into [`ObjModule::symbols`].
 pub type SymbolId = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +25,7 @@ pub enum SectionKind {
     Data,
 }
 
+/// The contents of one section and the relocations against them.
 #[derive(Debug, Clone)]
 pub struct Section {
     pub kind: SectionKind,
@@ -47,6 +49,7 @@ pub enum RelocKind {
     Abs64,
 }
 
+/// A field the writer or linker must fill in; see the module docs for how its value is computed.
 #[derive(Debug, Clone)]
 pub struct Reloc {
     /// Offset of the relocated field inside its section.
@@ -62,6 +65,7 @@ pub enum Binding {
     Global,
 }
 
+/// A symbol table entry.
 #[derive(Debug, Clone)]
 pub struct Symbol {
     pub name: String,
@@ -92,9 +96,9 @@ pub struct DebugFunction {
     pub high: u64,
 }
 
-/// Source-level debug information for `-g` (replaces the original STABS). Writers turn it into
-/// DWARF sections (`.debug_info`, `.debug_abbrev`, `.debug_line`, strings inline) with the
-/// relocations the object format requires; executables get them resolved.
+/// Source-level debug information for `-g`. Writers turn it into DWARF sections (`.debug_info`,
+/// `.debug_abbrev`, `.debug_line`, strings inline) with the relocations the object format
+/// requires; executables get them resolved.
 #[derive(Debug, Clone, Default)]
 pub struct DebugInfo {
     /// Source files as written in the debug info (absolute paths; raw bytes, since paths need
@@ -108,6 +112,7 @@ pub struct DebugInfo {
     pub functions: Vec<DebugFunction>,
 }
 
+/// The assembled program: sections, symbol table and optional debug information.
 #[derive(Debug, Clone, Default)]
 pub struct ObjModule {
     pub sections: Vec<Section>,
@@ -117,6 +122,7 @@ pub struct ObjModule {
 }
 
 impl ObjModule {
+    /// The symbol named `name`, if any.
     pub fn symbol_by_name(&self, name: &str) -> Option<SymbolId> {
         self.symbols.iter().position(|s| s.name == name)
     }

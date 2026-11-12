@@ -71,6 +71,8 @@ pub enum Base {
     Abs,
 }
 
+/// A memory operand. `size` is the `... PTR` size; `None` lets the other operand (or the
+/// instruction) determine it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mem {
     pub size: Option<Size>,
@@ -78,6 +80,7 @@ pub struct Mem {
     pub disp: i64,
 }
 
+/// An operand of [`Emitter::insn`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operand {
     Reg(Reg),
@@ -95,11 +98,13 @@ pub enum Op {
     Ret, Nop, Hlt, Int3, Syscall, Rdrand,
 }
 
+/// Condition of a `jcc` (`E` and `Z` encode the same instruction).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cond {
     E, Z, G, L, Ge,
 }
 
+/// Target of [`Emitter::jump`] and [`Emitter::call`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BranchTarget {
     /// A named label/function (`.LUpgradeMarker_0`, `writechar`, `GetStdHandle`, user function),
@@ -112,12 +117,15 @@ pub enum BranchTarget {
     Local { n: u32, forward: bool },
 }
 
+/// The section [`Emitter::section`] switches to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SectionKind {
     Text,
     Data,
 }
 
+/// Collects the instructions, data, labels and line rows of `.text` and `.data` as they are
+/// generated; [`Emitter::finish`] lays them out and produces the [`ObjModule`].
 pub struct Emitter {
     target: Target,
     /// Current section (0 = .text, 1 = .data).
@@ -164,6 +172,7 @@ fn symbol_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '$'
 }
 
+/// A name gas accepts as an unquoted symbol.
 fn valid_symbol(name: &str) -> bool {
     !name.is_empty()
         && name.chars().all(symbol_char)
@@ -171,6 +180,8 @@ fn valid_symbol(name: &str) -> bool {
 }
 
 impl Emitter {
+    /// An empty module for `target`, which decides which labels are temporary and which
+    /// references are resolved without a relocation.
     pub fn new(target: Target) -> Emitter {
         Emitter {
             target,
@@ -275,7 +286,7 @@ impl Emitter {
         Ok(())
     }
 
-    // ---- -g debug info (DWARF, replaces STABS) ----
+    // ---- -g debug info (DWARF) ----
     /// Register a source file (absolute path, raw bytes as in the file system); returns its
     /// index for `debug_line`.
     pub fn debug_file(&mut self, path: &[u8]) -> usize {

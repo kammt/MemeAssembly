@@ -1,5 +1,19 @@
 //! Mach-O x86-64: `MH_OBJECT` files with the load commands the LLVM (Apple) assembler writes,
 //! and `MH_EXECUTE` images linked directly (dyld + libSystem, entry through `LC_MAIN`).
+//!
+//! Objects: header, one unnamed `LC_SEGMENT_64` holding `__TEXT,__text` and `__DATA,__data`
+//! back to back from address 0, `LC_BUILD_VERSION`, `LC_SYMTAB` and `LC_DYSYMTAB`, then
+//! section contents, relocations, symbols and strings. Mach-O relocations have implicit
+//! addends. References to temporary labels become non-extern (section-relative) relocations;
+//! all others are extern relocations against the symbol. 32-bit absolute references cannot
+//! be expressed and are rejected.
+//!
+//! Executables: `__PAGEZERO` (the low 4 GiB), `__TEXT` (headers and `__text`), `__DATA` (if
+//! `.data` is non-empty) and `__LINKEDIT` (rebase opcodes, export trie, function starts,
+//! symbols, strings). dyld calls `_main` through `LC_MAIN` and exits with its return value.
+//! [`link::link_program`] applies the relocations; nothing is bound from libSystem, so any
+//! undefined symbol is a link error. The image is PIE with every absolute pointer rebased,
+//! unless `__text` itself holds one.
 use super::super::module::{ObjModule, RelocKind};
 use super::{align_up, link, put_u64, symbol_groups, uleb, Le, StrTab};
 
@@ -61,6 +75,7 @@ const HEADER_SIZE: u64 = 32;
 const SEGMENT_CMD_SIZE: u64 = 72;
 const SECTION_HDR_SIZE: u64 = 80;
 
+/// The `mach_header_64`.
 fn header(out: &mut Vec<u8>, filetype: u32, ncmds: u32, sizeofcmds: u32, flags: u32) {
     out.u32(MH_MAGIC_64);
     out.u32(CPU_TYPE_X86_64);
@@ -72,6 +87,7 @@ fn header(out: &mut Vec<u8>, filetype: u32, ncmds: u32, sizeofcmds: u32, flags: 
     out.u32(0);
 }
 
+/// An `LC_SEGMENT_64` command with its section headers.
 struct SegmentCmd<'a> {
     name: &'a str,
     vmaddr: u64,
@@ -129,6 +145,7 @@ impl SegmentCmd<'_> {
     }
 }
 
+/// Section flags of module section `i`: `__text` is marked as containing instructions.
 fn section_flags(i: usize) -> u32 {
     if i == 0 {
         S_ATTR_PURE_INSTRUCTIONS | S_ATTR_SOME_INSTRUCTIONS
@@ -137,6 +154,7 @@ fn section_flags(i: usize) -> u32 {
     }
 }
 
+/// `LC_BUILD_VERSION` for macOS [`MIN_MACOS`] and SDK version `sdk`, without tool entries.
 fn build_version(out: &mut Vec<u8>, sdk: u32) {
     out.u32(LC_BUILD_VERSION);
     out.u32(24);
@@ -170,6 +188,7 @@ fn dysymtab_cmd(out: &mut Vec<u8>, nlocal: usize, nextdef: usize, nundef: usize)
     }
 }
 
+/// An `nlist_64` symbol table entry before its name is placed in the string table.
 struct Nlist {
     name: String,
     n_type: u8,
@@ -194,6 +213,7 @@ fn symtab_bytes(syms: &[Nlist]) -> (Vec<u8>, Vec<u8>) {
     (b, names.data)
 }
 
+/// A `relocation_info` record; `length` is log2 of the field size.
 fn reloc_entry(out: &mut Vec<u8>, address: u64, symbolnum: u32, pcrel: bool, length: u32, external: bool, ty: u32) {
     out.u32(address as u32);
     out.u32(symbolnum | (pcrel as u32) << 24 | length << 25 | (external as u32) << 27 | ty << 28);
@@ -201,6 +221,8 @@ fn reloc_entry(out: &mut Vec<u8>, address: u64, symbolnum: u32, pcrel: bool, len
 
 const ABS32_UNSUPPORTED: &str = "32-bit absolute addressing is not supported in 64-bit mode";
 
+/// An `MH_OBJECT` file for `m`; fails on 32-bit absolute references and on PC-relative
+/// values that don't fit their field.
 pub fn write_object(m: &ObjModule) -> Result<Vec<u8>, String> {
     // Object-file addresses: sections laid out back to back from 0.
     let sizes = [m.sections[0].data.len() as u64, m.sections[1].data.len() as u64];
@@ -439,6 +461,8 @@ fn uuid(bytes: &[u8]) -> [u8; 16] {
     u
 }
 
+/// A load command whose fixed part (`cmd`, `cmdsize`, `header_words`) is followed by the
+/// string `s`, NUL terminated and padded to 8 bytes.
 fn padded_cmd_string(out: &mut Vec<u8>, cmd: u32, header_words: &[u32], s: &str) {
     let fixed = 8 + 4 * header_words.len() as u64;
     let size = align_up(fixed + s.len() as u64 + 1, 8);
@@ -460,6 +484,8 @@ fn dylib_cmd_size() -> u64 {
     align_up(24 + LIBSYSTEM.len() as u64 + 1, 8)
 }
 
+/// An `MH_EXECUTE` image of `m` entered at `_main`; fails on undefined symbols, a missing
+/// global `_main`, 32-bit absolute references, or relocations that don't fit.
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     let text = &m.sections[0];
     let data = &m.sections[1];

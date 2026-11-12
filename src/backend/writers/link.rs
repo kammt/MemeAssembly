@@ -1,5 +1,10 @@
 //! The part of a static linker shared by the executable writers: given final addresses for
 //! the module's sections, resolve symbols and apply every relocation.
+//!
+//! Defined symbols resolve to their section's address plus offset. Undefined ones go through
+//! a writer-supplied callback (PE resolves its kernel32 imports this way; ELF and Mach-O know
+//! none). Values are computed with ELF semantics whatever the output format, and errors are
+//! collected and reported in ld's wording.
 use super::super::module::{Binding, ObjModule, RelocKind, Symbol, SymbolId};
 use super::{field_size, is_pcrel, put_u32, put_u64, section_name};
 
@@ -107,6 +112,7 @@ pub fn write_field(buf: &mut [u8], off: usize, kind: RelocKind, value: i128) -> 
     Ok(())
 }
 
+/// The ELF relocation type name used in diagnostics, for every output format.
 fn kind_name(kind: RelocKind) -> &'static str {
     match kind {
         RelocKind::Pc32 => "R_X86_64_PC32",

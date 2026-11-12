@@ -1,5 +1,6 @@
 //! Test helper: turns a GNU as ELF relocatable object back into an [`ObjModule`], so the
-//! writers can be checked against gas (and other assemblers) without the real assembler.
+//! writers can be fed the module gas assembled from a fixture, independently of this
+//! compiler's emitter, and their output compared with gas and the other assemblers.
 use crate::backend::module::*;
 
 fn u16_at(b: &[u8], o: usize) -> u16 {
@@ -25,6 +26,9 @@ struct Sh {
     align: u64,
 }
 
+/// Reads `.text`, `.data`, their symbols and their `.rela` relocations from an ELF object.
+/// Relocations against section symbols are turned back into references to temporary labels
+/// (`.Ltmp_<section>_<offset>`), as the emitter would produce for `.L` labels.
 pub fn import(b: &[u8]) -> ObjModule {
     assert_eq!(&b[..4], b"\x7fELF");
     assert_eq!(u16_at(b, 16), 1, "not a relocatable object");

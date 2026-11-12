@@ -1,4 +1,9 @@
-//! Port of compiler/analyser/{analyser,functions,jumpMarkers,comparisons,randomCommands}.c
+//! The checks between parsing and translation. Every command's parameters are classified and
+//! checked first ([`parameters`]); then the analyses across commands make sure that functions,
+//! jump markers and comparison labels are defined once and that calls and jumps have a target
+//! ([`helper`]). Finally the random choices the translator needs are made: where the "confused
+//! stonks" label goes and which lines "perfectly balanced" deletes. Bully mode reports none of
+//! these errors; it fixes the commands up or excludes them from translation instead.
 
 pub mod helper;
 pub mod parameters;
@@ -9,8 +14,9 @@ use super::random::Rng;
 use super::log::{print_debug, print_error, print_thanos_ascii};
 use helper::{check_companion_command_existence, check_duplicate_definition};
 
-/// Runs the parameter checks on every command and then the analyses (in the C code's order:
-/// by the opcode of the command each one belongs to).
+/// Runs the parameter checks on every command and then the analyses, ordered by the opcode of
+/// the commands each one is about. The order fixes the order of the error messages and of the
+/// random numbers drawn.
 pub fn analyse_commands(state: &mut CompileState) {
     let mut rng = Rng::default();
     let mut lists: Vec<Vec<CmdLoc>> = vec![Vec::new(); COMMAND_LIST.len()];
@@ -61,21 +67,29 @@ pub fn main_function_exists(state: &CompileState) -> bool {
     functions.any(|f| *f.commands[0].param_text(0, state.target) == *main_name)
 }
 
+/// Monke jump markers: a label name is defined once in the whole program, and every
+/// "return to monke" needs a marker with its name (in any file).
 fn analyse_monke_markers(markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
     check_duplicate_definition(markers, state, false, 1, "monke jump marker");
     check_companion_command_existence(jumps, markers, state, 1, false, "monke jump marker");
 }
 
+/// The parameterless jump markers ("upgrade", "banana"): at most one per file, and every jump
+/// needs the marker in its own file.
 fn analyse_jump_markers(markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
     check_duplicate_definition(markers, state, true, 0, "jump marker");
     check_companion_command_existence(jumps, markers, state, 0, true, "jump marker");
 }
 
+/// "who would win" comparisons: each "{p} wins" label is defined once per file, and both
+/// parameters of a comparison need a label with their text in the same file.
 fn analyse_who_would_win_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
     check_duplicate_definition(labels, state, true, 1, "comparison jump marker");
     check_companion_command_existence(comparisons, labels, state, 2, true, "comparison jump label");
 }
 
+/// "corporate needs you to find the difference": at most one "they're the same picture" label
+/// per file, and every comparison needs the label in its own file.
 fn analyse_theyre_the_same_picture_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
     check_duplicate_definition(labels, state, true, 0, "\"they're the same picture\"");
     check_companion_command_existence(comparisons, labels, state, 0, true, "\"they're the same picture\"");
@@ -106,7 +120,8 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
     let lines_to_be_deleted = loc - lines_to_be_kept;
     let mut lines: Vec<Vec<&mut ParsedCommand>> = state.files.iter_mut().map(File::lines_mut).collect();
     // In bully mode, lines may already be excluded from translation (e.g. duplicate jump
-    // markers). The C loop then never found enough lines and hung; stop once every line is gone.
+    // markers), so fewer lines than `lines_to_be_deleted` may be left. The loop stops once
+    // every line is excluded; it would never end otherwise.
     let deletable = lines.iter().flatten().filter(|c| c.translate).count();
 
     if perfectly_balanced_used > 0 {
@@ -120,8 +135,8 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
             let random_file = rng.below(lines.len());
             let file_loc = lines[random_file].len();
             if file_loc == 0 {
-                // A file without code (possible in bully mode) has no line to delete; the C code
-                // computed `rand() % 0` and crashed here. Draw another file instead.
+                // A file without code (possible in bully mode) has no line to delete, and
+                // `rng.below(0)` would panic: draw another file instead.
                 continue;
             }
             let random_line = rng.below(file_loc);
@@ -145,7 +160,7 @@ mod tests {
     #[test]
     fn perfectly_balanced_deletes_orphaned_lines() {
         // Bully mode moves orphaned lines into an injected function; deleting such a line must
-        // remove it from there (the C code deleted it from the file's array, without effect)
+        // exclude the command inside that function from translation
         let mut state = CompileState::new(Target::Linux);
         state.compile_mode = CompileMode::Bully;
         state.output_mode = OutputMode::AssemblyFile;

@@ -1,5 +1,7 @@
 //! Classifies the parameters of the commands and checks that they are allowed (bully mode
-//! replaces what is not).
+//! replaces what is not). This is the first step of the analyser: it turns the parser's
+//! [`Param::Raw`] text into typed parameters, checks two-parameter combinations, and rejects
+//! combinations that cannot be encoded as x86-64 instructions.
 
 use crate::backend::emitter::Reg;
 use crate::frontend::commands::*;
@@ -66,7 +68,8 @@ fn param_name(param_type: u8) -> &'static str {
     PARAM_NAMES.get(param_type.trailing_zeros() as usize).copied().unwrap_or("invalid")
 }
 
-/// The registers of each size in the C code's order, from which bully mode picks by index.
+/// The registers of each size, in the order from which bully mode picks by index (changing the
+/// order changes the code bully mode generates).
 const REGISTERS: [(u8, &[&str]); 4] = [
     (PARAM_REG64, &["rax", "rbx", "rcx", "rdx", "rdi", "rsi", "rsp", "rbp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]),
     (PARAM_REG32, &["eax", "ebx", "ecx", "edx", "edi", "esi", "esp", "ebp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"]),
@@ -117,10 +120,9 @@ fn random_decimal(computed_index: u64, modulus: u32) -> Param {
     decimal(((computed_index as u32) % modulus).to_string().into_bytes())
 }
 
-/// Bully mode: cut the decimal parameter off after `cut` digits, and further until it is a
-/// sign-extended 32 bit number. (The C code wrote a NUL at index `computedIndex % 32`, out of
-/// bounds when the number is shorter, and kept numbers that were still too large, which gas
-/// then rejected.)
+/// Bully mode: cut the text of the decimal parameter off after `cut` bytes (no change if it is
+/// shorter), then drop further trailing digits until it is a sign-extended 32 bit number, so
+/// that the instruction can be encoded.
 fn shorten_decimal(param: &mut Option<Param>, cut: usize) {
     if let Some(Param::Decimal { value, text }) = param {
         text.truncate(cut);
@@ -139,6 +141,7 @@ enum Class {
     Invalid,
 }
 
+/// `text` as a register of one of the `allowed` types (names are lowercase only).
 fn as_register(text: &[u8], allowed: u8) -> Option<Param> {
     // (`Reg::parse` ignores the case, the parameters do not)
     let reg = Reg::parse(std::str::from_utf8(text).ok()?).filter(|r| r.name().as_bytes() == text)?;
@@ -146,6 +149,8 @@ fn as_register(text: &[u8], allowed: u8) -> Option<Param> {
     (allowed & param.param_type() != 0).then_some(param)
 }
 
+/// `text` as a character: an escape sequence from [`ESCAPE_SEQUENCES`], a single byte, or an
+/// ASCII code from 0 to 255.
 fn as_char(text: &[u8]) -> Option<Param> {
     if let Some(&(_, literal, value)) = ESCAPE_SEQUENCES.iter().find(|(e, _, _)| e.as_bytes() == text) {
         // gas has no `\v` escape and reads 'v'
@@ -162,10 +167,12 @@ fn as_char(text: &[u8]) -> Option<Param> {
     Some(Param::Char { value: value as u8, text: text.to_vec(), verbatim })
 }
 
+/// A monke jump marker name: only `a` and `u`, at least one of each.
 fn is_monke_label(text: &[u8]) -> bool {
     text.iter().all(|c| matches!(c, b'a' | b'u')) && text.contains(&b'a') && text.contains(&b'u')
 }
 
+/// A function name: ASCII letters, digits, `_`, `$` and `.`, not starting with a digit.
 fn is_function_name(text: &[u8]) -> bool {
     let valid = |c: &u8| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'$' | b'.');
     text.first().is_some_and(|c| !c.is_ascii_digit()) && text.iter().all(valid)
@@ -345,14 +352,16 @@ fn check_combination(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mu
                 let (number, register) = (cmd.param_text(decimal_index, target), cmd.param_text(reg_index, target));
                 let (bits, size) = (bits_needed.to_string(), reg_size.to_string());
                 let message = format_c(format, &[&number, bits.as_bytes(), &register, size.as_bytes()]);
-                // (the C code passed 3 as the argument count)
+                // The obfuscated-mode key uses an argument count of 3 although the format
+                // has 4 arguments. The key only selects which fake message obfuscated mode
+                // prints; a different count would select a different one.
                 print_error_with_key(state, input_file_name, line, ErrorKey::new(format, 3), &message);
             }
         } else if cmd.opcode != Opcode::Mov && reg_size == 64 && !fits_sign_extended_32(number) {
             if state.bully() {
                 // We just make the number shorter than 32 bits :bigBrain:
                 shorten_decimal(&mut cmd.parameters[decimal_index], (state.computed_index % 32) as usize);
-                // Also, change computedIndex. Just because
+                // Also, change `computed_index`. Just because
                 state.computed_index = state.computed_index.wrapping_add((number & 0xFFF) as u64);
             } else {
                 print_error(state, input_file_name, line, "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits");
@@ -386,7 +395,10 @@ fn check_combination(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mu
     }
 }
 
-/// Combinations the C compiler accepted, but that can't be assembled.
+/// Reports what passes the checks above but can't be encoded as x86-64 instructions: a pointer
+/// the generated code can't use, a pointer operand of unknown size, ah/bh/ch/dh combined with a
+/// register that needs a REX prefix, and (`push_too_large`) a pushed number that is no
+/// sign-extended 32 bit immediate. Bully mode fixes these up instead.
 fn check_encodable(cmd: &ParsedCommand, input_file_name: &[u8], state: &mut CompileState, push_too_large: bool) {
     let line = cmd.line_num;
     if let Some(problem) = pointer_problem(cmd) {
@@ -406,8 +418,8 @@ fn check_encodable(cmd: &ParsedCommand, input_file_name: &[u8], state: &mut Comp
     }
 }
 
-/// Checks if the given parsed command adheres to the parameter constraints (i.e. the parameters
-/// are legal).
+/// Classifies the parameters of the command at `loc` and checks that they and their combination
+/// are legal. Errors are reported; bully mode fixes the command up instead.
 pub fn check_parameters(loc: CmdLoc, input_file_name: &[u8], state: &mut CompileState) {
     // (a copy, as reporting an error needs the state)
     let mut cmd = state.cmd(loc).clone();
@@ -415,6 +427,8 @@ pub fn check_parameters(loc: CmdLoc, input_file_name: &[u8], state: &mut Compile
     *state.cmd_mut(loc) = cmd;
 }
 
+/// Classifies and checks each parameter, then their combination, then whether the command can
+/// be encoded. The encoding check only runs if the earlier checks found no error for it.
 fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut CompileState) {
     let used_parameters = cmd.opcode.command().used_parameters();
     let errors_before = state.compiler_errors;
@@ -455,6 +469,7 @@ enum PointerProblem {
     Unsupported,
 }
 
+/// Why the pointer parameter of `cmd` (if any) can't be used.
 fn pointer_problem(cmd: &ParsedCommand) -> Option<PointerProblem> {
     let index = cmd.pointer?;
     if !matches!(cmd.param_type(index), PARAM_REG64 | PARAM_REG32) {

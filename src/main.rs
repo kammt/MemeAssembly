@@ -1,4 +1,6 @@
-//! The MemeAssembly compiler (port of compiler/memeasm.c).
+//! The `memeasm` executable: parses the command line, turns the options into a
+//! `CompileState`, reads and parses every input file and hands the result to
+//! `frontend::compile`, which analyses it and writes the requested output.
 
 mod backend;
 mod frontend;
@@ -42,6 +44,7 @@ fn print_help_page(program_name: &str, target: Target) {
     ));
 }
 
+/// The raw bytes of a command line argument (lossily converted to UTF-8 on non-Unix hosts).
 fn os_to_bytes(s: &OsString) -> Vec<u8> {
     #[cfg(unix)]
     {

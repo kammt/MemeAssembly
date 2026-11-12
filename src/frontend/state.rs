@@ -3,6 +3,7 @@
 use super::commands::ParsedCommand;
 use crate::target::Target;
 
+/// A parsed function.
 #[derive(Debug, Clone)]
 pub struct Function {
     /// The definition (`commands[0]`, which holds the name) and the rest of the function.
@@ -24,8 +25,10 @@ impl Function {
     }
 }
 
+/// A parsed input file.
 #[derive(Debug, Clone)]
 pub struct File {
+    /// The name as given on the command line.
     pub file_name: Vec<u8>,
     /// lines of code
     pub loc: usize,
@@ -33,7 +36,8 @@ pub struct File {
     /// Commands outside of any function (an error; bully mode puts them into injected
     /// functions instead).
     pub orphans: Vec<ParsedCommand>,
-    /// A variable necessary for the "confused stonks" command
+    /// The line of code that the "confused stonks" command jumps to, chosen at random by the
+    /// analyser.
     pub random_index: usize,
 }
 
@@ -47,6 +51,8 @@ impl File {
     }
 }
 
+/// `--compile-mode`: `noob` reports errors, `bully` replaces invalid code with something valid
+/// instead of reporting it, `obfuscated` reports errors with made-up messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum CompileMode {
     Noob,
@@ -54,6 +60,8 @@ pub enum CompileMode {
     Obfuscated,
 }
 
+/// What [`compile`](super::compile) writes: an executable, `-S` assembly text or a `-O` object
+/// file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputMode {
     Executable,
@@ -61,15 +69,15 @@ pub enum OutputMode {
     ObjectFile,
 }
 
+/// Whether debug messages (`-d`) are printed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
     Normal,
     Debug,
 }
 
-/// `optimisationLevel` values. In the C enum `o_s` followed `o_3 = -3` and therefore had the
-/// value -2 (the same as `o_2`), so `-O-2` and `-O-s` both did both things. Here they are
-/// distinct, as the help page describes them.
+/// Values of [`CompileState::optimisation_level`], one per `--opt-level`. Each has its own value,
+/// so `-O-2` and `-O-s` select only the behaviour the help page describes for them.
 pub const OPT_NONE: i64 = 0;
 pub const OPT_1: i64 = -1;
 pub const OPT_2: i64 = -2;
@@ -85,18 +93,21 @@ pub struct CmdLoc {
     pub k: usize,
 }
 
+/// Everything the compiler knows: the options, the parsed files and the error count. Parsing
+/// fills it, the analyser checks and amends it, and code generation reads it.
 pub struct CompileState {
     pub compile_mode: CompileMode,
     pub output_mode: OutputMode,
     pub files: Vec<File>,
-    /// `-g`: emit debug information (DWARF; the C compiler wrote STABS).
+    /// `-g`: emit DWARF debug information.
     pub use_debug_info: bool,
     pub martyrdom: bool,
     pub optimisation_level: i64,
     pub compiler_errors: u32,
     pub log_level: LogLevel,
     pub target: Target,
-    /// The C global `computedIndex` used for bully-mode pseudo-randomness.
+    /// Deterministic pseudo-random state for bully mode: starts at 69 and is mixed with the
+    /// invalid source text it replaces, so the same program is always compiled the same way.
     pub computed_index: u64,
 }
 
@@ -116,10 +127,12 @@ impl CompileState {
         }
     }
 
+    /// Whether bully mode is active.
     pub fn bully(&self) -> bool {
         self.compile_mode == CompileMode::Bully
     }
 
+    /// The command at `l`.
     pub fn cmd(&self, l: CmdLoc) -> &ParsedCommand {
         &self.files[l.file].functions[l.func].commands[l.k]
     }
