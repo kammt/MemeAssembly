@@ -121,7 +121,7 @@ emulation is gone. Old → new spelling:
 | `-o <file>` | `-o <file>`, `--output <file>` |
 | `-S` | `-S`, `--assembly` |
 | `-O` | `-O`, `--object` |
-| `-O-1`, `-O-2`, `-O-3`, `-O-s`, `-O69420` | `--opt-level=-1`, `=-2`, `=-3`, `=-s`, `=69420` (also `--opt-level -1`) |
+| `-O-1`, `-O-2`, `-O-3`, `-O-s`, `-O69420` | unchanged, or `--opt-level=-1`, `=-2`, `=-3`, `=-s`, `=69420` (also `--opt-level -1`) |
 | `-fcompile-mode <mode>` / `-fcompile-mode=<mode>` | `--compile-mode <mode>` / `--compile-mode=<mode>` (`noob`, `bully`, `obfuscated`; default `noob`) |
 | `-fno-martyrdom` | `--no-martyrdom` |
 | (none: one C build per OS) | `--target <linux\|macos\|windows>` (default: the host OS) |
@@ -137,10 +137,11 @@ operating system at run time.
 
 What changed beyond the spelling:
 
-1. **Removed spellings.** `-O-1` … `-O69420`, `-fcompile-mode`, `-fno-martyrdom`, single-dash
-   long options (`-help`, `-output`) and abbreviations of long options (`-fc`, `--comp`) are
-   gone. `-O` is only the object-file flag: `-O-1` is now the error
-   `unexpected argument '--' found`.
+1. **Removed spellings.** `-fcompile-mode`, `-fno-martyrdom`, single-dash long options
+   (`-help`, `-output`) and abbreviations of long options (`-fc`, `--comp`) are gone. The
+   optimisation levels keep their C spelling: before clap sees the command line, the exact
+   arguments `-O-1`, `-O-2`, `-O-3`, `-O-s` and `-O69420` (not after `--`) are rewritten to
+   `--opt-level=…`. Other `-O…` forms (`-O-7`, `-gO-1`) are clap errors.
 2. **All argument errors come from clap** and are found before anything is acted on: unknown
    options, missing values (`-S -o`), invalid values (`--compile-mode foo`,
    `--opt-level=-7`, `--target amiga`, listing the possible values) and conflicts. They are
@@ -161,7 +162,7 @@ What changed beyond the spelling:
    not honoured.
 6. **Help page:** same layout and exit code 0, with these lines changed: the usage lines say
    `inputFile...` (several files) and `(-v | --version)`, the optimisation lines read
-   `--opt-level=-1` … `--opt-level=69420`, then
+   `-O-1, --opt-level=-1` … `-O69420, --opt-level=69420`, then
    ` --compile-mode=<noob|bully|obfuscated> - Change the compile mode (default: noob)`,
    the `-g` line mentions DWARF (see above), ` --no-martyrdom`, the `[-d]` usage fix (#10)
    and the new last line

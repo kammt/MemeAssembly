@@ -85,6 +85,24 @@ pub enum OptLevel {
     Max,
 }
 
+/// Rewrites the C spellings `-O-1`, `-O-2`, `-O-3`, `-O-s` and `-O69420` (an attached value
+/// clap can't express next to the `-O` flag) to `--opt-level=…`, up to a `--`.
+pub fn legacy_opt_args(args: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
+    let mut options_ended = false;
+    args.into_iter()
+        .map(|arg| match arg.to_str() {
+            Some("--") => {
+                options_ended = true;
+                arg
+            }
+            Some(text @ ("-O-1" | "-O-2" | "-O-3" | "-O-s" | "-O69420")) if !options_ended => {
+                format!("--opt-level={}", &text[2..]).into()
+            }
+            _ => arg,
+        })
+        .collect()
+}
+
 /// The `optimisation_level` of an optional `--opt-level`.
 pub fn optimisation_level(level: Option<OptLevel>) -> i64 {
     match level {
@@ -144,6 +162,25 @@ mod tests {
             assert_eq!(optimisation_level(parse(&[&attached]).unwrap().opt_level), level);
         }
         assert_eq!(parse(&["--opt-level=-4"]).unwrap_err().kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn legacy_opt_spellings() {
+        let legacy = |args: &[&str]| {
+            let args = legacy_opt_args(std::iter::once("memeasm").chain(args.iter().copied()).map(OsString::from));
+            Cli::try_parse_from(args)
+        };
+        for (value, level) in [("-O-1", OPT_1), ("-O-2", OPT_2), ("-O-3", OPT_3), ("-O-s", OPT_S), ("-O69420", OPT_69420)] {
+            let cli = legacy(&["-S", value, "in"]).unwrap();
+            assert_eq!(optimisation_level(cli.opt_level), level);
+            assert!(!cli.object);
+        }
+        let cli = legacy(&["-O", "-O-1", "in"]).unwrap();
+        assert!(cli.object && optimisation_level(cli.opt_level) == OPT_1);
+        // after `--` it is an input file
+        assert_eq!(legacy(&["--", "-O-1"]).unwrap().files, ["-O-1"]);
+        assert_eq!(legacy(&["--", "-O-1", "--"]).unwrap().files, ["-O-1", "--"]);
+        assert!(legacy(&["-O-4"]).is_err());
     }
 
     #[test]

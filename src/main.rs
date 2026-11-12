@@ -27,11 +27,11 @@ fn print_help_page(program_name: &str, target: Target) {
     out_str(&format!(" {p} (-h | --help)\t\t\t\t\t\tDisplays this help page\n"));
     out_str(&format!(" {p} (-v | --version)\t\t\t\t\tPrints version information\n\n"));
     out_str("Compiler options:\n");
-    out_str(" --opt-level=-1 \t- reverse optimisation stage 1: A nop is inserted after every command\n");
-    out_str(" --opt-level=-2 \t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
-    out_str(" --opt-level=-3 \t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
-    out_str(" --opt-level=-s \t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
-    out_str(" --opt-level=69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
+    out_str(" -O-1, --opt-level=-1 \t- reverse optimisation stage 1: A nop is inserted after every command\n");
+    out_str(" -O-2, --opt-level=-2 \t- reverse optimisation stage 2: A register is moved to and from the Stack after every command\n");
+    out_str(" -O-3, --opt-level=-3 \t- reverse optimisation stage 3: A xmm-register is moved to and from the Stack using movups after every command\n");
+    out_str(" -O-s, --opt-level=-s \t- reverse storage optimisation: Intentionally increases the file size by aligning end of the compiled Assembly-code to 536870912B\n");
+    out_str(" -O69420, --opt-level=69420 \t- maximum optimisation. Reduces the execution to close to 0s by optimising out your entire code\n");
     out_str(" --compile-mode=<noob|bully|obfuscated> - Change the compile mode (default: noob)\n");
     out_str(" -g \t\t\t- write debug info into the compiled file. Currently, only the DWARF format is supported (Linux-only)\n");
     out_str(" --no-martyrdom \t- Disables martyrdom\n");
@@ -55,7 +55,7 @@ fn os_to_bytes(s: &OsString) -> Vec<u8> {
 }
 
 fn main() {
-    let args: Vec<OsString> = std::env::args_os().collect();
+    let args = frontend::cli::legacy_opt_args(std::env::args_os());
     let program_name = args.first().map(os_to_bytes).unwrap_or_default();
     let program_name_str = String::from_utf8_lossy(&program_name).into_owned();
 
