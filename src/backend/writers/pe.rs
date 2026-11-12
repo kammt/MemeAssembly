@@ -11,13 +11,14 @@
 //!
 //! Undefined symbols may only name the kernel32 functions MemeAssembly programs use: a call
 //! to `X` goes through a `jmp [rip + __imp_X]` thunk, `__imp_X` is the IAT slot itself.
-use super::super::fadec::*;
-use super::super::module::{Binding, ObjModule};
+use super::super::emitter::x86::{encode_indirect, BranchKind};
+use super::super::emitter::{Op, Operand, Size};
+use super::super::module::ObjModule;
 use super::coff::{
     IMAGE_FILE_MACHINE_AMD64, IMAGE_SCN_CNT_CODE, IMAGE_SCN_CNT_INITIALIZED_DATA, IMAGE_SCN_MEM_EXECUTE,
     IMAGE_SCN_MEM_READ, IMAGE_SCN_MEM_WRITE,
 };
-use super::{align_up, link, put_u32, Asm, Le};
+use super::{align_up, link, mem, put_u32, reg, rip, Asm, Le};
 
 const IMAGE_BASE: u64 = 0x1_4000_0000;
 const SECTION_ALIGN: u64 = 0x1000;
@@ -59,38 +60,23 @@ fn entry_stub() -> (Vec<u8>, usize, usize, usize) {
     let mut a = Asm::new();
     // On entry rsp = 8 (mod 16); 72 bytes realign it and hold the shadow space (32), the 5th
     // argument (8), argc/argv/envp (24) and _startupinfo (4).
-    a.ins(FE_SUB64ri, &[FE_SP, 72]);
-    a.ins(FE_LEA64rm, &[FE_CX, mem(FE_SP, 0, FE_NOREG, 40)]); // &argc
-    a.ins(FE_LEA64rm, &[FE_DX, mem(FE_SP, 0, FE_NOREG, 48)]); // &argv
-    a.ins(FE_LEA64rm, &[FE_R8, mem(FE_SP, 0, FE_NOREG, 56)]); // &envp
-    a.ins(FE_XOR32rr, &[FE_R9, FE_R9]); // no wildcard expansion
-    a.ins(FE_MOV32mi, &[mem(FE_SP, 0, FE_NOREG, 64), 0]); // _startupinfo.newmode = 0
-    a.ins(FE_LEA64rm, &[FE_AX, mem(FE_SP, 0, FE_NOREG, 64)]);
-    a.ins(FE_MOV64mr, &[mem(FE_SP, 0, FE_NOREG, 32), FE_AX]);
-    let getmainargs = a.rip_placeholder(FE_CALLm, &[0], 0);
-    a.ins(FE_MOV32rm, &[FE_CX, mem(FE_SP, 0, FE_NOREG, 40)]);
-    a.ins(FE_MOV64rm, &[FE_DX, mem(FE_SP, 0, FE_NOREG, 48)]);
-    a.ins(FE_MOV64rm, &[FE_R8, mem(FE_SP, 0, FE_NOREG, 56)]);
-    let main = a.branch_placeholder(FE_CALL);
-    a.ins(FE_MOV32rr, &[FE_CX, FE_AX]);
-    let exit = a.rip_placeholder(FE_CALLm, &[0], 0);
-    a.ins(FE_INT3, &[]);
+    a.ins(Op::Sub, &[reg("rsp"), Operand::Imm(72)]);
+    a.ins(Op::Lea, &[reg("rcx"), mem(None, "rsp", 40)]); // &argc
+    a.ins(Op::Lea, &[reg("rdx"), mem(None, "rsp", 48)]); // &argv
+    a.ins(Op::Lea, &[reg("r8"), mem(None, "rsp", 56)]); // &envp
+    a.ins(Op::Xor, &[reg("r9d"), reg("r9d")]); // no wildcard expansion
+    a.ins(Op::Mov, &[mem(Some(Size::Dword), "rsp", 64), Operand::Imm(0)]); // _startupinfo.newmode = 0
+    a.ins(Op::Lea, &[reg("rax"), mem(None, "rsp", 64)]);
+    a.ins(Op::Mov, &[mem(None, "rsp", 32), reg("rax")]);
+    let getmainargs = a.put(encode_indirect(BranchKind::Call, &rip(None, ""))).unwrap();
+    a.ins(Op::Mov, &[reg("ecx"), mem(None, "rsp", 40)]);
+    a.ins(Op::Mov, &[reg("rdx"), mem(None, "rsp", 48)]);
+    a.ins(Op::Mov, &[reg("r8"), mem(None, "rsp", 56)]);
+    let main = a.call_rel32();
+    a.ins(Op::Mov, &[reg("ecx"), reg("eax")]);
+    let exit = a.put(encode_indirect(BranchKind::Call, &rip(None, ""))).unwrap();
+    a.ins(Op::Int3, &[]);
     (a.code, main, getmainargs, exit)
-}
-
-/// PE image checksum (as computed by `CheckSumMappedFile`).
-fn checksum(image: &[u8], checksum_offset: usize) -> u32 {
-    let mut sum: u64 = 0;
-    for (i, c) in image.chunks(2).enumerate() {
-        if i * 2 == checksum_offset || i * 2 == checksum_offset + 2 {
-            continue;
-        }
-        let w = c[0] as u64 | (c.get(1).copied().unwrap_or(0) as u64) << 8;
-        sum += w;
-        sum = (sum & 0xffff) + (sum >> 16);
-    }
-    sum = (sum & 0xffff) + (sum >> 16);
-    (sum as u32) + image.len() as u32
 }
 
 /// `jmp`/`call` targets are 32-bit displacements from the end of the field.
@@ -126,10 +112,6 @@ fn base_relocations(sites: &[u64], first_page: u64) -> Vec<u8> {
 }
 
 pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
-    let main = m
-        .symbol_by_name("main")
-        .filter(|&id| m.symbols[id].definition.is_some() && m.symbols[id].binding == Binding::Global);
-
     // Imports: everything the module references, plus the stub's.
     let mut imports: Vec<Import> = Vec::new();
     let mut direct: Vec<String> = Vec::new();
@@ -170,7 +152,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         if direct.contains(&imp.name) {
             thunks.code.resize(align_up(thunks.code.len() as u64, 8) as usize, 0xcc);
             let at = thunks.code.len() as u64;
-            let field = thunks.rip_placeholder(FE_JMPm, &[0], 0);
+            let field = thunks.put(encode_indirect(BranchKind::Jmp, &rip(None, ""))).unwrap();
             imp.thunk = Some(stub_off + stub.len() as u64 + at);
             thunk_fields.push(field);
         }
@@ -243,26 +225,14 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
             imp.thunk.map(|t| IMAGE_BASE + text_rva + t)
         }
     };
-    let linked = link::relocate(m, &addrs, &resolve);
-    let mut errors = Vec::new();
-    if let Err(e) = &linked {
-        errors.push(e.clone());
-    }
-    if main.is_none() {
-        errors.push(link::missing_entry("main"));
-    }
-    if !errors.is_empty() {
-        return Err(errors.join("\n"));
-    }
-    // (32-bit absolute relocations fail above: the image base is above 4 GiB, as with ld.
+    // (32-bit absolute relocations fail here: the image base is above 4 GiB, as with ld.
     // They couldn't be rebased either.)
-    let linked = linked.expect("checked above");
+    let (linked, main_addr) = link::link_program(m, "main", link::NO_MAIN, &addrs, &resolve)?;
 
     // Patch the stub and thunks.
     let slot_of = |n: &str| imports.iter().find(|i| i.name == n).expect("stub import").slot;
     let stub_rva = text_rva + stub_off;
-    let (msec, moff) = m.symbols[main.expect("checked above")].definition.expect("defined");
-    let main_rva = [text_rva, data_rva][msec] + moff;
+    let main_rva = main_addr - IMAGE_BASE;
     let patch = |code: &mut Vec<u8>, base_rva: u64, field: usize, target_rva: u64| -> Result<(), String> {
         let b = rel32(base_rva + field as u64, target_rva)?;
         code[field..field + 4].copy_from_slice(&b);
@@ -337,8 +307,7 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
     out.u32(0); // Win32VersionValue
     out.u32(image_size as u32);
     out.u32(headers_size as u32);
-    let checksum_offset = out.len();
-    out.u32(0); // CheckSum, filled in below
+    out.u32(0); // CheckSum (only checked for drivers and system DLLs)
     out.u16(IMAGE_SUBSYSTEM_WINDOWS_CUI);
     out.u16(IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA | IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE | IMAGE_DLLCHARACTERISTICS_NX_COMPAT);
     out.u64(0x20_0000); // stack reserve
@@ -377,7 +346,5 @@ pub fn write_executable(m: &ObjModule) -> Result<Vec<u8>, String> {
         out.extend_from_slice(bytes);
     }
     out.pad_to(file_pos, 0);
-    let sum = checksum(&out, checksum_offset);
-    put_u32(&mut out, checksum_offset, sum);
     Ok(out)
 }

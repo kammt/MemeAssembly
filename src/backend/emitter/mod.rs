@@ -1,24 +1,19 @@
 //! Direct code generation: the translator drives an [`Emitter`] with typed instructions, which
-//! are encoded with fadec into an [`ObjModule`]. No assembly text is produced or parsed on this
-//! path – the `-S` text output is generated separately by the translator.
+//! are encoded (`x86.rs`) into an [`ObjModule`]. No assembly text is produced or parsed on this
+//! path – for `-S`, the translator drives a text printer with the same calls instead.
 //!
-//! OWNED BY: the encoder agent (implementation). The *public API* below is the contract with the
-//! frontend; extend it additively if needed, but do not change existing signatures without
-//! coordinating.
-//!
-//! Semantics must match what GNU as would have produced from the equivalent `-S` text (the
-//! reference compiler pipes that text into gas): same instruction forms (aim for byte-identical
-//! encodings incl. short/near jump relaxation), same acceptance/rejection of operand
-//! combinations (e.g. ambiguous memory operand size, size mismatches, immediates out of range)
-//! – errors are returned as `Err(String)` with a gas-like message.
-// Until the translator drives the emitter, most of the API is unused in the binary.
-#![allow(dead_code)]
+//! The result matches what GNU as produces from the equivalent `-S` text: the same instruction
+//! encodings, short/near jump relaxation, relocations and symbols. Operand combinations the
+//! translator never produces are rejected with an internal error; the errors real programs can
+//! reach (a symbol defined twice, a section alignment COFF can't represent) have gas's message.
 
-mod encode;
 mod layout;
 mod regs;
 #[cfg(test)]
 mod tests;
+pub(crate) mod x86;
+#[cfg(test)]
+mod x86_tests;
 
 use std::collections::HashMap;
 
@@ -43,9 +38,13 @@ pub enum Reg {
 
 impl Reg {
     /// Parse a register name exactly as gas would accept it in the generated text
-    /// (`rax`, `r8d`, `spl`, `ah`, ...). Implemented by the encoder agent.
+    /// (`rax`, `r8d`, `spl`, `ah`, ..., case-insensitive).
     pub fn parse(name: &str) -> Option<Reg> {
         regs::parse(name)
+    }
+    /// The register's (lower case) name.
+    pub fn name(self) -> String {
+        regs::name(self)
     }
 }
 
@@ -56,8 +55,6 @@ pub enum Size {
     Word,
     Dword,
     Qword,
-    /// `XMMWORD PTR` – only for completeness; the translator never writes it.
-    Xmmword,
 }
 
 /// Base of a memory operand.
@@ -84,8 +81,6 @@ pub struct Mem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operand {
     Reg(Reg),
-    /// Immediate exactly as gas would see the number (`0x...` from `%llX`, chars `'a'`/`'\n'`
-    /// already converted to their value by the frontend).
     Imm(i64),
     Mem(Mem),
 }
@@ -95,26 +90,24 @@ pub enum Operand {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Op {
     Mov, Movups, Lea, Push, Pop,
-    Add, Sub, And, Xor, Cmp, Test, Not, Inc, Dec,
+    Add, Sub, And, Xor, Cmp, Test, Not,
     Shl, Shr, Imul, Idiv, Cqo,
     Ret, Nop, Hlt, Int3, Syscall, Rdrand,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cond {
-    E, Ne, Z, Nz, G, L, Ge, Le, A, B,
+    E, Z, G, L, Ge,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BranchTarget {
-    /// A named label/function (`.LUpgradeMarker_0`, `writechar`, `GetStdHandle`, user function).
+    /// A named label/function (`.LUpgradeMarker_0`, `writechar`, `GetStdHandle`, user function),
+    /// taken verbatim (`$` or `rax` are ordinary symbol names here).
     /// Undefined names become undefined globals with a Branch32 reloc (like gas). Branches to
     /// defined symbols are resolved or keep a Branch32 reloc per object format (ELF: calls to
     /// global symbols; Mach-O: anything outside the current atom); see `layout::finish`.
     Symbol(String),
-    /// A quoted symbol name (gas `call "$"`): taken verbatim, without char-constant
-    /// substitution or register/`$` interpretation. Otherwise like `Symbol`.
-    Quoted(String),
     /// Numeric local label reference `Nf` (forward = true) / `Nb`.
     Local { n: u32, forward: bool },
 }
@@ -210,17 +203,13 @@ impl Emitter {
     /// the output if it is referenced.
     pub fn extern_symbol(&mut self, _name: &str) {}
 
-    /// `name:` – errors on redefinition like gas ("symbol `x' is already defined").
-    ///
-    /// `name` is taken as gas would read it from the `-S` text: character constants are
-    /// converted to numbers first (`.L'a'Wins_0` is the label `.L97Wins_0`). gas tolerates a
-    /// second definition at exactly the same position.
+    /// `name:` – errors on redefinition like gas ("symbol `x' is already defined"). gas
+    /// tolerates a second definition at exactly the same position.
     pub fn label(&mut self, name: &str) -> Result<(), String> {
-        let name = &char_constants(name);
         if !valid_symbol(name) {
-            return Err(layout::bad_label_message(name));
+            return Err(format!("internal error: invalid label name `{name}'"));
         }
-        if matches!(name.as_str(), ".text" | ".data" | ".bss") && self.target != Target::Windows {
+        if matches!(name, ".text" | ".data" | ".bss") && self.target != Target::Windows {
             return Err(format!("symbol `{name}' is already defined"));
         }
         let id = self.sym(name);
@@ -243,7 +232,7 @@ impl Emitter {
     }
     /// A non-branch instruction with gas Intel-syntax operand order (destination first).
     pub fn insn(&mut self, op: Op, ops: &[Operand]) -> Result<(), String> {
-        let e = encode::encode(op, ops)?;
+        let e = x86::encode(op, ops)?;
         let mut fixups = Vec::new();
         if let Some((field, sym, disp)) = e.rip {
             let id = self.sym_ref(&sym)?;
@@ -255,14 +244,14 @@ impl Emitter {
     /// `jmp target` (cond = None) or `jcc target`. Relaxed short/near like gas.
     pub fn jump(&mut self, cond: Option<Cond>, target: BranchTarget) -> Result<(), String> {
         let kind = match cond {
-            None => layout::BranchKind::Jmp,
-            Some(c) => layout::BranchKind::Jcc(c),
+            None => x86::BranchKind::Jmp,
+            Some(c) => x86::BranchKind::Jcc(c),
         };
         self.branch(kind, target)
     }
     /// `call target`
     pub fn call(&mut self, target: BranchTarget) -> Result<(), String> {
-        self.branch(layout::BranchKind::Call, target)
+        self.branch(x86::BranchKind::Call, target)
     }
     /// `.ascii` / `.byte`
     pub fn bytes(&mut self, data: &[u8]) {
@@ -272,21 +261,12 @@ impl Emitter {
     pub fn quad(&mut self, value: i64) {
         self.bytes(&value.to_le_bytes());
     }
-    /// `.align n` (additive extension; used for `-O-s`), with the meaning the directive has for
-    /// the target's assembler: gas aligns to `n` bytes, Apple's `as` (Mach-O) to `2**n` bytes and
-    /// rejects `n >= 32` ("invalid alignment value"). In `.text` the padding is filled with the
-    /// same NOP sequences that assembler uses, in `.data` with zeros. The section's alignment
-    /// becomes at least that. COFF (Windows) can't represent alignments above 8192: like gas,
-    /// `finish` then fails ("nonrepresentable section on output").
+    /// Align to `n` bytes (used for `-O-s`). The padding is filled with single-byte NOPs in
+    /// `.text` (unlike gas's multi-byte NOPs: it only follows the final `ret`) and with zeros in
+    /// `.data`. The section's alignment becomes at least `n`. COFF (Windows) can't represent
+    /// alignments above 8192: like gas, `finish` then fails ("nonrepresentable section on
+    /// output").
     pub fn align(&mut self, n: u64) -> Result<(), String> {
-        let n = if self.target == Target::MacOS {
-            if n >= 32 {
-                return Err("invalid alignment value".into());
-            }
-            1 << n
-        } else {
-            n
-        };
         if !n.is_power_of_two() {
             return Err("alignment not a power of 2".into());
         }
@@ -378,7 +358,7 @@ impl Emitter {
             return Ok(self.dot());
         }
         if !valid_symbol(name) {
-            return Err(layout::bad_reference_message(name));
+            return Err(format!("internal error: invalid symbol name `{name}'"));
         }
         Ok(self.sym(name))
     }
@@ -409,7 +389,7 @@ impl Emitter {
         self.push(item);
     }
 
-    fn branch(&mut self, kind: layout::BranchKind, target: BranchTarget) -> Result<(), String> {
+    fn branch(&mut self, kind: x86::BranchKind, target: BranchTarget) -> Result<(), String> {
         let target = match target {
             BranchTarget::Local { n, forward } => {
                 let count = self.fb_count.get(&n).copied().unwrap_or(0);
@@ -421,79 +401,16 @@ impl Emitter {
                     self.sym(&fb_name(n, count))
                 }
             }
-            BranchTarget::Quoted(s) => {
-                if s.is_empty() {
-                    return Err("empty symbol name".into());
+            BranchTarget::Symbol(s) => {
+                if !valid_symbol(&s) {
+                    return Err(format!("internal error: invalid symbol name `{s}'"));
                 }
                 self.sym(&s)
-            }
-            BranchTarget::Symbol(s) => {
-                let s = char_constants(&s);
-                if s == "$" || s == "." {
-                    self.dot()
-                } else {
-                    match regs::classify(&s) {
-                        regs::Ident::Symbol => self.sym_ref(&s)?,
-                        other => {
-                            let bytes = layout::indirect_branch(kind, other, &s)?;
-                            self.push_insn(layout::Item::Bytes { data: bytes, fixups: Vec::new() });
-                            return Ok(());
-                        }
-                    }
-                }
             }
         };
         self.push_insn(layout::Item::Branch { kind, target });
         Ok(())
     }
-}
-
-/// Value of the escape `\\c` in a gas character constant.
-pub(super) fn escape_value(c: char) -> u32 {
-    match c {
-        'b' => 8,
-        'f' => 12,
-        'n' => 10,
-        'r' => 13,
-        't' => 9,
-        '\'' => 39,
-        '"' => 34,
-        c => c as u32,
-    }
-}
-
-/// Replace gas character constants (`'a'`, `'\\n'`, `' '`) by their decimal value, as gas does
-/// when reading the line.
-pub(super) fn char_constants(s: &str) -> String {
-    if !s.contains('\'') {
-        return s.to_string();
-    }
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::new();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] != '\'' {
-            out.push(chars[i]);
-            i += 1;
-            continue;
-        }
-        i += 1;
-        if i >= chars.len() {
-            out.push('0');
-            break;
-        }
-        let mut v = chars[i] as u32;
-        if chars[i] == '\\' && i + 1 < chars.len() {
-            i += 1;
-            v = escape_value(chars[i]);
-        }
-        i += 1;
-        if i < chars.len() && chars[i] == '\'' {
-            i += 1;
-        }
-        out.push_str(&v.to_string());
-    }
-    out
 }
 
 /// Internal (never emitted) name of instance `inst` of numeric local label `n`.

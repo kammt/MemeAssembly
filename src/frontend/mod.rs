@@ -1,24 +1,27 @@
 //! Port of compiler/{compiler.c,parser,analyser,translator,logger}.
 //!
 //! The pipeline is the same as in C: [`parser::parse_file`] for every input file, then
-//! [`compile`], which runs the analysis and then either writes the assembly text of
-//! [`translator`] (`-S`) or generates the code directly with [`encoder`] and hands it to
-//! [`crate::backend::emit`] (replacing the original `popen("gcc ...")`).
+//! [`compile`], which runs the analysis and then generates the code with [`translator`]: as
+//! assembly text ([`asm_text`], `-S`) or directly into an object module ([`encoder`]) that
+//! [`crate::backend::emit`] writes (replacing the original `popen("gcc ...")`).
 
 pub mod analyser;
+pub mod asm_text;
 pub mod cli;
 pub mod commands;
 pub mod encoder;
-pub mod libc;
 pub mod log;
 pub mod parser;
+pub mod random;
 pub mod translator;
 
 use std::path::PathBuf;
 
 use crate::backend::{self, OutputKind};
 use commands::{CompileState, OutputMode};
-use log::{err, err_str, exit, print_error_ascii};
+use std::process::exit;
+
+use log::{err, err_str, print_error_ascii};
 
 /// Converts a C-style byte string (file name from argv) into a path.
 pub fn bytes_to_path(b: &[u8]) -> PathBuf {
@@ -52,14 +55,20 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         let mut file = match std::fs::File::create(&output_path) {
             Ok(f) => f,
             Err(e) => {
-                err_str(&format!("Failed to open output file: {}\n", libc::io_error_message(&e)));
+                err_str(&format!("Failed to open output file: {}\n", log::io_error_message(&e)));
                 exit(1);
             }
         };
-        let asm = translator::write_to_string(&state);
+        let asm = match asm_text::write_to_string(&state) {
+            Ok(asm) => asm,
+            Err(msg) => {
+                log::print_internal_compiler_error(&msg, true);
+                exit(1);
+            }
+        };
         use std::io::Write;
-        if let Err(e) = file.write_all(&log::text_mode(&asm)) {
-            err_str(&format!("Failed to write output file: {}\n", libc::io_error_message(&e)));
+        if let Err(e) = file.write_all(&asm) {
+            err_str(&format!("Failed to write output file: {}\n", log::io_error_message(&e)));
             exit(1);
         }
         exit(0);
@@ -81,7 +90,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
     };
     if let Err(msg) = backend::emit(&module, state.target, kind, &output_path) {
         // e.g. "cannot write out: Is a directory (os error 21)" -> perror style
-        let msg: Vec<String> = msg.lines().map(libc::strip_os_error).collect();
+        let msg: Vec<String> = msg.lines().map(log::strip_os_error).collect();
         let mut m = msg.join("\n").into_bytes();
         if m.last() != Some(&b'\n') {
             m.push(b'\n');

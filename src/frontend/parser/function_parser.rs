@@ -1,10 +1,10 @@
 //! Port of compiler/parser/functionParser.c
 
 use crate::frontend::commands::*;
-use crate::frontend::log::{print_debug, print_error, Arg};
+use crate::frontend::log::{print_debug, print_error};
 
 fn command_type(cmd: &ParsedCommand) -> u8 {
-    COMMAND_LIST[cmd.opcode as usize].command_type
+    cmd.opcode.command().command_type
 }
 
 /// Creates a function by starting at the function definition and then traversing the command
@@ -19,7 +19,7 @@ fn parse_function(
     let function_start = &commands[function_start_at_index];
     let start_line = function_start.line_num;
 
-    print_debug(state.log_level, "\tParsing function:", &[]);
+    print_debug(state.log_level, "\tParsing function:");
 
     let mut index = 1;
     // Points to the last found return-statement and is 0 if none was found until now
@@ -33,14 +33,7 @@ fn parse_function(
             if function_end_index != function_start_at_index + index - 1
                 && state.compile_mode != CompileMode::Bully
             {
-                print_error(
-                    state,
-                    input_file_name,
-                    parsed.line_num as u64,
-                    "expected a return statement, but got a new function definition",
-                    0,
-                    &[],
-                );
+                print_error(state, input_file_name, parsed.line_num, "expected a return statement, but got a new function definition");
             }
             break;
         } else if ty == COMMAND_TYPE_FUNC_RETURN {
@@ -48,10 +41,10 @@ fn parse_function(
         }
         index += 1;
     }
-    print_debug(state.log_level, "\t\tIteration stopped at index %lu", &[Arg::U(index as u64)]);
+    print_debug(state.log_level, format!("\t\tIteration stopped at index {index}"));
 
     if function_end_index == 0 && state.compile_mode != CompileMode::Bully {
-        print_error(state, input_file_name, start_line as u64, "function does not return", 0, &[]);
+        print_error(state, input_file_name, start_line, "function does not return");
     }
 
     if function_end_index != 0 {
@@ -61,72 +54,61 @@ fn parse_function(
     }
 }
 
-/// Splits the file's commands into functions (injecting functions for orphaned commands in
-/// bully mode).
-pub fn parse_functions(file: &mut File, state: &mut CompileState) {
-    let commands = &file.parsed_commands;
+/// Splits the file's commands into functions and orphaned commands (bully mode puts each run of
+/// orphaned commands into an injected function of its own).
+pub fn parse_functions(
+    file_name: &[u8],
+    commands: Vec<ParsedCommand>,
+    state: &mut CompileState,
+) -> (Vec<Function>, Vec<ParsedCommand>) {
     let function_definitions =
         commands.iter().filter(|c| command_type(c) == COMMAND_TYPE_FUNC_DEF).count();
-    print_debug(state.log_level, "Number of functions: %lu", &[Arg::U(function_definitions as u64)]);
+    print_debug(state.log_level, format!("Number of functions: {function_definitions}"));
 
-    let mut functions = Vec::with_capacity(function_definitions);
-    let mut command_array_index = 0;
-    while command_array_index < commands.len() {
-        let start_index = command_array_index;
-        let mut orphaned_commands = false;
-        while command_array_index < commands.len() {
-            if command_type(&commands[command_array_index]) != COMMAND_TYPE_FUNC_DEF {
-                orphaned_commands = true;
-                if state.compile_mode != CompileMode::Bully {
-                    print_error(
-                        state,
-                        &file.file_name,
-                        commands[command_array_index].line_num as u64,
-                        "command does not belong to any function",
-                        0,
-                        &[],
-                    );
-                }
-                command_array_index += 1;
-            } else {
-                break;
+    // The file is a sequence of runs: (is a function, number of commands)
+    let mut runs = Vec::new();
+    let mut index = 0;
+    while index < commands.len() {
+        let start_index = index;
+        while index < commands.len() && command_type(&commands[index]) != COMMAND_TYPE_FUNC_DEF {
+            if state.compile_mode != CompileMode::Bully {
+                let line = commands[index].line_num;
+                print_error(state, file_name, line, "command does not belong to any function");
             }
+            index += 1;
         }
-
-        // In bully mode, orphaned commands (startIndex..commandArrayIndex) get a function of their own
-        if state.compile_mode == CompileMode::Bully && orphaned_commands {
-            let func_name = FUNCTION_NAMES[command_array_index % FUNCTION_NAMES.len()];
-            let mut owned = Vec::with_capacity(command_array_index - start_index + 2);
-
-            let mut def = ParsedCommand::new(69);
-            def.opcode = 0;
-            def.parameters[0] = Some(func_name.as_bytes().to_vec());
-            owned.push(def);
-
-            owned.extend_from_slice(&commands[start_index..command_array_index]);
-
-            let mut ret = ParsedCommand::new(420);
-            ret.opcode = 1;
-            owned.push(ret);
-
-            functions.push(Function {
-                number_of_commands: owned.len(),
-                commands: FunctionCommands::Owned(owned),
-            });
+        if index > start_index {
+            runs.push((false, index - start_index));
         }
-
-        if command_array_index >= commands.len() {
-            break;
+        if index < commands.len() {
+            let number_of_commands = parse_function(&commands, file_name, index, state);
+            runs.push((true, number_of_commands));
+            index += number_of_commands;
         }
-
-        let number_of_commands =
-            parse_function(commands, &file.file_name, command_array_index, state);
-        functions.push(Function {
-            number_of_commands,
-            commands: FunctionCommands::InFile(command_array_index),
-        });
-        command_array_index += number_of_commands;
     }
 
-    file.functions = functions;
+    let mut functions = Vec::with_capacity(function_definitions);
+    let mut orphans = Vec::new();
+    let mut commands = commands.into_iter();
+    let mut end_index = 0;
+    for (is_function, length) in runs {
+        let run = commands.by_ref().take(length);
+        end_index += length;
+        if is_function {
+            functions.push(Function { commands: run.collect(), injected: false });
+        } else if state.compile_mode == CompileMode::Bully {
+            // A function named after the index of the command that follows
+            let func_name = FUNCTION_NAMES[end_index % FUNCTION_NAMES.len()];
+            let mut def = ParsedCommand::new(69);
+            def.opcode = Opcode::FuncDef;
+            def.parameters[0] = Some(Param::Raw { text: func_name.as_bytes().to_vec(), mangle: false });
+            let mut ret = ParsedCommand::new(420);
+            ret.opcode = Opcode::Return;
+            let commands = std::iter::once(def).chain(run).chain(std::iter::once(ret)).collect();
+            functions.push(Function { commands, injected: true });
+        } else {
+            orphans.extend(run);
+        }
+    }
+    (functions, orphans)
 }

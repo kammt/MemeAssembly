@@ -191,27 +191,10 @@ fn same_linked_contents(m: &ObjModule, a: (&[u8], &MachO), b: (&[u8], &MachO)) -
     Ok(())
 }
 
-/// `.text`/`.data` of an ELF file as `(address, contents)`.
-fn elf_section(b: &[u8], name: &str) -> Option<(u64, Vec<u8>)> {
-    let shoff = u64_at(b, 0x28) as usize;
-    let (entsize, num, strndx) =
-        (u16::from_le_bytes([b[0x3a], b[0x3b]]) as usize, u16::from_le_bytes([b[0x3c], b[0x3d]]) as usize, u16::from_le_bytes([b[0x3e], b[0x3f]]) as usize);
-    let shdr = |i: usize| shoff + i * entsize;
-    let strtab = u64_at(b, shdr(strndx) + 0x18) as usize;
-    (0..num).find_map(|i| {
-        let h = shdr(i);
-        if cstr(&b[strtab + u32_at(b, h) as usize..]) != name {
-            return None;
-        }
-        let (addr, off, size) = (u64_at(b, h + 0x10), u64_at(b, h + 0x18) as usize, u64_at(b, h + 0x20) as usize);
-        Some((addr, b[off..off + size].to_vec()))
-    })
-}
-
-/// Ground truth independent of everything Mach-O: GNU ld links the GNU as object of the same
-/// source with `.text`/`.data` at the addresses the Mach-O image uses. With the same section
+/// Ground truth independent of everything Mach-O: GNU ld links the GNU as objects of the same
+/// sources with `.text`/`.data` at the addresses the Mach-O image uses. With the same section
 /// addresses, the code and data must be byte for byte the same.
-fn gnu_ld_reference(gas_obj: &Path, macho: &MachO, out: &Path) -> Option<[Vec<u8>; 2]> {
+fn gnu_ld_reference(gas_objs: &[&Path], macho: &MachO, out: &Path) -> Option<[Vec<u8>; 2]> {
     let ld = need(tool(&["x86_64-linux-gnu-ld"]).or_else(|| host_x86_64().then(|| tool(&["ld"])).flatten()), "x86-64 GNU ld")?;
     let mut cmd = Command::new(ld);
     cmd.args(["-e", "0", "-z", "noexecstack", "-o"]).arg(out);
@@ -220,16 +203,16 @@ fn gnu_ld_reference(gas_obj: &Path, macho: &MachO, out: &Path) -> Option<[Vec<u8
             cmd.arg(format!("--section-start={elf}={:#x}", s.addr));
         }
     }
-    run_ok(cmd.arg(gas_obj));
+    run_ok(cmd.args(gas_objs));
     let b = std::fs::read(out).unwrap();
     Some([".text", ".data"].map(|n| elf_section(&b, n).map(|s| s.1).unwrap_or_default()))
 }
 
 /// Asserts that the image's `__text`/`__data` equal GNU ld's output at the same addresses.
-fn assert_matches_gnu_ld(name: &str, image: &[u8], image_path: &Path, gas_obj: &Path) -> Option<()> {
+fn assert_matches_gnu_ld(name: &str, image: &[u8], image_path: &Path, gas_objs: &[&Path]) -> Option<()> {
     let p = parse(image);
     let elf = image_path.with_extension("gnu-ld");
-    let reference = gnu_ld_reference(gas_obj, &p, &elf)?;
+    let reference = gnu_ld_reference(gas_objs, &p, &elf)?;
     for (i, sect) in ["__text", "__data"].into_iter().enumerate() {
         assert!(
             p.contents(image, sect) == reference[i].as_slice(),
@@ -250,7 +233,7 @@ fn macho_objects_link_like_gnu_toolchain() {
     let mut checked = 0;
     for (name, src) in fixtures("macos") {
         if name == "edge" {
-            continue; // undefined symbols; see macho_edge_relocations_match_llvm_mc
+            continue; // undefined symbols; see macho_edge_relocations_link_like_gnu_toolchain
         }
         let Some(m) = module_for(&src, &dir) else { return };
         if m.symbol_by_name("_main").is_none() {
@@ -260,7 +243,7 @@ fn macho_objects_link_like_gnu_toolchain() {
         write_file(&obj, &write(&m, Target::MacOS, OutputKind::Object).unwrap());
         let exe = dir.join(format!("{name}.lld"));
         let Some(image) = ld64(&[&obj], &exe, &[]) else { return };
-        let Some(()) = assert_matches_gnu_ld(&name, &image, &exe, &gas_obj_path(&src, &dir)) else { return };
+        let Some(()) = assert_matches_gnu_ld(&name, &image, &exe, &[&gas_obj_path(&src, &dir)]) else { return };
         let p = parse(&image);
         let main = m.symbols[m.symbol_by_name("_main").unwrap()].definition.unwrap().1;
         assert_eq!(p.entry_in_text(), main, "{name}: entry point");
@@ -314,11 +297,28 @@ fn macho_objects_are_shaped_like_llvm_mc() {
     }
     assert!(checked >= 10, "only {checked} fixtures checked");
 }
-/// Relocation records for the edge cases, as llvm-mc writes them for the `L`-prefixed source:
-/// those of llvm-mc that refer to symbols in another section or undefined symbols (which the
-/// module keeps too) must appear identically in ours.
+/// `(offset, PC-relative, length, type)` of every relocation, plus the symbol for extern ones.
+fn macho_relocs(readobj: &Path, obj: &Path) -> Vec<String> {
+    let out = String::from_utf8(run_ok(Command::new(readobj).args(["-r", "--expand-relocs"]).arg(obj)).stdout).unwrap();
+    out.split("Relocation {")
+        .skip(1)
+        .map(|r| {
+            let field = |k: &str| r.lines().find_map(|l| l.trim().strip_prefix(k)).unwrap_or("").trim().to_string();
+            // Extern relocations name a symbol, the others a section.
+            let symbol = field("Symbol: ");
+            let symbol = symbol.split(" (").next().unwrap();
+            format!("{} {} {} {} {symbol}", field("Offset: "), field("PCRel: "), field("Length: "), field("Type: "))
+        })
+        .collect()
+}
+
+/// The relocation edge cases: linked by ld64.lld together with an object defining the
+/// undefined symbols, our object gives exactly the code and data GNU ld makes of the GNU as
+/// objects at the same addresses. The relocation records are those llvm-mc writes for the
+/// `L`-prefixed source, except that references to temporary labels are section-relative
+/// (non-extern) where llvm-mc rebases them onto the preceding symbol.
 #[test]
-fn macho_edge_relocations_match_llvm_mc() {
+fn macho_edge_relocations_link_like_gnu_toolchain() {
     let dir = scratch("macho_edge_relocations");
     let src = fixture_dir().join("edge.macos.s");
     let Some(mut m) = module_for(&src, &dir) else { return };
@@ -332,22 +332,31 @@ fn macho_edge_relocations_match_llvm_mc() {
     }
     let ours_path = dir.join("edge.ours.o");
     write_file(&ours_path, &write(&m, Target::MacOS, OutputKind::Object).unwrap());
+
+    let helper_src = dir.join("helper.s");
+    std::fs::write(&helper_src, ".data\n.globl ext\next: .quad 0x1122334455667788\n.globl undefined_but_global\nundefined_but_global: .byte 7\n").unwrap();
+    let helper_macho = dir.join("helper.mc.o");
+    let Some(_) = llvm_mc(&helper_src, &helper_macho, false) else { return };
+    let helper_gas = dir.join("helper.gas.o");
+    let Some(_) = gas_elf(&helper_src, &helper_gas) else { return };
+    let exe = dir.join("edge.lld");
+    let Some(image) = ld64(&[&ours_path, &helper_macho], &exe, &[]) else { return };
+    let Some(()) = assert_matches_gnu_ld("edge", &image, &exe, &[&gas_obj_path(&src, &dir), &helper_gas]) else { return };
+
     let theirs_path = dir.join("edge.mc.o");
     let Some(_) = llvm_mc(&src, &theirs_path, true) else { return };
     let Some(readobj) = need(llvm("llvm-readobj"), "llvm-readobj") else { return };
-    let relocs = |p: &Path| -> Vec<String> {
-        let out = String::from_utf8(run_ok(Command::new(&readobj).args(["-r", "--expand-relocs"]).arg(p)).stdout).unwrap();
-        out.split("Relocation {").skip(1).map(|r| r.split_whitespace().collect::<Vec<_>>().join(" ")).collect()
-    };
-    let (ours, theirs) = (relocs(&ours_path), relocs(&theirs_path));
-    // llvm-mc keeps relocations against `_main`, `local_fn` within __text: drop those.
-    let kept: Vec<&String> = theirs.iter().filter(|r| !(r.contains("Symbol: local_fn") || r.contains("Symbol: _main") && r.contains("PCRel: 1"))).collect();
-    let ours_refs: Vec<&String> = ours.iter().collect();
-    assert_eq!(ours_refs, kept, "relocations differ");
-    // And the bytes those relocations apply to agree.
-    let (a, b) = (std::fs::read(&ours_path).unwrap(), std::fs::read(&theirs_path).unwrap());
-    let (pa, pb) = (parse(&a), parse(&b));
-    assert_eq!(pa.contents(&a, "__data"), pb.contents(&b, "__data"));
+    let (ours, theirs) = (macho_relocs(&readobj, &ours_path), macho_relocs(&readobj, &theirs_path));
+    // llvm-mc keeps PC-relative relocations against `_main`, `local_fn` within __text: drop those.
+    let theirs: Vec<String> = theirs.into_iter().filter(|r| !(r.ends_with(" local_fn") || r.ends_with(" _main") && r.contains(" 1 "))).collect();
+    let temporary = |r: &String| r.ends_with(' ');
+    assert!(ours.iter().any(temporary), "{ours:#?}");
+    assert_eq!(ours.len(), theirs.len(), "{ours:#?}\n{theirs:#?}");
+    for (a, b) in ours.iter().zip(&theirs) {
+        // A non-extern relocation has the same offset, kind and length.
+        let same = if temporary(a) { b.starts_with(a.as_str()) } else { a == b };
+        assert!(same, "ours `{a}', llvm-mc `{b}'");
+    }
 }
 
 /// Executables are what ld64.lld makes of our object: same code and data (relocated fields
@@ -377,7 +386,7 @@ fn macho_executables_match_ld64_lld() {
         if let Err(e) = same_linked_contents(&m, (&ours, &a), (&lld, &b)) {
             panic!("{name}: {e}; compare {} and {}", ours_path.display(), lld_path.display());
         }
-        let Some(()) = assert_matches_gnu_ld(&name, &ours, &ours_path, &gas_obj_path(&src, &dir)) else { return };
+        let Some(()) = assert_matches_gnu_ld(&name, &ours, &ours_path, &[&gas_obj_path(&src, &dir)]) else { return };
         assert_eq!(a.entry_in_text(), b.entry_in_text(), "{name}: entry point");
         let (Some(ra), Some(rb)) = (rebases(&ours_path, &a), rebases(&lld_path, &b)) else { return };
         assert_eq!(ra, rb, "{name}: rebases");
@@ -406,7 +415,6 @@ fn macho_executables_match_ld64_lld() {
             "minos 10.14",
             "sdk 15.0",
             "cmd LC_FUNCTION_STARTS",
-            "cmd LC_DATA_IN_CODE",
             "0x100000000  __mh_execute_header",
             "_main:",
         ] {

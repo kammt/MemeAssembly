@@ -1,10 +1,49 @@
 //! Port of compiler/analyser/parameters.c
 
+use crate::backend::emitter::Reg;
 use crate::frontend::commands::*;
-use crate::frontend::libc::{c_char_value, cstr, strtol, strtoll};
 use crate::frontend::log::{
-    print_debug, print_error, print_internal_compiler_error, print_nice_ascii, print_note, Arg,
+    print_debug, print_error, print_error_with_key, print_internal_compiler_error, print_nice_ascii, print_note,
+    ErrorKey,
 };
+use std::num::IntErrorKind;
+
+/// A decimal number parameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Decimal {
+    /// The value, saturated to `i64::MIN`/`i64::MAX` if it does not fit into 64 bits.
+    value: i64,
+    /// Whether the number does not fit into 64 bits.
+    overflow: bool,
+}
+
+/// Parses a decimal number: optional leading ASCII whitespace, an optional sign and digits,
+/// nothing else. The empty string counts as 0 (bully mode can shorten a number to nothing).
+fn parse_decimal(s: &[u8]) -> Option<Decimal> {
+    if s.is_empty() {
+        return Some(Decimal { value: 0, overflow: false });
+    }
+    let s = s.trim_ascii_start();
+    let digits = s.strip_prefix(b"-").or_else(|| s.strip_prefix(b"+")).unwrap_or(s);
+    if digits.is_empty() || !digits.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let text = std::str::from_utf8(s).ok()?;
+    match text.parse::<i64>() {
+        Ok(value) => Some(Decimal { value, overflow: false }),
+        Err(e) => match e.kind() {
+            IntErrorKind::PosOverflow => Some(Decimal { value: i64::MAX, overflow: true }),
+            IntErrorKind::NegOverflow => Some(Decimal { value: i64::MIN, overflow: true }),
+            _ => None,
+        },
+    }
+}
+
+/// The value of a decimal number parameter, 0 if `s` is not one (e.g. only a sign is left
+/// after bully mode shortened it).
+fn decimal_value(s: &[u8]) -> i64 {
+    parse_decimal(s).map_or(0, |d| d.value)
+}
 
 const PARAM_NAMES: [&str; 8] = [
     "64 bit Register",
@@ -38,6 +77,7 @@ const ESCAPE_SEQUENCES: [&str; 10] =
     ["\\n", "\\s", "space", "\\t", "\\f", "\\b", "\\v", "\\\"", "\\?", "\\\\"];
 const TRANSLATED_ESCAPE_SEQUENCES: [&str; 10] =
     ["'\\n'", "' '", "' '", "'\\t'", "'\\f'", "'\\b'", "'\\v'", "'\\\"'", "'\\?'", "'\\\\'"];
+const ESCAPE_SEQUENCE_VALUES: [u8; 10] = [b'\n', b' ', b' ', b'\t', 0x0C, 0x08, 0x0B, b'"', b'?', b'\\'];
 
 fn get_register_size(param_type: u8) -> u32 {
     match param_type {
@@ -49,9 +89,13 @@ fn get_register_size(param_type: u8) -> u32 {
     }
 }
 
+fn register(name: &str) -> Param {
+    Param::Reg(Reg::parse(name).expect("register names of the analyser are valid"))
+}
+
 /// Returns a register of the specified size chosen by `computedIndex`.
-fn get_random_register(param_type: u8, computed_index: u64) -> Option<Vec<u8>> {
-    let pick = |regs: &[&str]| Some(regs[(computed_index % regs.len() as u64) as usize].as_bytes().to_vec());
+fn get_random_register(param_type: u8, computed_index: u64) -> Option<Param> {
+    let pick = |regs: &[&str]| Some(register(regs[(computed_index % regs.len() as u64) as usize]));
     match param_type {
         PARAM_REG64 => pick(&REGISTERS_64_BIT),
         PARAM_REG32 => pick(&REGISTERS_32_BIT),
@@ -61,15 +105,37 @@ fn get_random_register(param_type: u8, computed_index: u64) -> Option<Vec<u8>> {
     }
 }
 
-fn is_in_array(parameter: &[u8], array: &[&str]) -> bool {
-    array.iter().any(|a| a.as_bytes() == parameter)
+fn decimal(text: Vec<u8>) -> Param {
+    Param::Decimal { value: decimal_value(&text), text }
+}
+
+/// The value of a decimal parameter (0 for other parameters).
+fn decimal_param_value(cmd: &ParsedCommand, i: usize) -> i64 {
+    match &cmd.parameters[i] {
+        Some(Param::Decimal { value, .. }) => *value,
+        _ => 0,
+    }
+}
+
+/// Bully mode: cut the decimal parameter off after `cut` digits, and further until it is a
+/// sign-extended 32 bit number. (The C code wrote a NUL at index `computedIndex % 32`, out of
+/// bounds when the number is shorter, and kept numbers that were still too large, which gas
+/// then rejected.)
+fn shorten_decimal(param: &mut Option<Param>, cut: usize) {
+    if let Some(Param::Decimal { value, text }) = param {
+        text.truncate(cut);
+        while !fits_sign_extended_32(decimal_value(text)) {
+            text.pop();
+        }
+        *value = decimal_value(text);
+    }
 }
 
 fn print_parameter_usage_note(allowed_params: u8) {
     let names: Vec<&str> =
         (0..8).filter(|i| allowed_params & (1 << i) != 0).map(|i| PARAM_NAMES[i]).collect();
     let s = names.join(", ");
-    print_note("the following parameter types are allowed: %s", true, &[Arg::S(s.as_bytes())]);
+    print_note(&format!("the following parameter types are allowed: {s}"), true);
 }
 
 /// Prints the "X cannot be a pointer" error (or silently fixes it in bully mode).
@@ -82,7 +148,7 @@ fn check_not_pointer(
 ) {
     if cmd.is_pointer as usize == parameter_num + 1 {
         if state.compile_mode != CompileMode::Bully {
-            print_error(state, input_file_name, cmd.line_num as u64, message, 0, &[]);
+            print_error(state, input_file_name, cmd.line_num, message);
         } else {
             // Well then it's not a pointer :shrug:
             cmd.is_pointer = 0;
@@ -100,14 +166,15 @@ pub fn check_parameters(loc: CmdLoc, input_file_name: &[u8], state: &mut Compile
 
 fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut CompileState) {
     let ll = state.log_level;
-    print_debug(ll, "Starting parameter validity check", &[]);
-    let command = &COMMAND_LIST[cmd.opcode as usize];
+    let target = state.target;
+    print_debug(ll, "Starting parameter validity check");
+    let command = cmd.opcode.command();
     let used_parameters = command.used_parameters as usize;
     let errors_before = state.compiler_errors;
 
     'params: for parameter_num in 0..used_parameters {
-        let parameter = cstr(cmd.param(parameter_num)).to_vec();
-        print_debug(ll, "\tChecking parameter %s", &[Arg::S(&parameter)]);
+        let parameter = cmd.param_text(parameter_num, target).into_owned();
+        print_debug(ll, [&b"\tChecking parameter "[..], &parameter].concat());
 
         let allowed_types = command.allowed_param_types[parameter_num];
 
@@ -119,75 +186,74 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         ];
         for (ty, regs, yes, no) in reg_checks {
             if allowed_types & ty != 0 {
-                if is_in_array(&parameter, regs) {
-                    print_debug(ll, yes, &[]);
-                    cmd.param_types[parameter_num] = ty;
+                if let Some(&name) = regs.iter().find(|r| r.as_bytes() == parameter) {
+                    print_debug(ll, yes);
+                    cmd.parameters[parameter_num] = Some(register(name));
                     continue 'params;
                 }
-                print_debug(ll, no, &[]);
+                print_debug(ll, no);
             }
         }
 
         if allowed_types & PARAM_DECIMAL != 0 {
-            let r = strtoll(&parameter);
-            // If the end pointer does not point to the end of the string, there was an illegal character
-            if r.end == parameter.len() || (r.end == 0 && parameter.is_empty()) {
-                print_debug(ll, "\t\tParameter is a decimal number", &[]);
+            if let Some(r) = parse_decimal(&parameter) {
+                print_debug(ll, "\t\tParameter is a decimal number");
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a decimal number cannot be a pointer");
                 if r.value == 69 || r.value == 420 {
                     print_nice_ascii();
                 }
-                cmd.param_types[parameter_num] = PARAM_DECIMAL;
                 // The C code silently used strtoll's saturated value (INT64_MAX / INT64_MIN)
-                if r.overflow {
+                if !r.overflow {
+                    cmd.parameters[parameter_num] = Some(Param::Decimal { value: r.value, text: parameter });
+                } else {
                     if state.compile_mode != CompileMode::Bully {
-                        print_error(
-                            state,
-                            input_file_name,
-                            cmd.line_num as u64,
-                            "invalid parameter provided: \"%s\" does not fit into 64 Bits",
-                            1,
-                            &[Arg::S(&parameter)],
-                        );
-                        cmd.param_types[parameter_num] = 0;
+                        let message =
+                            [&b"invalid parameter provided: \""[..], &parameter, b"\" does not fit into 64 Bits"].concat();
+                        let key = ErrorKey::new("invalid parameter provided: \"%s\" does not fit into 64 Bits", 1);
+                        print_error_with_key(state, input_file_name, cmd.line_num, key, &message);
                     } else {
                         // The same replacement as for numbers that don't fit into a register
                         cmd.parameters[parameter_num] =
-                            Some(((state.computed_index as u32) % 256).to_string().into_bytes());
+                            Some(decimal(((state.computed_index as u32) % 256).to_string().into_bytes()));
                     }
                 }
                 continue 'params;
             }
-            print_debug(ll, "\t\tParameter is not a decimal number", &[]);
+            print_debug(ll, "\t\tParameter is not a decimal number");
         }
 
         if allowed_types & PARAM_CHAR != 0 {
-            if is_in_array(&parameter, &ESCAPE_SEQUENCES) {
-                let i = ESCAPE_SEQUENCES.iter().position(|e| e.as_bytes() == parameter).unwrap_or(0);
-                cmd.parameters[parameter_num] = Some(TRANSLATED_ESCAPE_SEQUENCES[i].as_bytes().to_vec());
-                print_debug(ll, "\t\tParameter is an escape sequence and has been translated", &[]);
+            if let Some(i) = ESCAPE_SEQUENCES.iter().position(|e| e.as_bytes() == parameter) {
+                cmd.parameters[parameter_num] = Some(Param::Char {
+                    value: ESCAPE_SEQUENCE_VALUES[i],
+                    text: TRANSLATED_ESCAPE_SEQUENCES[i].as_bytes().to_vec(),
+                    // gas has no `\v` escape and reads 'v'
+                    verbatim: ESCAPE_SEQUENCES[i] != "\\v",
+                });
+                print_debug(ll, "\t\tParameter is an escape sequence and has been translated");
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a character cannot be a pointer");
-                cmd.param_types[parameter_num] = PARAM_CHAR;
                 continue 'params;
             } else if parameter.len() == 1 {
-                cmd.parameters[parameter_num] = Some(vec![b'\'', parameter[0], b'\'']);
-                print_debug(ll, "\t\tParameter is a character, translated to: %s", &[Arg::S(cmd.param(parameter_num))]);
+                let c = parameter[0];
+                // gas reads `'\'` as an escaped quote
+                cmd.parameters[parameter_num] = Some(Param::Char { value: c, text: vec![b'\'', c, b'\''], verbatim: c != b'\\' });
+                print_debug(ll, [&b"\t\tParameter is a character, translated to: "[..], &cmd.param_text(parameter_num, target)].concat());
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a character cannot be a pointer");
-                cmd.param_types[parameter_num] = PARAM_CHAR;
                 continue 'params;
             }
-            print_debug(ll, "\t\tParameter is neither a character nor an escape sequence", &[]);
+            print_debug(ll, "\t\tParameter is neither a character nor an escape sequence");
 
             // Now check if it is an ASCII-code
-            let r = strtol(&parameter);
-            let end_ok = r.end == parameter.len() || (r.end == 0 && parameter.is_empty());
-            if end_ok && r.value >= 0 && r.value <= 255 {
-                print_debug(ll, "\t\tParameter is an ASCII-code", &[]);
+            if let Some(r) = parse_decimal(&parameter).filter(|r| (0..=255).contains(&r.value)) {
+                print_debug(ll, "\t\tParameter is an ASCII-code");
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a character cannot be a pointer");
-                cmd.param_types[parameter_num] = PARAM_CHAR;
+                // gas reads numbers with leading zeros as octal
+                let digits = parameter.strip_prefix(b"-").or(parameter.strip_prefix(b"+")).unwrap_or(&parameter);
+                let verbatim = !(digits.len() > 1 && digits[0] == b'0');
+                cmd.parameters[parameter_num] = Some(Param::Char { value: r.value as u8, text: parameter, verbatim });
                 continue 'params;
             }
-            print_debug(ll, "\t\tParameter is not an ASCII-code", &[]);
+            print_debug(ll, "\t\tParameter is not an ASCII-code");
         }
 
         if allowed_types & PARAM_MONKE_LABEL != 0 {
@@ -205,12 +271,12 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                 }
             }
             if a_used && u_used && !unexpected_character {
-                print_debug(ll, "\t\tParameter is a valid Monke jump label", &[]);
+                print_debug(ll, "\t\tParameter is a valid Monke jump label");
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a jump marker cannot be a pointer");
-                cmd.param_types[parameter_num] = PARAM_MONKE_LABEL;
+                cmd.parameters[parameter_num] = Some(Param::MonkeLabel(parameter));
                 continue 'params;
             }
-            print_debug(ll, "\t\tParameter is not a valid Monke jump label", &[]);
+            print_debug(ll, "\t\tParameter is not a valid Monke jump label");
         }
 
         if allowed_types & PARAM_FUNC_NAME != 0 {
@@ -218,46 +284,44 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             for (i, &c) in parameter.iter().enumerate() {
                 if i == 0 && c.is_ascii_digit() {
                     unexpected_character = true;
-                    print_debug(ll, "\t\tParameter is not a valid function name, as there is a number in the first position", &[]);
+                    print_debug(ll, "\t\tParameter is not a valid function name, as there is a number in the first position");
                     break;
                 }
                 if !(c == b'_' || c == b'$' || c == b'.' || c.is_ascii_alphanumeric()) {
                     unexpected_character = true;
                     print_debug(
                         ll,
-                        "\t\tParameter is not a valid function name, unexpected character found at position %lu",
-                        &[Arg::U(i as u64)],
+                        format!("\t\tParameter is not a valid function name, unexpected character found at position {i}"),
                     );
                     break;
                 }
             }
             if !unexpected_character {
-                print_debug(ll, "\t\tParameter is a valid function name", &[]);
+                print_debug(ll, "\t\tParameter is a valid function name");
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a function name cannot be a pointer");
-                cmd.param_types[parameter_num] = PARAM_FUNC_NAME;
+                // (validated with the macOS `_` prefix, which is added again when generating code)
+                let func = match &cmd.parameters[parameter_num] {
+                    Some(Param::Raw { text, mangle }) => Param::FuncName { name: text.clone(), mangle: *mangle },
+                    _ => Param::FuncName { name: parameter, mangle: false },
+                };
+                cmd.parameters[parameter_num] = Some(func);
                 continue 'params;
             }
         }
 
-        print_debug(ll, "No checks succeeded, invalid parameter!", &[]);
+        print_debug(ll, "No checks succeeded, invalid parameter!");
         if state.compile_mode != CompileMode::Bully {
-            print_error(
-                state,
-                input_file_name,
-                cmd.line_num as u64,
-                "invalid parameter provided: \"%s\"",
-                1,
-                &[Arg::S(&parameter)],
-            );
+            let message = [&b"invalid parameter provided: \""[..], &parameter, b"\""].concat();
+            let key = ErrorKey::new("invalid parameter provided: \"%s\"", 1);
+            print_error_with_key(state, input_file_name, cmd.line_num, key, &message);
             if state.compile_mode != CompileMode::Obfuscated {
                 print_parameter_usage_note(allowed_types);
             }
-            cmd.param_types[parameter_num] = 0;
         } else {
             // Replace the parameter with something pseudo-random that works, derived from the
             // global "computedIndex".
             for &c in &parameter {
-                state.computed_index = state.computed_index.wrapping_mul(c_char_value(c)) / 2;
+                state.computed_index = state.computed_index.wrapping_mul(u64::from(c)) / 2;
             }
 
             // Choose a parameter. If it is not allowed, rotate the bitmask until we find a valid one
@@ -270,37 +334,39 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                 PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8 => {
                     get_random_register(chosen, state.computed_index)
                 }
-                PARAM_DECIMAL | PARAM_CHAR => {
-                    Some(((state.computed_index as u32) % 128).to_string().into_bytes())
+                PARAM_DECIMAL => Some(decimal(((state.computed_index as u32) % 128).to_string().into_bytes())),
+                PARAM_CHAR => {
+                    let value = (state.computed_index % 128) as u8;
+                    Some(Param::Char { value, text: value.to_string().into_bytes(), verbatim: true })
                 }
                 PARAM_MONKE_LABEL => {
                     let length = (state.computed_index % 7 + 2) as usize;
                     let mut p = Vec::with_capacity(length);
                     for _ in 0..length {
-                        p.push(if state.computed_index % 2 == 0 { b'u' } else { b'a' });
+                        p.push(if state.computed_index.is_multiple_of(2) { b'u' } else { b'a' });
                         state.computed_index = state.computed_index.wrapping_mul(3) / 2;
                     }
-                    Some(p)
+                    Some(Param::MonkeLabel(p))
                 }
-                PARAM_FUNC_NAME => Some(
-                    FUNCTION_NAMES[(state.computed_index % FUNCTION_NAMES.len() as u64) as usize]
+                // (without the macOS `_` prefix)
+                PARAM_FUNC_NAME => Some(Param::FuncName {
+                    name: FUNCTION_NAMES[(state.computed_index % FUNCTION_NAMES.len() as u64) as usize]
                         .as_bytes()
                         .to_vec(),
-                ),
+                    mangle: false,
+                }),
                 _ => {
                     print_internal_compiler_error(
-                        "Random parameter generation unsupported for paramType %u",
+                        &format!("Random parameter generation unsupported for paramType {chosen}"),
                         true,
-                        &[Arg::U(chosen as u64)],
                     );
-                    crate::frontend::log::exit(1);
+                    std::process::exit(1);
                 }
             };
             if cmd.is_pointer as usize == parameter_num + 1 {
                 cmd.is_pointer = 0;
             }
             cmd.parameters[parameter_num] = new_param;
-            cmd.param_types[parameter_num] = chosen;
         }
     }
 
@@ -318,13 +384,13 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         // 1: If a number and a register are used, the number must fit in the register
         // 2: If a number and a 64 Bit register are used (and the command is not a mov-command),
         //    the number must be sign-extendable from 32 Bits
-        let (t0, t1) = (cmd.param_types[0], cmd.param_types[1]);
+        let (t0, t1) = (cmd.param_type(0), cmd.param_type(1));
         if (t0 == PARAM_DECIMAL && param_is_reg(t1)) || (t1 == PARAM_DECIMAL && param_is_reg(t0)) {
             let decimal_index = if t0 == PARAM_DECIMAL { 0 } else { 1 };
             let reg_index = 1 - decimal_index;
-            let reg_size = get_register_size(cmd.param_types[reg_index]);
+            let reg_size = get_register_size(cmd.param_type(reg_index));
 
-            let number = strtoll(cmd.param(decimal_index)).value;
+            let number = decimal_param_value(cmd, decimal_index);
             // Two's complement: positive numbers need 64 - clz bits, negative ones 64 - clz(~n) + 1.
             // (__builtin_clzll(0) for n = -1 is undefined in C; this uses 64 like ARM's CLZ.)
             let bits_needed: u32 = if number == 0 {
@@ -336,46 +402,35 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
             };
             if bits_needed > reg_size {
                 if state.compile_mode != CompileMode::Bully {
-                    let dec = cmd.param(decimal_index).to_vec();
-                    let reg = cmd.param(reg_index).to_vec();
-                    print_error(
-                        state,
-                        input_file_name,
-                        cmd.line_num as u64,
+                    let dec = cmd.param_text(decimal_index, target).into_owned();
+                    let reg = cmd.param_text(reg_index, target).into_owned();
+                    let message = [
+                        &b"invalid parameter combination: '"[..],
+                        &dec,
+                        format!("' ({bits_needed} bits) does not fit into register '").as_bytes(),
+                        &reg,
+                        format!("' of size {reg_size}").as_bytes(),
+                    ]
+                    .concat();
+                    let key = ErrorKey::new(
                         "invalid parameter combination: '%s' (%u bits) does not fit into register '%s' of size %u",
                         3,
-                        &[Arg::S(&dec), Arg::U(bits_needed as u64), Arg::S(&reg), Arg::U(reg_size as u64)],
                     );
+                    print_error_with_key(state, input_file_name, cmd.line_num, key, &message);
                 } else {
                     // We replace the number with something that is guaranteed to fit into all registers
                     cmd.parameters[decimal_index] =
-                        Some(((state.computed_index as u32) % 256).to_string().into_bytes());
+                        Some(decimal(((state.computed_index as u32) % 256).to_string().into_bytes()));
                 }
             } else if command.command_type != COMMAND_TYPE_MOV
                 && reg_size == 64
                 && !((number as u64 & 0xFFFF_FFFF_8000_0000) == 0 || (number | 0x7FFF_FFFF) == -1)
             {
                 if state.compile_mode != CompileMode::Bully {
-                    print_error(
-                        state,
-                        input_file_name,
-                        cmd.line_num as u64,
-                        "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits",
-                        0,
-                        &[],
-                    );
+                    print_error(state, input_file_name, cmd.line_num, "invalid parameter combination: 64 Bit arithmetic operation commands require the decimal number to be sign-extendable from 32 Bits");
                 } else {
                     // We just make the number shorter than 32 bits :bigBrain:
-                    // The C code wrote a NUL at index `computedIndex % 32`, out of bounds when the
-                    // number is shorter, and kept numbers that were still too large (which gas
-                    // then rejected). Drop further digits until the number really fits.
-                    let cut = (state.computed_index % 32) as usize;
-                    if let Some(p) = cmd.parameters[decimal_index].as_mut() {
-                        p.truncate(cut);
-                        while !fits_sign_extended_32(strtoll(p).value) {
-                            p.pop();
-                        }
-                    }
+                    shorten_decimal(&mut cmd.parameters[decimal_index], (state.computed_index % 32) as usize);
                     // Also, change computedIndex. Just because
                     state.computed_index = state.computed_index.wrapping_add((number & 0xFFF) as u64);
                 }
@@ -385,7 +440,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         // 3: If two registers are used, they must be of the same size
         let mut current_reg = 0u8;
         for i in 0..used_parameters {
-            let param_type = cmd.param_types[i];
+            let param_type = cmd.param_type(i);
             let not_pointer = cmd.is_pointer as usize != i + 1;
             if current_reg == 0 {
                 if param_is_reg(param_type) && not_pointer {
@@ -393,17 +448,9 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                 }
             } else if param_is_reg(param_type) && not_pointer && param_type != current_reg {
                 if state.compile_mode != CompileMode::Bully {
-                    print_error(
-                        state,
-                        input_file_name,
-                        cmd.line_num as u64,
-                        "invalid parameter combination: cannot combine registers of different size",
-                        0,
-                        &[],
-                    );
+                    print_error(state, input_file_name, cmd.line_num, "invalid parameter combination: cannot combine registers of different size");
                 } else {
                     cmd.parameters[i] = get_random_register(current_reg, state.computed_index);
-                    cmd.param_types[i] = current_reg;
                 }
             }
         }
@@ -412,11 +459,8 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         // another 8 bit register instead
         if bully {
             if let Some((high, _)) = high_byte_conflict(cmd) {
-                cmd.parameters[high] = Some(
-                    NON_HIGH_8_BIT[(state.computed_index % NON_HIGH_8_BIT.len() as u64) as usize]
-                        .as_bytes()
-                        .to_vec(),
-                );
+                cmd.parameters[high] =
+                    Some(register(NON_HIGH_8_BIT[(state.computed_index % NON_HIGH_8_BIT.len() as u64) as usize]));
             }
         }
 
@@ -424,33 +468,20 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         // operand size is unknown. Skipped in bully mode (handled by the translator).
         if state.compile_mode != CompileMode::Bully
             && cmd.is_pointer != 0
-            && !param_is_reg(cmd.param_types[(cmd.is_pointer % 2) as usize])
+            && !param_is_reg(cmd.param_type((cmd.is_pointer % 2) as usize))
         {
-            print_error(
-                state,
-                input_file_name,
-                cmd.line_num as u64,
-                "invalid parameter combination: operand size unknown",
-                0,
-                &[],
-            );
+            print_error(state, input_file_name, cmd.line_num, "invalid parameter combination: operand size unknown");
         }
     }
 
     // `push` only takes sign-extended 32-bit immediates
-    let push_too_large = cmd.opcode == OP_PUSH
-        && cmd.param_types[0] == PARAM_DECIMAL
-        && !fits_sign_extended_32(strtoll(cmd.param(0)).value);
+    let push_too_large = cmd.opcode == Opcode::Push
+        && cmd.param_type(0) == PARAM_DECIMAL
+        && !fits_sign_extended_32(decimal_param_value(cmd, 0));
     if bully {
         if push_too_large {
             // Shorten it like the "sign-extendable from 32 Bits" fix-up above
-            let cut = (state.computed_index % 32) as usize;
-            if let Some(p) = cmd.parameters[0].as_mut() {
-                p.truncate(cut);
-                while !fits_sign_extended_32(strtoll(p).value) {
-                    p.pop();
-                }
-            }
+            shorten_decimal(&mut cmd.parameters[0], (state.computed_index % 32) as usize);
         }
         return;
     }
@@ -460,36 +491,25 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
     if state.compiler_errors != errors_before {
         return;
     }
-    let line = cmd.line_num as u64;
+    let line = cmd.line_num;
     if let Some(problem) = pointer_problem(cmd) {
         let message = match problem {
             PointerProblem::Base => "invalid parameter combination: a pointer must be a 64 or 32 bit register",
             PointerProblem::Unsupported => "invalid parameter combination: this command cannot use a pointer here",
         };
-        print_error(state, input_file_name, line, message, 0, &[]);
+        print_error(state, input_file_name, line, message);
     } else if cmd.is_pointer != 0
         && pointer_use(cmd.opcode, cmd.is_pointer as usize - 1) == PointerUse::NeedsSize
     {
-        print_error(state, input_file_name, line, "invalid parameter combination: operand size unknown", 0, &[]);
+        print_error(state, input_file_name, line, "invalid parameter combination: operand size unknown");
     } else if let Some((high, other)) = high_byte_conflict(cmd) {
-        let (high, other) = (cmd.param(high).to_vec(), cmd.param(other).to_vec());
-        print_error(
-            state,
-            input_file_name,
-            line,
-            "invalid parameter combination: '%s' cannot be combined with '%s'",
-            2,
-            &[Arg::S(&high), Arg::S(&other)],
-        );
+        let (high, other) = (cmd.param_text(high, target).into_owned(), cmd.param_text(other, target).into_owned());
+        let message =
+            [&b"invalid parameter combination: '"[..], &high, b"' cannot be combined with '", &other, b"'"].concat();
+        let key = ErrorKey::new("invalid parameter combination: '%s' cannot be combined with '%s'", 2);
+        print_error_with_key(state, input_file_name, line, key, &message);
     } else if push_too_large {
-        print_error(
-            state,
-            input_file_name,
-            line,
-            "invalid parameter combination: pushed decimal numbers must be sign-extendable from 32 Bits",
-            0,
-            &[],
-        );
+        print_error(state, input_file_name, line, "invalid parameter combination: pushed decimal numbers must be sign-extendable from 32 Bits");
     }
 }
 
@@ -503,39 +523,63 @@ const NON_HIGH_8_BIT: [&str; 16] = [
 enum PointerProblem {
     /// `[al]`, `[ax]`: only 64 and 32 bit registers can address memory
     Base,
-    /// The translation pattern can't use a memory operand there (see [`PointerUse`])
+    /// The generated code can't use a memory operand there (see [`PointerUse`])
     Unsupported,
 }
 
 fn pointer_problem(cmd: &ParsedCommand) -> Option<PointerProblem> {
     let index = (cmd.is_pointer as usize).checked_sub(1)?;
-    if !matches!(cmd.param_types[index], PARAM_REG64 | PARAM_REG32) {
+    if !matches!(cmd.param_type(index), PARAM_REG64 | PARAM_REG32) {
         return Some(PointerProblem::Base);
     }
     (pointer_use(cmd.opcode, index) == PointerUse::Unsupported).then_some(PointerProblem::Unsupported)
 }
 
 /// Registers whose encoding needs a REX prefix (r8-r15 in any size, spl, bpl, sil, dil).
-fn needs_rex(register: &[u8]) -> bool {
-    matches!(register, b"spl" | b"bpl" | b"sil" | b"dil")
-        || (register.first() == Some(&b'r') && register.get(1).is_some_and(|c| c.is_ascii_digit()))
+fn needs_rex(register: Reg) -> bool {
+    match register {
+        Reg::R64(i) | Reg::R32(i) | Reg::R16(i) => i >= 8,
+        Reg::R8(i) => i >= 4,
+        Reg::R8H(_) | Reg::Xmm(_) => false,
+    }
 }
 
 /// A two-operand command combining ah/bh/ch/dh with a register that needs a REX prefix
 /// (including a pointer's base register): (index of the high byte register, the other index).
 fn high_byte_conflict(cmd: &ParsedCommand) -> Option<(usize, usize)> {
-    if COMMAND_LIST[cmd.opcode as usize].used_parameters != 2 {
+    if cmd.opcode.command().used_parameters != 2 {
         return None;
     }
-    let is_reg = |i: usize| param_is_reg(cmd.param_types[i]);
     let high = (0..2).find(|&i| {
-        is_reg(i) && cmd.is_pointer as usize != i + 1 && matches!(cmd.param(i), b"ah" | b"bh" | b"ch" | b"dh")
+        cmd.is_pointer as usize != i + 1 && matches!(cmd.parameters[i], Some(Param::Reg(Reg::R8H(_))))
     })?;
     let other = 1 - high;
-    (is_reg(other) && needs_rex(cmd.param(other))).then_some((high, other))
+    matches!(cmd.parameters[other], Some(Param::Reg(r)) if needs_rex(r)).then_some((high, other))
 }
 
 /// Whether a 64 bit immediate can be encoded as a sign-extended 32 bit immediate.
 fn fits_sign_extended_32(number: i64) -> bool {
     i32::try_from(number).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decimals() {
+        let d = |s: &[u8]| parse_decimal(s).map(|d| (d.value, d.overflow));
+        assert_eq!(d(b"42"), Some((42, false)));
+        assert_eq!(d(b" \t-12"), Some((-12, false)));
+        assert_eq!(d(b"+7"), Some((7, false)));
+        assert_eq!(d(b""), Some((0, false)));
+        assert_eq!(d(b"-9223372036854775808"), Some((i64::MIN, false)));
+        assert_eq!(d(b"99999999999999999999"), Some((i64::MAX, true)));
+        assert_eq!(d(b"-99999999999999999999"), Some((i64::MIN, true)));
+        for s in [&b"-"[..], b"+", b" ", b"12x", b"99999999999999999999x", b"1 2", b"0x10", b"--1", b"1\0"] {
+            assert_eq!(d(s), None, "{:?}", String::from_utf8_lossy(s));
+        }
+        assert_eq!(decimal_value(b"-"), 0);
+        assert_eq!(decimal_value(b"123"), 123);
+    }
 }

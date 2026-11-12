@@ -2,10 +2,13 @@
 # Compares the Rust frontend against the original C compiler.
 #
 # For every input × compile mode × optimisation level × extra flags × target it runs both
-# compilers with `-S` and diffs the generated assembly (minus the timestamp line), stdout,
+# compilers with `-S` and diffs the generated assembly (minus the header comment), stdout,
 # stderr and the exit code. Erroneous inputs are additionally run without `-S` (the compile
 # errors happen before any code generation). A set of command line cases checks the CLI-level
 # messages of memeasm.c that were kept.
+#
+# The cases are written with the C compiler's (getopt) option spelling; the Rust compiler gets
+# the clap spelling of the same options (see new_spelling).
 #
 # Usage: tests/frontend_parity.sh [-v] [filter-regex]
 #   MEMEASM   Rust compiler          (default: target/debug/memeasm)
@@ -15,8 +18,14 @@
 #             gcc -std=gnu17 -D MACOS -O2 -o memeasm-mac $(FILES from the Makefile))
 #
 # Both binaries are started with argv[0] = "memeasm" and from the repository root, so file
-# names in messages are identical. Confused stonks / perfectly balanced use time(NULL) as seed,
-# so each pair of runs is retried until both happened within the same second.
+# names in messages are identical.
+#
+# Random choices: the C compiler seeds rand() with time(NULL), the Rust compiler uses an
+# OS-seeded generator, so their choices cannot be compared. The confused stonks label (emitted
+# for every file) is removed from both outputs, and the Rust output must contain it exactly
+# once for every `jmp` to it. For "perfectly balanced" programs the Rust output must be a
+# line-subsequence of the (whitelisted) reference output of the same program without its
+# "perfectly balanced" lines. With -d, the debug lines that show random choices are masked.
 #
 # Intentional divergences that are filtered/skipped here:
 #  * -g: the C compiler writes STABS, the Rust one gas DWARF directives (.file/.loc). The
@@ -75,10 +84,44 @@ run() {
     echo $? >"$dir/code"
 }
 
-# Removes the timestamp and (for -g) the debug directives of both debug formats.
+# The Rust compiler's spelling of a C compiler (getopt) argument.
+new_spelling() {
+    case "$1" in
+        -fcompile-mode) echo --compile-mode ;;
+        -fcompile-mode=*) echo "--compile-mode=${1#*=}" ;;
+        -fno-martyrdom) echo --no-martyrdom ;;
+        -ftarget=*) echo "--target=${1#*=}" ;;
+        -O?*) echo "--opt-level=${1#-O}" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+# set_args <target> <args...>: REF_ARGS / MINE_ARGS for the two compilers (OUT replaced by the
+# output path of each side). Also sets CASE_TARGET, CASE_MODE, CASE_OPT and CASE_PB (an input
+# uses "perfectly balanced").
+set_args() {
+    local target=$1 a prev=
+    shift
+    REF_ARGS=() MINE_ARGS=("--target=$target")
+    CASE_TARGET=$target CASE_MODE=noob CASE_OPT= CASE_PB=0
+    for a in "$@"; do
+        case "$prev" in -fcompile-mode | -fc) CASE_MODE=$a ;; esac
+        case "$a" in
+            -fcompile-mode=*) CASE_MODE=${a#*=} ;;
+            -O-[0-9s] | -O69420) CASE_OPT=$a ;;
+            *.memeasm) grep -q 'perfectly balanced as all things should be' "$a" 2>/dev/null && CASE_PB=1 ;;
+        esac
+        prev=$a
+        REF_ARGS+=("${a//OUT/$WORK/ref/out.S}")
+        MINE_ARGS+=("$(new_spelling "${a//OUT/$WORK/mine/out.S}")")
+    done
+}
+
+# Removes the header comment, the randomly placed confused stonks labels and (for -g) the debug
+# directives of both debug formats.
 normalize_asm() {
     [ -f "$1" ] || return 0
-    LC_ALL=C sed -e '2s/ on .*$//' \
+    LC_ALL=C sed -e '2s/ on .*$//' -e '/^[ \t]*\.LConfusedStonks_[0-9]*:[ \t]*$/d' \
         -e '/^$/{N;/^\n\.LEOF:$/d;P;D}' \
         -e '/^\.stabs /d' -e '/^\t\.stabn /d' -e '/^\.stabn /d' \
         -e '/^\t\.Lcmd_[0-9]*:$/d' -e '/^\t\.Lret_.*:$/d' -e '/^\.LEOF:$/d' \
@@ -86,24 +129,85 @@ normalize_asm() {
 }
 
 # -d prints parameters[0] of commands without parameters, which is an uninitialised pointer in
-# C (garbage or a stale string); the Rust port prints "(null)". Those lines are masked.
+# C (garbage or a stale string); the Rust port prints "(null)". Those lines are masked, and so
+# are the random choices. With "perfectly balanced", how often -O69420 skips a command depends
+# on which lines were deleted, so that message is dropped too.
 normalize_stdout() {
-    LC_ALL=C sed -e 's/^\t\tComparing against parameter .*$/\t\tComparing against parameter <masked>/' "$1"
+    local pb_skip=()
+    [ "${CASE_PB:-0}" = 1 ] && pb_skip=(-e '/^\tCommand is not a function declaration, abort\.$/d')
+    LC_ALL=C sed "${pb_skip[@]}" \
+        -e 's/^\t\tComparing against parameter .*$/\t\tComparing against parameter <masked>/' \
+        -e 's/^Chose random line for jump marker: [0-9]*$/Chose random line for jump marker: <N>/' \
+        -e 's/^\x1b\[0m\(\tGenerated random line \)/\1/' \
+        -e '/^\tGenerated random line [0-9]* in file [0-9]*$/d' \
+        -e '/^\t\tLine was already generated$/d' -e '/^\t\tLine was added to the list$/d' "$1"
 }
 
-# The reference -S output with the intentional differences applied (see the whitelist script).
-# Uses CASE_TARGET, CASE_MODE and CASE_OPT of the current case.
+# Every confused stonks label that is jumped to must be defined exactly once, the others at
+# most once.
+stonks_labels_ok() {
+    [ -f "$1" ] || return 0
+    LC_ALL=C perl -ne '
+        $def{$1}++ if /^[ \t]*\.LConfusedStonks_(\d+):[ \t]*$/;
+        $use{$1} = 1 if /\bjmp \.LConfusedStonks_(\d+)$/;
+        END { for (keys %use) { exit 1 if ($def{$_} // 0) != 1 } for (values %def) { exit 1 if $_ > 1 } }' "$1"
+}
+
+# is_subsequence <small> <big>: the non-blank lines of <small> are a subsequence of those of
+# <big> (deleted lines leave blank or tab-only lines behind). The instructions -O-1/-2/-3 append
+# to every command are removed from both first: the "perfectly balanced" line itself gets them
+# too, but is blank in <big>.
+is_subsequence() {
+    LC_ALL=C perl -e '
+        my $opt = shift;
+        sub lines {
+            open my $f, "<", $_[0] or exit 1;
+            local $/;
+            my $s = <$f> // "";
+            $s =~ s/^\tnop\n//mg if $opt eq "-O-1";
+            $s =~ s/^\tpush rax\n\tpop rax\n//mg if $opt eq "-O-2";
+            $s =~ s/^\tmovups \[rsp \+ 8\], xmm0\n\tmovups xmm0, \[rsp \+ 8\]\n//mg if $opt eq "-O-3";
+            return grep { /\S/ } split /^/m, $s;
+        }
+        my @big = lines($ARGV[1]);
+        my $i = 0;
+        for my $l (lines($ARGV[0])) { $i++ while $i < @big && $big[$i] ne $l; exit 1 if $i++ >= @big }' -- "$CASE_OPT" "$1" "$2"
+}
+
+# reference_without_pb <reference compiler>: writes the reference -S output for the current
+# case's inputs without their "perfectly balanced" lines to $WORK/full.S (line numbers stay).
+reference_without_pb() {
+    local ref=$1 i=0 a f full_args=()
+    rm -rf "$WORK/full" "$WORK/full.S"
+    for a in "${REF_ARGS[@]}"; do
+        if [ "$a" = "$WORK/ref/out.S" ]; then
+            a=$WORK/full.S
+        elif [[ $a == *.memeasm ]] && [ -f "$a" ]; then
+            i=$((i + 1))
+            f=$WORK/full/$i/$(basename "$a")
+            mkdir -p "$WORK/full/$i"
+            LC_ALL=C sed -e 's/^.*perfectly balanced as all things should be.*$//' "$a" >"$f"
+            a=$f
+        fi
+        full_args+=("$a")
+    done
+    (PATH="$(ref_gcc_dir "$CASE_TARGET"):$PATH" exec -a memeasm "$ref" "${full_args[@]}") >/dev/null 2>&1 </dev/null
+}
+
+# The reference -S output ($1, default $WORK/ref/out.S) with the intentional differences
+# applied (see the whitelist script). Uses CASE_TARGET, CASE_MODE and CASE_OPT of the current case.
 expected_asm() {
-    [ -f "$WORK/ref/out.S" ] || return 0
+    local file=${1:-$WORK/ref/out.S}
+    [ -f "$file" ] || return 0
     local size
     # (power's own `QWORD PTR [rsp]` operands are not bully pointers)
     size=$(grep -oE '(BYTE|WORD|DWORD|QWORD) PTR \[[a-z0-9]+\]' "$WORK/mine/out.S" 2>/dev/null | grep -v -m1 '^QWORD PTR \[rsp\]$' | cut -d' ' -f1)
-    normalize_asm "$WORK/ref/out.S" |
+    normalize_asm "$file" |
         BULLY_SIZE=$size perl "$ROOT/tests/frontend_parity_whitelist.pl" "$CASE_TARGET" "$CASE_MODE" "$CASE_OPT"
 }
 
 compare_dirs() {
-    local name=$1
+    local name=$1 ref=$2
     local ok=1
     cmp -s <(normalize_stdout "$WORK/ref/stdout") <(normalize_stdout "$WORK/mine/stdout") || ok=0
     cmp -s "$WORK/ref/stderr" "$WORK/mine/stderr" || ok=0
@@ -112,7 +216,13 @@ compare_dirs() {
     [ -f "$WORK/ref/out.S" ] && ref_exists=1
     [ -f "$WORK/mine/out.S" ] && mine_exists=1
     [ $ref_exists = $mine_exists ] || ok=0
-    if ! cmp -s <(expected_asm) <(normalize_asm "$WORK/mine/out.S"); then ok=0; fi
+    stonks_labels_ok "$WORK/mine/out.S" || ok=0
+    if [ $CASE_PB = 1 ] && [ $ref_exists = 1 ]; then
+        reference_without_pb "$ref"
+        is_subsequence <(normalize_asm "$WORK/mine/out.S") <(expected_asm "$WORK/full.S") || ok=0
+    elif ! cmp -s <(expected_asm) <(normalize_asm "$WORK/mine/out.S"); then
+        ok=0
+    fi
     if [ $ok = 1 ]; then
         PASS=$((PASS + 1))
     else
@@ -123,6 +233,7 @@ compare_dirs() {
             diff "$WORK/ref/code" "$WORK/mine/code" | head -5
             diff <(normalize_stdout "$WORK/ref/stdout") <(normalize_stdout "$WORK/mine/stdout") | head -20
             diff "$WORK/ref/stderr" "$WORK/mine/stderr" | head -20
+            [ $CASE_PB = 1 ] && echo "(perfectly balanced: the Rust output must be a subsequence of the reference without those lines)"
             diff <(expected_asm) <(normalize_asm "$WORK/mine/out.S") | head -20
         fi
     fi
@@ -141,32 +252,14 @@ check() {
     local ref
     ref=$(ref_for_target "$target")
     if [ -z "$ref" ]; then SKIP=$((SKIP + 1)); return 0; fi
-    local ref_args=() mine_args=("-ftarget=$target") a prev=
-    CASE_TARGET=$target CASE_MODE=noob CASE_OPT=
-    for a in "$@"; do
-        case "$prev" in -fcompile-mode | -fc) CASE_MODE=$a ;; esac
-        case "$a" in
-            -fcompile-mode=*) CASE_MODE=${a#*=} ;;
-            -O-[0-9s] | -O69420) CASE_OPT=$a ;;
-        esac
-        prev=$a
-        ref_args+=("${a//OUT/$WORK/ref/out.S}")
-        mine_args+=("${a//OUT/$WORK/mine/out.S}")
-    done
-    local attempt
-    for attempt in 1 2 3 4 5; do
-        local t0 t1
-        t0=$(date +%s)
-        run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${ref_args[@]}"
-        run "$WORK/mine" "" "$MINE" "${mine_args[@]}"
-        t1=$(date +%s)
-        [ "$t0" = "$t1" ] && break
-    done
+    set_args "$target" "$@"
+    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${REF_ARGS[@]}"
+    run "$WORK/mine" "" "$MINE" "${MINE_ARGS[@]}"
     if [ $needs_failure = 1 ] && { [ "$(cat "$WORK/ref/code")" = 0 ] || grep -q "^gcc exited unexpectedly" "$WORK/ref/stderr"; }; then
         SKIP=$((SKIP + 1))
         return 0
     fi
-    compare_dirs "$name"
+    compare_dirs "$name" "$ref"
 }
 
 # check_fixed <name> <target> <ref-outcome> <args...>: a C bug where the reference crashes or
@@ -180,15 +273,11 @@ check_fixed() {
     local ref
     ref=$(ref_for_target "$target")
     if [ -z "$ref" ]; then SKIP=$((SKIP + 1)); return 0; fi
-    local ref_args=() mine_args=("-ftarget=$target") a
-    for a in "$@"; do
-        ref_args+=("${a//OUT/$WORK/ref/out.S}")
-        mine_args+=("${a//OUT/$WORK/mine/out.S}")
-    done
+    set_args "$target" "$@"
     rm -f "$WORK/mine/out.S"
     local ref_code
-    ref_code=$(exec 2>/dev/null; timeout 5 "$ref" "${ref_args[@]}" </dev/null >/dev/null; echo $?)
-    "$MINE" "${mine_args[@]}" >/dev/null 2>"$WORK/mine/stderr" </dev/null
+    ref_code=$(exec 2>/dev/null; timeout 5 "$ref" "${REF_ARGS[@]}" </dev/null >/dev/null; echo $?)
+    "$MINE" "${MINE_ARGS[@]}" >/dev/null 2>"$WORK/mine/stderr" </dev/null
     local mine_code=$?
     local ok=1
     case "$expect" in
@@ -236,13 +325,9 @@ check_new_error() {
     local ref
     ref=$(ref_for_target "$target")
     if [ -z "$ref" ]; then SKIP=$((SKIP + 1)); return 0; fi
-    local ref_args=() mine_args=("-ftarget=$target") a
-    for a in "$@"; do
-        ref_args+=("${a//OUT/$WORK/ref/out.S}")
-        mine_args+=("${a//OUT/$WORK/mine/out.S}")
-    done
-    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${ref_args[@]}"
-    run "$WORK/mine" "" "$MINE" "${mine_args[@]}"
+    set_args "$target" "$@"
+    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${REF_ARGS[@]}"
+    run "$WORK/mine" "" "$MINE" "${MINE_ARGS[@]}"
     local ok=1
     [ "$(cat "$WORK/ref/code")" = 0 ] || ok=0
     [ "$(cat "$WORK/mine/code")" = 1 ] || ok=0
@@ -265,13 +350,9 @@ check_assembles() {
     ref=$(ref_for_target "$target")
     gas=$(gas_for_target "$target")
     if [ -z "$ref" ] || [ -z "$gas" ]; then SKIP=$((SKIP + 1)); return 0; fi
-    local ref_args=() mine_args=("-ftarget=$target") a
-    for a in "$@"; do
-        ref_args+=("${a//OUT/$WORK/ref/out.S}")
-        mine_args+=("${a//OUT/$WORK/mine/out.S}")
-    done
-    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${ref_args[@]}"
-    run "$WORK/mine" "" "$MINE" "${mine_args[@]}"
+    set_args "$target" "$@"
+    run "$WORK/ref" "$(ref_gcc_dir "$target")" "$ref" "${REF_ARGS[@]}"
+    run "$WORK/mine" "" "$MINE" "${MINE_ARGS[@]}"
     local ok=1 msgs
     [ "$(cat "$WORK/mine/code")" = 0 ] || ok=0
     msgs=$("$gas" -o "$WORK/mine.o" "$WORK/mine/out.S" 2>&1) && [ -z "$msgs" ] || ok=0
@@ -350,37 +431,24 @@ for target in "${TARGETS[@]}"; do
         fi
     done
 
-    # getopt_long_only spellings that must keep working
+    # Command lines that mean the same in both spellings (argument errors and the help page
+    # come from clap now and are not compared)
     in=tests/frontend_cases/ok/simple.memeasm
-    check "$target/cli/single-dash-long" "$target" -fcompile-mode=obfuscated -S -output OUT "$in"
-    check "$target/cli/abbrev" "$target" -fc bully -out OUT -S "$in"
-    check "$target/cli/double-dash" "$target" --output=OUT --fno-martyrdom -S "$in"
     check "$target/cli/cluster" "$target" -dSo OUT "$in"
     check "$target/cli/attached-o" "$target" -S -oOUT "$in"
     check "$target/cli/permute" "$target" "$in" -S -o OUT -O-3
     check "$target/cli/last-O-wins" "$target" -O-1 -O69420 -S -o OUT "$in"
-    check "$target/cli/S-after-O" "$target" -O -S -o OUT "$in"
     check "$target/cli/terminator" "$target" -S -o OUT -- "$in"
     check "$target/cli/-g" "$target" -g -S -o OUT "$in"
     check "$target/cli/-g-bully" "$target" -g -fcompile-mode bully -S -o OUT "$in"
-    check "$target/cli/-g-twice" "$target" -g -g -S -o OUT "$in"
     # memeasm.c's own CLI messages
     check "$target/cli/version" "$target" -v
-    check "$target/cli/version-before-error" "$target" -v -O-7
-    check "$target/cli/error-before-version" "$target" -O-7 -v
     check "$target/cli/no-output" "$target" "$in"
     check "$target/cli/no-input" "$target" -o OUT
     check "$target/cli/no-args" "$target"
     check "$target/cli/missing-file" "$target" -o OUT does-not-exist.memeasm
     check "$target/cli/missing-second-file" "$target" -S -o OUT "$in" does-not-exist.memeasm
     check "$target/cli/directory" "$target" -o OUT tests
-    check "$target/cli/bad-O" "$target" -O-4 -o OUT "$in"
-    check "$target/cli/bad-O-text" "$target" -Oabc -o OUT "$in"
-    check "$target/cli/bad-O-trailing" "$target" -O-1x -o OUT "$in"
-    check "$target/cli/bad-O-space" "$target" "-O -1" -S -o OUT "$in"
-    check "$target/cli/bad-O-range" "$target" -O99999999999999999999999 -o OUT "$in"
-    check "$target/cli/bad-mode" "$target" -fcompile-mode foo -o OUT "$in"
-    check "$target/cli/g-then-bad-mode" "$target" -g -fcompile-mode foo -o OUT "$in"
 done
 
 echo "parity: $PASS passed, $FAIL failed, $SKIP skipped"

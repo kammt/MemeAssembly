@@ -107,7 +107,7 @@ Ready-made packages are available, no compiling required:
 The MemeASM-compiler writes executables all by itself, so you don't need gcc, an assembler or a linker to run your memes. A C compiler (gcc/cc) is only needed if you create object files with `-O` and link them yourself, like some of the [examples](examples/) do.
 
 ### Building from source
-MemeAssembly is written in Rust. Building it requires [cargo](https://rustup.rs) and a C compiler (it compiles the bundled [fadec](https://github.com/aengelke/fadec) encoder).
+MemeAssembly is written in Rust. Building it requires [cargo](https://rustup.rs); there are no other dependencies.
 ```
 make                # or: cargo build --release
 sudo make install   # installs memeasm into /usr/local/bin

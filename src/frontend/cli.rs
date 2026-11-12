@@ -1,383 +1,228 @@
 //! Command line definition.
 //!
-//! The C compiler used `getopt_long_only("o:hO::dgSv", ...)`, which accepts spellings that
-//! clap does not: long options with a single dash (`-fcompile-mode bully`, `-help`),
-//! unambiguous abbreviations (`-fc`, `--out`), short clusters with an attached value
-//! (`-So out`, `-ofile`) and `-O` with an *optional, attached* value (`-O` vs `-O-1`).
-//! [`normalize`] rewrites exactly these forms into canonical clap spellings before parsing:
-//!
-//! * `-name[=v]` / `--name[=v]` where `name` is one of the C long options or an unambiguous
-//!   prefix of one → `--canonical[=v]`; a required value given as the next argument is
-//!   attached (`--output=<next>`), so it may start with `-` like with getopt.
-//! * any other `-xyz` → its short options one by one: `-O<rest>` → `--opt-level=<rest>`,
-//!   a bare `-O` → `--object`, `-o<rest>` / `-o <next>` → `--output=...`, others stay `-x`.
-//! * everything after `--` and all non-options are passed through unchanged.
-//!
-//! Besides the C spellings, the clap-style aliases `--compile-mode`, `--no-martyrdom`,
-//! `--target`, `--object`, `--opt-level` and `--version` are accepted (single-dash only where
-//! that does not change a C meaning, see [`ALIASES`]).
+//! clap parses the complete command line before anything is acted on. `-h` and `-v` are
+//! handled by `main` (the help page is MemeAssembly's own), and every error exits with code 1.
+//! A repeated option is not an error: its last occurrence wins.
 
 use std::ffi::OsString;
 
-use clap::{ArgAction, Parser};
+use clap::{Parser, ValueEnum};
+
+use super::commands::{CompileMode, OPT_1, OPT_2, OPT_3, OPT_69420, OPT_NONE, OPT_S};
+use crate::target::Target;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "memeasm",
     about = "The MemeAssembly compiler",
     disable_help_flag = true,
-    disable_version_flag = true
+    disable_version_flag = true,
+    args_override_self = true
 )]
 pub struct Cli {
     /// Output file
-    #[arg(short = 'o', long = "output", value_name = "FILE", action = ArgAction::Append)]
-    pub output: Vec<OsString>,
+    #[arg(short = 'o', long = "output", value_name = "FILE")]
+    pub output: Option<OsString>,
 
     /// Only compile to x86_64 Assembly code
-    #[arg(short = 'S', action = ArgAction::Count)]
-    pub assembly: u8,
+    #[arg(short = 'S', long = "assembly", conflicts_with = "object")]
+    pub assembly: bool,
 
-    /// Only compile to an object file (`-O` without a value)
-    #[arg(long = "object", action = ArgAction::Count)]
-    pub object: u8,
+    /// Only compile to an object file
+    #[arg(short = 'O', long = "object")]
+    pub object: bool,
 
-    /// Reverse optimisation level (`-O-1`, `-O-2`, `-O-3`, `-O-s`, `-O69420`)
-    #[arg(long = "opt-level", value_name = "LEVEL", allow_hyphen_values = true, action = ArgAction::Append)]
-    pub opt_level: Vec<String>,
+    /// Reverse optimisation stage -1, -2, -3, reverse storage optimisation -s, or the maximum
+    /// optimisation 69420
+    #[arg(long = "opt-level", value_name = "LEVEL", allow_hyphen_values = true)]
+    pub opt_level: Option<OptLevel>,
 
-    /// Enables debug logs
-    #[arg(short = 'd', long = "debug", action = ArgAction::Count)]
-    pub debug: u8,
-
-    /// Write debug info into the compiled file
-    #[arg(short = 'g', action = ArgAction::Count)]
-    pub debug_info: u8,
-
-    /// Displays the help page
-    #[arg(short = 'h', long = "help", action = ArgAction::Count)]
-    pub help: u8,
-
-    /// Prints version information
-    #[arg(short = 'v', long = "version", action = ArgAction::Count)]
-    pub version: u8,
-
-    /// Compile mode: noob (default), bully or obfuscated
-    #[arg(long = "fcompile-mode", alias = "compile-mode", value_name = "MODE", allow_hyphen_values = true, action = ArgAction::Append)]
-    pub compile_mode: Vec<String>,
+    /// Compile mode
+    #[arg(long = "compile-mode", value_name = "MODE", default_value = "noob")]
+    pub compile_mode: CompileMode,
 
     /// Disables martyrdom
-    #[arg(long = "fno-martyrdom", alias = "no-martyrdom", action = ArgAction::Count)]
-    pub no_martyrdom: u8,
+    #[arg(long = "no-martyrdom")]
+    pub no_martyrdom: bool,
 
-    /// Target operating system: linux, macos or windows
-    #[arg(long = "ftarget", alias = "target", value_name = "OS", allow_hyphen_values = true, action = ArgAction::Append)]
-    pub target: Vec<String>,
+    /// Target operating system (default: the host's)
+    #[arg(long = "target", value_name = "OS")]
+    pub target: Option<Target>,
+
+    /// Enables debug logs
+    #[arg(short = 'd', long = "debug")]
+    pub debug: bool,
+
+    /// Write debug info into the compiled file
+    #[arg(short = 'g', long = "debug-info")]
+    pub debug_info: bool,
+
+    /// Displays the help page
+    #[arg(short = 'h', long = "help")]
+    pub help: bool,
+
+    /// Prints version information
+    #[arg(short = 'v', long = "version")]
+    pub version: bool,
 
     /// Input files
     #[arg(value_name = "inputFile")]
     pub files: Vec<OsString>,
 }
 
-/// The long options of memeasm.c (plus `ftarget`), in getopt's table order, and whether they
-/// take a value. Abbreviations are resolved against these names only.
-const LONG_OPTIONS: [(&str, bool); 6] = [
-    ("output", true),
-    ("help", false),
-    ("debug", false),
-    ("fno-martyrdom", false),
-    ("fcompile-mode", true),
-    ("ftarget", true),
-];
-
-/// Additional exact-only long names (clap-style aliases), whether they take a value, and
-/// whether the single-dash spelling is accepted too. It is not for `object`/`opt-level`:
-/// getopt_long_only read `-object` as `-o bject` and `-opt-level` as `-o pt-level`. The other
-/// single-dash forms were either rejected by C (`-target`, `-compile-mode`, `-no-martyrdom`)
-/// or meant the same (`-version` = `-v`).
-const ALIASES: [(&str, bool, bool); 6] = [
-    ("compile-mode", true, true),
-    ("no-martyrdom", false, true),
-    ("target", true, true),
-    ("object", false, false),
-    ("opt-level", true, false),
-    ("version", false, true),
-];
-
-/// The short options of the C optstring `o:hO::dgSv`.
-const SHORT_OPTIONS: &[u8] = b"ohOdgSv";
-
-enum LongMatch {
-    Found(&'static str, bool),
-    Ambiguous,
-    None,
+/// The values of `--opt-level`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum OptLevel {
+    #[value(name = "-1")]
+    Reverse1,
+    #[value(name = "-2")]
+    Reverse2,
+    #[value(name = "-3")]
+    Reverse3,
+    #[value(name = "-s")]
+    ReverseStorage,
+    #[value(name = "69420")]
+    Max,
 }
 
-fn find_long(name: &str, double_dash: bool) -> LongMatch {
-    if let Some(&(n, v)) = LONG_OPTIONS.iter().find(|(n, _)| *n == name) {
-        return LongMatch::Found(n, v);
-    }
-    if let Some(&(n, v, _)) = ALIASES.iter().find(|(n, _, single)| *n == name && (double_dash || *single)) {
-        return LongMatch::Found(n, v);
-    }
-    let mut candidates = LONG_OPTIONS.iter().filter(|(n, _)| n.starts_with(name));
-    match (candidates.next(), candidates.next()) {
-        (Some(&(n, v)), None) if !name.is_empty() => LongMatch::Found(n, v),
-        (Some(_), Some(_)) => LongMatch::Ambiguous,
-        _ => LongMatch::None,
-    }
-}
-
-/// Rewrites getopt_long_only spellings into canonical clap spellings (see the module docs).
-pub fn normalize(args: Vec<OsString>) -> Vec<OsString> {
-    let mut out = Vec::with_capacity(args.len());
-    let mut iter = args.into_iter();
-    if let Some(program) = iter.next() {
-        out.push(program);
-    }
-    while let Some(arg) = iter.next() {
-        let Some(text) = arg.to_str().map(str::to_string) else {
-            out.push(arg);
-            continue;
-        };
-        if text == "--" {
-            out.push(arg);
-            out.extend(iter.by_ref());
-            break;
-        }
-        if !text.starts_with('-') || text == "-" {
-            out.push(arg);
-            continue;
-        }
-
-        let double_dash = text.starts_with("--");
-        let body = if double_dash { &text[2..] } else { &text[1..] };
-        // getopt_long_only tries a single-dash argument as a long option unless it is a
-        // single valid short option character.
-        let try_long = double_dash || body.len() > 1 || !SHORT_OPTIONS.contains(&body.as_bytes()[0]);
-        if try_long {
-            let (name, value) = match body.split_once('=') {
-                Some((n, v)) => (n, Some(v)),
-                None => (body, None),
-            };
-            match find_long(name, double_dash) {
-                LongMatch::Found(canonical, takes_value) => {
-                    let mut canon = format!("--{canonical}");
-                    match value {
-                        Some(v) => {
-                            canon.push('=');
-                            canon.push_str(v);
-                            out.push(canon.into());
-                        }
-                        None if takes_value => match iter.next() {
-                            Some(next) => {
-                                let mut joined = OsString::from(canon + "=");
-                                joined.push(next);
-                                out.push(joined);
-                            }
-                            None => out.push(canon.into()),
-                        },
-                        None => out.push(canon.into()),
-                    }
-                    continue;
-                }
-                // Unknown or ambiguous: let clap report it.
-                LongMatch::Ambiguous => {
-                    out.push(arg);
-                    continue;
-                }
-                LongMatch::None if double_dash || !SHORT_OPTIONS.contains(&body.as_bytes()[0]) => {
-                    out.push(arg);
-                    continue;
-                }
-                LongMatch::None => {}
+/// Rewrites the C spellings `-O-1`, `-O-2`, `-O-3`, `-O-s` and `-O69420` (an attached value
+/// clap can't express next to the `-O` flag) to `--opt-level=…`, up to a `--`.
+pub fn legacy_opt_args(args: impl IntoIterator<Item = OsString>) -> Vec<OsString> {
+    let mut options_ended = false;
+    args.into_iter()
+        .map(|arg| match arg.to_str() {
+            Some("--") => {
+                options_ended = true;
+                arg
             }
-        }
-
-        // A cluster of short options.
-        for (i, c) in body.char_indices() {
-            let rest = &body[i + c.len_utf8()..];
-            match c {
-                'O' if rest.is_empty() => out.push("--object".into()),
-                'O' => out.push(format!("--opt-level={rest}").into()),
-                'o' if !rest.is_empty() => out.push(format!("--output={rest}").into()),
-                'o' => match iter.next() {
-                    Some(next) => {
-                        let mut joined = OsString::from("--output=");
-                        joined.push(next);
-                        out.push(joined);
-                    }
-                    None => out.push("-o".into()),
-                },
-                _ => {
-                    out.push(format!("-{c}").into());
-                    continue;
-                }
+            Some(text @ ("-O-1" | "-O-2" | "-O-3" | "-O-s" | "-O69420")) if !options_ended => {
+                format!("--opt-level={}", &text[2..]).into()
             }
-            break;
-        }
+            _ => arg,
+        })
+        .collect()
+}
+
+/// The `optimisation_level` of an optional `--opt-level`.
+pub fn optimisation_level(level: Option<OptLevel>) -> i64 {
+    match level {
+        None => OPT_NONE,
+        Some(OptLevel::Reverse1) => OPT_1,
+        Some(OptLevel::Reverse2) => OPT_2,
+        Some(OptLevel::Reverse3) => OPT_3,
+        Some(OptLevel::ReverseStorage) => OPT_S,
+        Some(OptLevel::Max) => OPT_69420,
     }
-    out
 }
 
-/// An unknown option that [`normalize`] left as it was (`-fbogus`, `-xyz`). clap would report
-/// only its first character (`-f`), getopt named the whole argument.
-pub fn unknown_option(normalized: &[OsString]) -> Option<String> {
-    normalized
-        .iter()
-        .skip(1)
-        .map_while(|a| a.to_str().filter(|a| *a != "--"))
-        .find(|a| a.len() > 2 && a.starts_with('-') && !a.starts_with("--"))
-        .map(str::to_string)
-}
-
-/// The clap error for an unknown option, naming the complete argument.
-pub fn unknown_option_error(arg: &str) -> clap::Error {
-    use clap::error::{ContextKind, ContextValue, ErrorKind};
-    use clap::CommandFactory;
-    let mut cmd = Cli::command();
-    let usage = cmd.render_usage();
-    let mut e = clap::Error::new(ErrorKind::UnknownArgument).with_cmd(&cmd);
-    e.insert(ContextKind::InvalidArg, ContextValue::String(arg.to_string()));
-    let tip = format!("to pass '{arg}' as a value, use '-- {arg}'");
-    e.insert(ContextKind::Suggested, ContextValue::StyledStrs(vec![tip.into()]));
-    e.insert(ContextKind::Usage, ContextValue::StyledStr(usage));
-    e
-}
-
-/// The options whose relative order matters (memeasm.c handled them one by one in argv order).
-#[derive(Debug, PartialEq, Eq)]
-pub enum Event {
-    Help,
-    Version,
-    OptLevel(String),
-    CompileMode(String),
-    Target(String),
-    DebugInfo,
-    Assembly,
-    Object,
-}
-
-/// The order-dependent options of a [`normalize`]d command line that clap accepted, in order.
-/// After normalisation every option is a separate `-x` or `--name[=value]` argument.
-pub fn events(normalized: &[OsString]) -> Vec<Event> {
-    let mut list = Vec::new();
-    for arg in normalized.iter().skip(1) {
-        let Some(arg) = arg.to_str() else { continue };
-        if arg == "--" {
-            break;
-        }
-        let (name, value) = match arg.split_once('=') {
-            Some((n, v)) => (n, v.to_string()),
-            None => (arg, String::new()),
-        };
-        list.push(match name {
-            "-h" | "--help" => Event::Help,
-            "-v" | "--version" => Event::Version,
-            "-g" => Event::DebugInfo,
-            "-S" => Event::Assembly,
-            "--object" => Event::Object,
-            "--opt-level" => Event::OptLevel(value),
-            "--fcompile-mode" | "--compile-mode" => Event::CompileMode(value),
-            "--ftarget" | "--target" => Event::Target(value),
-            _ => continue,
-        });
-    }
-    list
+/// The command line name of a target (`linux`, `macos`, `windows`).
+pub fn target_name(target: Target) -> String {
+    target.to_possible_value().map(|v| v.get_name().to_string()).unwrap_or_default()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::error::ErrorKind;
 
-    fn norm(args: &[&str]) -> Vec<String> {
-        let mut v: Vec<OsString> = vec!["memeasm".into()];
-        v.extend(args.iter().map(OsString::from));
-        normalize(v).into_iter().skip(1).map(|s| s.into_string().unwrap()).collect()
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("memeasm").chain(args.iter().copied()))
     }
 
     #[test]
-    fn c_spellings() {
-        assert_eq!(norm(&["-o", "out", "in.memeasm"]), ["--output=out", "in.memeasm"]);
-        assert_eq!(norm(&["-ofile"]), ["--output=file"]);
-        assert_eq!(norm(&["-So", "-weird"]), ["-S", "--output=-weird"]);
-        assert_eq!(norm(&["-O"]), ["--object"]);
-        assert_eq!(norm(&["-O-1", "-O-s", "-O69420"]), ["--opt-level=-1", "--opt-level=-s", "--opt-level=69420"]);
-        assert_eq!(norm(&["-dO-2"]), ["-d", "--opt-level=-2"]);
-        assert_eq!(norm(&["-dgS"]), ["-d", "-g", "-S"]);
-        assert_eq!(norm(&["-fcompile-mode", "bully"]), ["--fcompile-mode=bully"]);
-        assert_eq!(norm(&["-fcompile-mode=bully"]), ["--fcompile-mode=bully"]);
-        assert_eq!(norm(&["-fno-martyrdom"]), ["--fno-martyrdom"]);
-        assert_eq!(norm(&["-ftarget", "windows"]), ["--ftarget=windows"]);
-        assert_eq!(norm(&["-help", "--help", "-h"]), ["--help", "--help", "-h"]);
-        assert_eq!(norm(&["-debug", "-v"]), ["--debug", "-v"]);
-    }
-
-    #[test]
-    fn abbreviations() {
-        assert_eq!(norm(&["-out", "x"]), ["--output=x"]);
-        assert_eq!(norm(&["--out=x"]), ["--output=x"]);
-        assert_eq!(norm(&["-fc", "noob"]), ["--fcompile-mode=noob"]);
-        assert_eq!(norm(&["-fno"]), ["--fno-martyrdom"]);
-        assert_eq!(norm(&["-he"]), ["--help"]);
-        // "-f" is ambiguous, "-x" unknown: left for clap to reject
-        assert_eq!(norm(&["-f"]), ["-f"]);
-        assert_eq!(norm(&["-xyz"]), ["-xyz"]);
-    }
-
-    #[test]
-    fn single_dash_aliases() {
-        assert_eq!(norm(&["-object"]), ["--output=bject"]);
-        assert_eq!(norm(&["-opt-level"]), ["--output=pt-level"]);
-        assert_eq!(norm(&["--object", "--opt-level", "-1"]), ["--object", "--opt-level=-1"]);
-        assert_eq!(norm(&["-target", "linux", "-version"]), ["--target=linux", "--version"]);
-        assert_eq!(norm(&["-compile-mode=noob", "-no-martyrdom"]), ["--compile-mode=noob", "--no-martyrdom"]);
-    }
-
-    #[test]
-    fn unknown_options_are_named_completely() {
-        let n = |args: &[&str]| {
-            let mut v: Vec<OsString> = vec!["memeasm".into()];
-            v.extend(args.iter().map(OsString::from));
-            unknown_option(&normalize(v))
-        };
-        assert_eq!(n(&["-fbogus", "-S"]).as_deref(), Some("-fbogus"));
-        assert_eq!(n(&["-xyz"]).as_deref(), Some("-xyz"));
-        assert_eq!(n(&["-dx", "-o", "-weird", "--", "-abc"]), None);
-        let msg = unknown_option_error("-fbogus").to_string();
-        assert!(msg.starts_with("error: unexpected argument '-fbogus' found"), "{msg}");
-    }
-
-    #[test]
-    fn positionals_and_terminator() {
-        assert_eq!(norm(&["a", "-", "-S", "--", "-O", "b"]), ["a", "-", "-S", "--", "-O", "b"]);
-    }
-
-    #[test]
-    fn clap_parses_normalized_arguments() {
-        let mut v: Vec<OsString> = vec!["memeasm".into()];
-        v.extend(["in1", "-O-1", "-o", "out", "-S", "-fcompile-mode", "bully", "in2", "-g"].map(OsString::from));
-        let cli = Cli::try_parse_from(normalize(v)).unwrap();
+    fn options() {
+        let cli = parse(&[
+            "in1", "--opt-level", "-1", "-o", "out", "-S", "--compile-mode", "bully", "in2", "-g", "-d",
+            "--target=windows", "--no-martyrdom",
+        ])
+        .unwrap();
         assert_eq!(cli.files, ["in1", "in2"]);
-        assert_eq!(cli.output, ["out"]);
-        assert_eq!(cli.opt_level, ["-1"]);
-        assert_eq!(cli.compile_mode, ["bully"]);
-        assert_eq!((cli.assembly, cli.debug_info, cli.object), (1, 1, 0));
+        assert_eq!(cli.output.as_deref(), Some("out".as_ref()));
+        assert_eq!(optimisation_level(cli.opt_level), OPT_1);
+        assert_eq!(cli.compile_mode, CompileMode::Bully);
+        assert_eq!(cli.target, Some(Target::Windows));
+        assert!(cli.assembly && !cli.object && cli.debug_info && cli.debug && cli.no_martyrdom);
+        assert!(!cli.help && !cli.version);
     }
 
     #[test]
-    fn events_in_command_line_order() {
-        let mut v: Vec<OsString> = vec!["memeasm".into()];
-        v.extend(["-g", "-o", "-g", "-O", "x", "-gS", "-ftarget", "windows", "-O-1", "--", "-h"].map(OsString::from));
-        assert_eq!(
-            events(&normalize(v)),
-            [
-                Event::DebugInfo,
-                Event::Object,
-                Event::DebugInfo,
-                Event::Assembly,
-                Event::Target("windows".into()),
-                Event::OptLevel("-1".into()),
-            ]
-        );
+    fn defaults() {
+        let cli = parse(&["-o", "out", "in"]).unwrap();
+        assert_eq!(optimisation_level(cli.opt_level), OPT_NONE);
+        assert_eq!(cli.compile_mode, CompileMode::Noob);
+        assert_eq!(cli.target, None);
+        assert!(!cli.assembly && !cli.object && !cli.no_martyrdom);
+    }
+
+    #[test]
+    fn opt_levels() {
+        for (value, level) in [("-1", OPT_1), ("-2", OPT_2), ("-3", OPT_3), ("-s", OPT_S), ("69420", OPT_69420)] {
+            assert_eq!(optimisation_level(parse(&["--opt-level", value]).unwrap().opt_level), level);
+            let attached = format!("--opt-level={value}");
+            assert_eq!(optimisation_level(parse(&[&attached]).unwrap().opt_level), level);
+        }
+        assert_eq!(parse(&["--opt-level=-4"]).unwrap_err().kind(), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn legacy_opt_spellings() {
+        let legacy = |args: &[&str]| {
+            let args = legacy_opt_args(std::iter::once("memeasm").chain(args.iter().copied()).map(OsString::from));
+            Cli::try_parse_from(args)
+        };
+        for (value, level) in [("-O-1", OPT_1), ("-O-2", OPT_2), ("-O-3", OPT_3), ("-O-s", OPT_S), ("-O69420", OPT_69420)] {
+            let cli = legacy(&["-S", value, "in"]).unwrap();
+            assert_eq!(optimisation_level(cli.opt_level), level);
+            assert!(!cli.object);
+        }
+        let cli = legacy(&["-O", "-O-1", "in"]).unwrap();
+        assert!(cli.object && optimisation_level(cli.opt_level) == OPT_1);
+        // after `--` it is an input file
+        assert_eq!(legacy(&["--", "-O-1"]).unwrap().files, ["-O-1"]);
+        assert_eq!(legacy(&["--", "-O-1", "--"]).unwrap().files, ["-O-1", "--"]);
+        assert!(legacy(&["-O-4"]).is_err());
+    }
+
+    #[test]
+    fn short_clusters_and_attached_values() {
+        let cli = parse(&["-dSoout", "in"]).unwrap();
+        assert!(cli.debug && cli.assembly);
+        assert_eq!(cli.output.as_deref(), Some("out".as_ref()));
+        let cli = parse(&["-gO", "-o", "out.o", "in"]).unwrap();
+        assert!(cli.debug_info && cli.object);
+        assert_eq!(cli.output.as_deref(), Some("out.o".as_ref()));
+    }
+
+    #[test]
+    fn last_occurrence_wins() {
+        let cli = parse(&["--opt-level=-1", "--opt-level=69420", "-o", "a", "-o", "b", "-g", "-g"]).unwrap();
+        assert_eq!(optimisation_level(cli.opt_level), OPT_69420);
+        assert_eq!(cli.output.as_deref(), Some("b".as_ref()));
+    }
+
+    #[test]
+    fn errors() {
+        let kind = |args: &[&str]| parse(args).unwrap_err().kind();
+        assert_eq!(kind(&["-S", "-O"]), ErrorKind::ArgumentConflict);
+        assert_eq!(kind(&["-x"]), ErrorKind::UnknownArgument);
+        assert_eq!(kind(&["-fcompile-mode", "bully"]), ErrorKind::UnknownArgument);
+        assert_eq!(kind(&["--compile-mode", "foo"]), ErrorKind::InvalidValue);
+        assert_eq!(kind(&["--target", "amiga"]), ErrorKind::InvalidValue);
+        assert_eq!(kind(&["in", "-o"]), ErrorKind::InvalidValue);
+        assert_eq!(kind(&["in", "--compile-mode"]), ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn terminator() {
+        let cli = parse(&["-o", "out", "--", "-S"]).unwrap();
+        assert_eq!(cli.files, ["-S"]);
+        assert!(!cli.assembly);
+    }
+
+    #[test]
+    fn target_names() {
+        assert_eq!(target_name(Target::MacOS), "macos");
+        assert_eq!(target_name(Target::Linux), "linux");
+        assert_eq!(target_name(Target::Windows), "windows");
     }
 }
