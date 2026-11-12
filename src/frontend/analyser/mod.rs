@@ -12,7 +12,7 @@ use super::commands::*;
 use super::state::*;
 use super::random::Rng;
 use super::log::{print_debug, print_error, print_thanos_ascii};
-use helper::{check_companion_command_existence, check_duplicate_definition};
+use helper::{check_companion_command_existence, check_duplicate_definition, check_edition_companion_existence};
 
 /// Runs the parameter checks on every command and then the analyses, ordered by the opcode of
 /// the commands each one is about. The order fixes the order of the error messages and of the
@@ -42,6 +42,7 @@ pub fn analyse_commands(state: &mut CompileState) {
     analyse_jump_markers(list(Opcode::Banana), list(Opcode::WhereBanana), state);
     analyse_monke_markers(list(Opcode::Monke), list(Opcode::ReturnToMonke), state);
     analyse_who_would_win_commands(list(Opcode::WhoWouldWin), list(Opcode::Wins), state);
+    analyse_who_would_win_editions(list(Opcode::WhoWouldWinEdition), list(Opcode::EditionWins), state);
     analyse_theyre_the_same_picture_commands(list(Opcode::FindDifference), list(Opcode::SamePicture), state);
     set_confused_stonks_jump_label(state, &mut rng);
     choose_lines_to_be_deleted(list(Opcode::PerfectlyBalanced).len(), state, &mut rng);
@@ -86,6 +87,15 @@ fn analyse_jump_markers(markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut Compil
 fn analyse_who_would_win_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
     check_duplicate_definition(labels, state, true, 1, "comparison jump marker");
     check_companion_command_existence(comparisons, labels, state, 2, true, "comparison jump label");
+}
+
+/// "who would win" comparisons with an edition: each "{e}: {p} wins" label is defined once per
+/// edition and file, and both parameters of a comparison need a label of its edition with their
+/// text in the same file. The editions are independent of each other and of the labels without
+/// an edition, so a register can be compared in several editions.
+fn analyse_who_would_win_editions(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
+    check_duplicate_definition(labels, state, true, 2, "comparison jump marker");
+    check_edition_companion_existence(comparisons, labels, state, 2, "comparison jump label");
 }
 
 /// "corporate needs you to find the difference": at most one "they're the same picture" label

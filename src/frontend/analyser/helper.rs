@@ -67,7 +67,35 @@ pub fn check_companion_command_existence(
     same_file: bool,
     item_name: &str,
 ) {
+    check_companions(parents, children, state, parameters_to_check, same_file, item_name, None);
+}
+
+/// [`check_companion_command_existence`] for "who would win" comparisons with an edition: the
+/// parent's parameter `edition` is the edition, and a companion must have it as its first
+/// parameter and the text of the parent's parameter as its second one
+/// (`who would win? rax or rbx (2026 edition)` needs `2026: rax wins` and `2026: rbx wins`).
+pub fn check_edition_companion_existence(
+    parents: &[CmdLoc],
+    children: &[CmdLoc],
+    state: &mut CompileState,
+    edition: usize,
+    item_name: &str,
+) {
+    check_companions(parents, children, state, 2, true, item_name, Some(edition));
+}
+
+fn check_companions(
+    parents: &[CmdLoc],
+    children: &[CmdLoc],
+    state: &mut CompileState,
+    parameters_to_check: u8,
+    same_file: bool,
+    item_name: &str,
+    edition: Option<usize>,
+) {
     let parameters_to_check = parameters_to_check.min(2);
+    // (the companion's parameter that names the parent's parameter)
+    let child_param = if edition.is_some() { 1 } else { 0 };
     for &parent in parents {
         let mut child_found = [false; 2];
         let command = state.cmd(parent).clone();
@@ -78,12 +106,14 @@ pub fn check_companion_command_existence(
         );
 
         for &child in children {
-            if !same_file || parent.file == child.file {
-                let child_cmd = state.cmd(child);
-                if parameters_to_check == 0 || param_eq(state, &command, 0, child_cmd, 0) {
+            let child_cmd = state.cmd(child);
+            if (!same_file || parent.file == child.file)
+                && edition.is_none_or(|e| param_eq(state, &command, e, child_cmd, 0))
+            {
+                if parameters_to_check == 0 || param_eq(state, &command, 0, child_cmd, child_param) {
                     child_found[0] = true;
                 }
-                if parameters_to_check == 2 && param_eq(state, &command, 1, child_cmd, 0) {
+                if parameters_to_check == 2 && param_eq(state, &command, 1, child_cmd, child_param) {
                     child_found[1] = true;
                 }
             }
@@ -104,8 +134,14 @@ pub fn check_companion_command_existence(
                 if !found {
                     if !state.bully() {
                         let parameter = command.param_text(i, state.target);
-                        let format = "%s was not defined for parameter \"%s\"";
-                        print_error_fmt(state, &file_name, line, format, &[item_name.as_bytes(), &parameter]);
+                        if let Some(e) = edition {
+                            let edition = command.param_text(e, state.target);
+                            let format = "%s was not defined for parameter \"%s\" of the \"%s\" edition";
+                            print_error_fmt(state, &file_name, line, format, &[item_name.as_bytes(), &parameter, &edition]);
+                        } else {
+                            let format = "%s was not defined for parameter \"%s\"";
+                            print_error_fmt(state, &file_name, line, format, &[item_name.as_bytes(), &parameter]);
+                        }
                     } else {
                         state.cmd_mut(parent).translate = false;
                     }
@@ -142,5 +178,40 @@ mod tests {
         assert_eq!(errors_in_main("who would win? rax or rax\nrax wins"), 0);
         assert_eq!(errors_in_main("who would win? rax or rbx\nrax wins"), 1);
         assert_eq!(errors_in_main("who would win? rax or rbx"), 2);
+    }
+
+    #[test]
+    fn comparison_labels_with_edition() {
+        let both = "who would win? rax or rbx (2026 edition)\n2026: rax wins\n2026: rbx wins";
+        assert_eq!(errors_in_main(both), 0);
+        // registers can be reused across editions, and next to the labels without an edition
+        assert_eq!(
+            errors_in_main(&format!(
+                "{both}\nwho would win? rax or rbx (2027 edition)\n2027: rax wins\n2027: rbx wins\n\
+                 who would win? rax or rbx\nrax wins\nrbx wins"
+            )),
+            0
+        );
+        // one edition serves several comparisons
+        assert_eq!(errors_in_main(&format!("{both}\nwho would win? rbx or rax (2026 edition)")), 0);
+        assert_eq!(errors_in_main("who would win? rax or rax (x edition)\nx: rax wins"), 0);
+        // the labels must name the edition exactly; labels without an edition don't count
+        assert_eq!(errors_in_main("who would win? rax or rbx (2026 edition)\n2026: rax wins"), 1);
+        assert_eq!(errors_in_main("who would win? rax or rbx (2026 edition)\n2027: rax wins\nrbx wins"), 2);
+        assert_eq!(errors_in_main("who would win? rax or rbx\n2026: rax wins\n2026: rbx wins"), 2);
+        // a label is defined once per edition
+        assert_eq!(errors_in_main(&format!("{both}\n2026: rax wins")), 1);
+        // without an edition, a label is still defined once
+        assert_eq!(errors_in_main("who would win? rax or rbx\nrax wins\nrbx wins\nrax wins"), 1);
+    }
+
+    #[test]
+    fn invalid_editions() {
+        // like function names, but may start with a digit
+        assert_eq!(errors_in_main("who would win? rax or rbx (a.b$_1 edition)\na.b$_1: rax wins\na.b$_1: rbx wins"), 0);
+        for edition in ["a-b", "\u{e4}", "()"] {
+            let src = format!("who would win? rax or rbx ({edition} edition)\n{edition}: rax wins\n{edition}: rbx wins");
+            assert!(errors_in_main(&src) > 0, "{edition}");
+        }
     }
 }

@@ -89,14 +89,17 @@ fn match_command(command: &Command, line: &[u8], input_file_name: &[u8], line_nu
             _ => return Match::Mismatch,
         };
 
-        // A parameter word of a pattern is "{p}" or "{p}:"
-        let Some(suffix) = pattern_word.strip_prefix(b"{p}") else {
+        // A parameter word of a pattern is "{p}", "{p}:" or "({p}"
+        let Some(at) = pattern_word.windows(3).position(|w| w == b"{p}") else {
             if pattern_word != line_word {
                 return Match::Mismatch;
             }
             continue;
         };
-        let Some(text) = line_word.strip_suffix(suffix) else { return Match::Mismatch };
+        let (prefix, suffix) = (&pattern_word[..at], &pattern_word[at + 3..]);
+        let Some(text) = line_word.strip_prefix(prefix).and_then(|w| w.strip_suffix(suffix)) else {
+            return Match::Mismatch;
+        };
         // Function names (definitions and calls) get a `_` prefix on macOS
         let mangle = matches!(command.opcode, Opcode::FuncDef | Opcode::Call);
         parameters.push(Param::Raw { text: text.to_vec(), mangle });
@@ -125,7 +128,7 @@ fn bully_replacement(parsed: &mut ParsedCommand, line: &[u8], input_file_name: &
     let command = &COMMAND_LIST[(ci % Opcode::Invalid as u64) as usize];
     parsed.opcode = command.opcode;
     let count = RANDOM_PARAMS.len() as u64;
-    let picks = [ci % count, ci.wrapping_mul(first) % count];
+    let picks = [ci % count, ci.wrapping_mul(first) % count, ci.wrapping_mul(first).wrapping_mul(first) % count];
     for (slot, pick) in parsed.parameters.iter_mut().zip(picks).take(command.used_parameters()) {
         // (no macOS `_` prefix for these)
         *slot = Some(Param::Raw { text: RANDOM_PARAMS[pick as usize].as_bytes().to_vec(), mangle: false });
@@ -258,13 +261,19 @@ mod tests {
         (commands, state.compiler_errors)
     }
 
-    /// The parser only produces raw parameters
+    /// The parser only produces raw parameters (the first two; see [`edition`] for the third)
     fn params(c: &ParsedCommand) -> [Option<&[u8]>; 2] {
-        c.parameters.each_ref().map(|p| {
-            p.as_ref().map(|p| match p {
-                Param::Raw { text, .. } => &text[..],
-                other => panic!("unexpected {other:?}"),
-            })
+        [0, 1].map(|i| raw(c, i))
+    }
+
+    fn edition(c: &ParsedCommand) -> Option<&[u8]> {
+        raw(c, 2)
+    }
+
+    fn raw(c: &ParsedCommand, i: usize) -> Option<&[u8]> {
+        c.parameters[i].as_ref().map(|p| match p {
+            Param::Raw { text, .. } => &text[..],
+            other => panic!("unexpected {other:?}"),
         })
     }
 
@@ -297,6 +306,34 @@ mod tests {
                 (10, Opcode::Return, None, [None, None]),
             ]
         );
+
+        // comparisons with an edition ("({p}" parameter words) and their labels
+        let src = b"who would win? rax or 5 (2026 edition)\n\
+            who would win? rax or rbx\n\
+            2026: rax wins\n\
+            rax wins\n\
+            who would win? rax or rbx (2026 edition) or draw 25\n\
+            who would win? rax or rbx ( edition)\n\
+            :: rax wins";
+        let (c, errors) = parse(src, Target::Linux);
+        assert_eq!(errors, 0);
+        let summary: Vec<_> = c.iter().map(|c| (c.opcode, params(c), edition(c))).collect();
+        assert_eq!(
+            summary,
+            [
+                (Opcode::WhoWouldWinEdition, [Some(&b"rax"[..]), Some(b"5")], Some(&b"2026"[..])),
+                (Opcode::WhoWouldWin, [Some(&b"rax"[..]), Some(b"rbx")], None),
+                (Opcode::EditionWins, [Some(&b"2026"[..]), Some(b"rax")], None),
+                (Opcode::Wins, [Some(&b"rax"[..]), None], None),
+                (Opcode::OrDraw25, [None, None], None),
+                (Opcode::WhoWouldWinEdition, [Some(&b"rax"[..]), Some(b"rbx")], Some(&b""[..])),
+                (Opcode::EditionWins, [Some(&b":"[..]), Some(b"rax")], None),
+            ]
+        );
+        for line in [&b"who would win? rax or rbx 2026 edition"[..], b"who would win? rax or rbx (2026 edition", b"2026 : rax wins"] {
+            let (c, errors) = parse(line, Target::Linux);
+            assert_eq!((c[0].opcode, errors), (Opcode::Invalid, 1), "{:?}", String::from_utf8_lossy(line));
+        }
 
         // macOS function names get their underscore
         let (c, _) = parse(b"I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n", Target::MacOS);

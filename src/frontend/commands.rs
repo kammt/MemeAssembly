@@ -9,21 +9,23 @@ use std::borrow::Cow;
 use crate::target::Target;
 
 // Parameter types (bit flags)
-pub const PARAM_REG64: u8 = 1;
-pub const PARAM_REG32: u8 = 2;
-pub const PARAM_REG16: u8 = 4;
-pub const PARAM_REG8: u8 = 8;
-pub const PARAM_DECIMAL: u8 = 16;
-pub const PARAM_CHAR: u8 = 32;
-pub const PARAM_MONKE_LABEL: u8 = 64;
-pub const PARAM_FUNC_NAME: u8 = 128;
-pub const PARAM_REG: u8 = PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8;
+pub const PARAM_REG64: u16 = 1;
+pub const PARAM_REG32: u16 = 2;
+pub const PARAM_REG16: u16 = 4;
+pub const PARAM_REG8: u16 = 8;
+pub const PARAM_DECIMAL: u16 = 16;
+pub const PARAM_CHAR: u16 = 32;
+pub const PARAM_MONKE_LABEL: u16 = 64;
+pub const PARAM_FUNC_NAME: u16 = 128;
+/// The edition of a "who would win" comparison (`(2026 edition)`, `2026: rax wins`).
+pub const PARAM_COMPARISON_LABEL: u16 = 256;
+pub const PARAM_REG: u16 = PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8;
 /// An immediate: a decimal number or a character.
-pub const PARAM_IMM: u8 = PARAM_DECIMAL | PARAM_CHAR;
-pub const PARAM_REG_OR_IMM: u8 = PARAM_REG | PARAM_IMM;
+pub const PARAM_IMM: u16 = PARAM_DECIMAL | PARAM_CHAR;
+pub const PARAM_REG_OR_IMM: u16 = PARAM_REG | PARAM_IMM;
 
 /// Whether the `PARAM_*` type is a register of any size.
-pub fn param_is_reg(param: u8) -> bool {
+pub fn param_is_reg(param: u16) -> bool {
     param & PARAM_REG != 0
 }
 
@@ -37,18 +39,25 @@ pub const POINTER_SUFFIX: &[u8] = b"do you know de wey";
 /// One entry of [`COMMAND_LIST`].
 pub struct Command {
     pub opcode: Opcode,
-    /// The text of the command; every `{p}` (at the start of a word) is a parameter.
+    /// The text of the command; every `{p}` is a parameter. It takes up a word of its own, or
+    /// a word with a `(` before it or a `:` after it.
     pub pattern: &'static str,
     /// The allowed `PARAM_*` types of each parameter.
-    pub allowed_param_types: &'static [u8],
+    pub allowed_param_types: &'static [u16],
     /// Generates the command's code (for `-S` text and object code alike).
     pub code: CodeGen,
 }
 
 impl Command {
-    /// The number of parameters the command takes (0 to 2).
+    /// The number of parameters the command takes (0 to 3).
     pub fn used_parameters(&self) -> usize {
         self.allowed_param_types.len()
+    }
+
+    /// Whether the first two parameters are the operands of one instruction (a register and a
+    /// register or an immediate), so that their combination must be encodable.
+    pub fn has_two_operands(&self) -> bool {
+        matches!(self.allowed_param_types, [a, b, ..] if param_is_reg(*a) && b & PARAM_REG_OR_IMM != 0)
     }
 }
 
@@ -105,6 +114,10 @@ commands! {
     ReturnToMonke => "return to monke {p}", [PARAM_MONKE_LABEL], tr::monke_jump;
     WhoWouldWin => "who would win? {p} or {p}", [PARAM_REG, PARAM_REG_OR_IMM], tr::who_would_win;
     Wins => "{p} wins", [PARAM_REG_OR_IMM], tr::wins_label;
+    /// A comparison with its own labels: `who would win? rax or rbx (2026 edition)` jumps to
+    /// `2026: rax wins` or `2026: rbx wins`
+    WhoWouldWinEdition => "who would win? {p} or {p} ({p} edition)", [PARAM_REG, PARAM_REG_OR_IMM, PARAM_COMPARISON_LABEL], tr::who_would_win_edition;
+    EditionWins => "{p}: {p} wins", [PARAM_COMPARISON_LABEL, PARAM_REG_OR_IMM], tr::edition_wins_label;
     FindDifference => "corporate needs you to find the difference between {p} and {p}", [PARAM_REG, PARAM_REG_OR_IMM], tr::find_difference;
     SamePicture => "they're the same picture", [], tr::same_picture_label;
     // IO-Operations
@@ -165,6 +178,8 @@ pub enum Param {
     Char { value: u8, text: Vec<u8>, verbatim: bool },
     MonkeLabel(Vec<u8>),
     FuncName { name: Vec<u8>, mangle: bool },
+    /// The edition of a "who would win" comparison.
+    ComparisonLabel(Vec<u8>),
 }
 
 impl Param {
@@ -181,14 +196,17 @@ impl Param {
                 }
             }
             Param::Reg(r) => Cow::Owned(r.name().into_bytes()),
-            Param::Decimal { text, .. } | Param::Char { text, .. } | Param::MonkeLabel(text) => {
+            Param::Decimal { text, .. }
+            | Param::Char { text, .. }
+            | Param::MonkeLabel(text)
+            | Param::ComparisonLabel(text) => {
                 Cow::Borrowed(text)
             }
         }
     }
 
     /// The `PARAM_*` type (0 = not classified / invalid).
-    pub fn param_type(&self) -> u8 {
+    pub fn param_type(&self) -> u16 {
         match self {
             Param::Raw { .. } | Param::Reg(Reg::Xmm(_)) => 0,
             Param::Reg(Reg::R64(_)) => PARAM_REG64,
@@ -199,6 +217,7 @@ impl Param {
             Param::Char { .. } => PARAM_CHAR,
             Param::MonkeLabel(_) => PARAM_MONKE_LABEL,
             Param::FuncName { .. } => PARAM_FUNC_NAME,
+            Param::ComparisonLabel(_) => PARAM_COMPARISON_LABEL,
         }
     }
 }
@@ -209,7 +228,7 @@ impl Param {
 pub struct ParsedCommand {
     pub opcode: Opcode,
     /// `None` for each slot the command does not use.
-    pub parameters: [Option<Param>; 2],
+    pub parameters: [Option<Param>; 3],
     /// The index of the parameter followed by "do you know de wey" (a pointer).
     pub pointer: Option<usize>,
     pub line_num: usize,
@@ -219,7 +238,7 @@ pub struct ParsedCommand {
 
 impl ParsedCommand {
     pub fn new(line_num: usize) -> ParsedCommand {
-        ParsedCommand { opcode: Opcode::Invalid, parameters: [None, None], pointer: None, line_num, translate: true }
+        ParsedCommand { opcode: Opcode::Invalid, parameters: [None, None, None], pointer: None, line_num, translate: true }
     }
 
     /// The text of parameter `i` (see [`Param::text`]; an unused slot reads as an empty
@@ -237,7 +256,7 @@ impl ParsedCommand {
     }
 
     /// The `PARAM_*` type of parameter `i`.
-    pub fn param_type(&self, i: usize) -> u8 {
+    pub fn param_type(&self, i: usize) -> u16 {
         self.parameters[i].as_ref().map_or(0, Param::param_type)
     }
 
@@ -290,10 +309,11 @@ mod tests {
     fn command_table() {
         for (i, command) in COMMAND_LIST.iter().enumerate() {
             assert_eq!(command.opcode as usize, i);
-            // every parameter has a type, and parse_line only supports "{p}" at the start of a word
+            // every parameter has a type, and parse_line only supports the parameter words "{p}",
+            // "{p}:" and "({p}"
             assert_eq!(command.pattern.matches("{p}").count(), command.used_parameters(), "{:?}", command.pattern);
             for word in command.pattern.split(' ').filter(|w| w.contains("{p}")) {
-                assert!(word == "{p}" || word == "{p}:", "{:?}", command.pattern);
+                assert!(matches!(word, "{p}" | "{p}:" | "({p}"), "{:?}", command.pattern);
             }
         }
     }

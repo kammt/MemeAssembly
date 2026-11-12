@@ -53,7 +53,7 @@ fn decimal(text: Vec<u8>) -> Param {
 }
 
 /// The names of the `PARAM_*` types, by bit.
-const PARAM_NAMES: [&str; 8] = [
+const PARAM_NAMES: [&str; 9] = [
     "64 bit Register",
     "32 bit Register",
     "16 bit Register",
@@ -62,15 +62,16 @@ const PARAM_NAMES: [&str; 8] = [
     "character",
     "monke jump marker name",
     "function name",
+    "comparison label",
 ];
 
-fn param_name(param_type: u8) -> &'static str {
+fn param_name(param_type: u16) -> &'static str {
     PARAM_NAMES.get(param_type.trailing_zeros() as usize).copied().unwrap_or("invalid")
 }
 
 /// The registers of each size, in the order from which bully mode picks by index (changing the
 /// order changes the code bully mode generates).
-const REGISTERS: [(u8, &[&str]); 4] = [
+const REGISTERS: [(u16, &[&str]); 4] = [
     (PARAM_REG64, &["rax", "rbx", "rcx", "rdx", "rdi", "rsi", "rsp", "rbp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]),
     (PARAM_REG32, &["eax", "ebx", "ecx", "edx", "edi", "esi", "esp", "ebp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"]),
     (PARAM_REG16, &["ax", "bx", "cx", "dx", "di", "si", "sp", "bp", "r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"]),
@@ -95,7 +96,7 @@ const ESCAPE_SEQUENCES: [(&str, &str, u8); 10] = [
     ("\\\\", "'\\\\'", b'\\'),
 ];
 
-fn register_bits(param_type: u8) -> u32 {
+fn register_bits(param_type: u16) -> u32 {
     match param_type {
         PARAM_REG8 => 8,
         PARAM_REG16 => 16,
@@ -110,7 +111,7 @@ fn register(name: &str) -> Param {
 }
 
 /// Bully mode: a register of the given size, chosen by `computed_index`.
-fn random_register(param_type: u8, computed_index: u64) -> Param {
+fn random_register(param_type: u16, computed_index: u64) -> Param {
     let (_, names) = REGISTERS.iter().find(|(t, _)| *t == param_type).expect("a register type");
     register(names[(computed_index % names.len() as u64) as usize])
 }
@@ -142,7 +143,7 @@ enum Class {
 }
 
 /// `text` as a register of one of the `allowed` types (names are lowercase only).
-fn as_register(text: &[u8], allowed: u8) -> Option<Param> {
+fn as_register(text: &[u8], allowed: u16) -> Option<Param> {
     // (`Reg::parse` ignores the case, the parameters do not)
     let reg = Reg::parse(std::str::from_utf8(text).ok()?).filter(|r| r.name().as_bytes() == text)?;
     let param = Param::Reg(reg);
@@ -178,9 +179,15 @@ fn is_function_name(text: &[u8]) -> bool {
     text.first().is_some_and(|c| !c.is_ascii_digit()) && text.iter().all(valid)
 }
 
+/// A comparison label (the edition of a "who would win" comparison): ASCII letters, digits,
+/// `_`, `$` and `.` like a function name, but it may start with a digit (`2026`).
+fn is_comparison_label(text: &[u8]) -> bool {
+    !text.is_empty() && text.iter().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'$' | b'.'))
+}
+
 /// Classifies the parameter `raw` (as the parser read it) as the first of the `allowed` types it
 /// matches.
-fn classify(raw: &Param, allowed: u8, target: crate::target::Target) -> Class {
+fn classify(raw: &Param, allowed: u16, target: crate::target::Target) -> Class {
     let Param::Raw { text: raw_text, mangle } = raw else { unreachable!("parameters are classified once") };
     // (validated with the macOS `_` prefix, which is added again when generating code)
     let text = &*raw.text(target);
@@ -208,19 +215,23 @@ fn classify(raw: &Param, allowed: u8, target: crate::target::Target) -> Class {
     if allowed & PARAM_FUNC_NAME != 0 && !raw_text.is_empty() && is_function_name(text) {
         return Class::Valid(Param::FuncName { name: raw_text.clone(), mangle: *mangle });
     }
+    if allowed & PARAM_COMPARISON_LABEL != 0 && is_comparison_label(text) {
+        return Class::Valid(Param::ComparisonLabel(text.to_vec()));
+    }
     Class::Invalid
 }
 
 /// Bully mode: a valid replacement for the invalid parameter `text`, chosen by the global
 /// `computed_index`.
-fn bully_random_param(text: &[u8], allowed: u8, state: &mut CompileState) -> Param {
+fn bully_random_param(text: &[u8], allowed: u16, state: &mut CompileState) -> Param {
     for &c in text {
         state.computed_index = state.computed_index.wrapping_mul(u64::from(c)) / 2;
     }
     let ci = state.computed_index;
 
     // Choose a parameter type. If it is not allowed, rotate the bitmask until we find a valid one
-    let mut chosen: u8 = 1 << (ci % 8);
+    // (the comparison label is never chosen first, it only comes up if nothing else is allowed)
+    let mut chosen: u16 = 1 << (ci % 8);
     while allowed & chosen == 0 {
         chosen = chosen.rotate_left(1);
     }
@@ -245,6 +256,8 @@ fn bully_random_param(text: &[u8], allowed: u8, state: &mut CompileState) -> Par
             name: FUNCTION_NAMES[(ci % FUNCTION_NAMES.len() as u64) as usize].as_bytes().to_vec(),
             mangle: false,
         },
+        // A random edition
+        PARAM_COMPARISON_LABEL => Param::ComparisonLabel((1969 + ci % 69).to_string().into_bytes()),
         register_type => random_register(register_type, ci),
     }
 }
@@ -256,6 +269,7 @@ fn not_a_pointer_error(param: &Param) -> Option<&'static str> {
         Param::Char { .. } => Some("a character cannot be a pointer"),
         Param::MonkeLabel(_) => Some("a jump marker cannot be a pointer"),
         Param::FuncName { .. } => Some("a function name cannot be a pointer"),
+        Param::ComparisonLabel(_) => Some("a comparison label cannot be a pointer"),
         Param::Raw { .. } | Param::Reg(_) => None,
     }
 }
@@ -313,7 +327,7 @@ fn check_parameter(cmd: &mut ParsedCommand, i: usize, input_file_name: &[u8], st
             print_debug(state.log_level, format!("line {line}: {shown:?} is invalid"));
             print_error_fmt(state, input_file_name, line, "invalid parameter provided: \"%s\"", &[&text]);
             if state.compile_mode != CompileMode::Obfuscated {
-                let names: Vec<&str> = (0..8).filter(|b| allowed & (1 << b) != 0).map(|b| PARAM_NAMES[b]).collect();
+                let names: Vec<&str> = (0..PARAM_NAMES.len()).filter(|b| allowed & (1 << b) != 0).map(|b| PARAM_NAMES[b]).collect();
                 print_note(&format!("the following parameter types are allowed: {}", names.join(", ")), true);
             }
         }
@@ -327,7 +341,7 @@ fn bits_needed(number: i64) -> u32 {
     bits.max(1)
 }
 
-/// The checks for commands with two parameters.
+/// The checks for commands whose first two parameters are the operands of one instruction.
 fn check_combination(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut CompileState) {
     let target = state.target;
     let line = cmd.line_num;
@@ -390,7 +404,7 @@ fn check_combination(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mu
 
     // 4: If there's a pointer parameter, the other parameter must be a register, otherwise the
     // operand size is unknown. Skipped in bully mode (handled by the translator).
-    if !state.bully() && cmd.pointer.is_some_and(|p| !param_is_reg(cmd.param_type(1 - p))) {
+    if !state.bully() && cmd.pointer.is_some_and(|p| p < 2 && !param_is_reg(cmd.param_type(1 - p))) {
         print_error(state, input_file_name, line, "invalid parameter combination: operand size unknown");
     }
 }
@@ -443,7 +457,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
         cmd.pointer = None;
     }
 
-    if used_parameters == 2 {
+    if cmd.opcode.command().has_two_operands() {
         check_combination(cmd, input_file_name, state);
     }
 
@@ -487,10 +501,10 @@ fn needs_rex(register: Reg) -> bool {
     }
 }
 
-/// A two-operand command combining ah/bh/ch/dh with a register that needs a REX prefix
+/// A command with two operands combining ah/bh/ch/dh with a register that needs a REX prefix
 /// (including a pointer's base register): (index of the high byte register, the other index).
 fn high_byte_conflict(cmd: &ParsedCommand) -> Option<(usize, usize)> {
-    if cmd.opcode.command().used_parameters() != 2 {
+    if !cmd.opcode.command().has_two_operands() {
         return None;
     }
     let high = (0..2).find(|&i| !cmd.is_pointer(i) && matches!(cmd.parameters[i], Some(Param::Reg(Reg::R8H(_)))))?;
@@ -557,6 +571,13 @@ mod tests {
         assert_eq!(class(b"_f.$1", PARAM_FUNC_NAME), Some(PARAM_FUNC_NAME));
         for name in [&b"1f"[..], b"", b"f-g"] {
             assert_eq!(class(name, PARAM_FUNC_NAME), None);
+        }
+        // comparison labels are like function names, but may start with a digit
+        for label in [&b"2026"[..], b"_f.$1", b"1f", b"Rax"] {
+            assert_eq!(class(label, PARAM_COMPARISON_LABEL), Some(PARAM_COMPARISON_LABEL));
+        }
+        for label in [&b""[..], b"f-g", b"(2026", b"a:b", b"\xc3\xa4"] {
+            assert_eq!(class(label, PARAM_COMPARISON_LABEL), None);
         }
     }
 }

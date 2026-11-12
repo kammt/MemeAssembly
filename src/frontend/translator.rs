@@ -255,7 +255,7 @@ impl<'a> Ctx<'a> {
     /// The symbol name `prefix`, parameter `i`, `suffix` (labels of `monke`, `who would win`
     /// and the function names). Character parameters are spelled as [`Asm::char_in_symbol`]
     /// says, numbers in hex.
-    fn sym(&self, a: &dyn Asm, prefix: &str, i: usize, suffix: &str) -> Result<Vec<u8>, String> {
+    fn sym(&self, a: &dyn Asm, prefix: &str, i: usize, suffix: &[u8]) -> Result<Vec<u8>, String> {
         let mut name = prefix.as_bytes().to_vec();
         match &self.cmd.parameters[i] {
             Some(Param::Char { value, text, verbatim }) => {
@@ -269,8 +269,21 @@ impl<'a> Ctx<'a> {
             }
             _ => return Err(self.bad_parameter(i)),
         }
-        name.extend_from_slice(suffix.as_bytes());
+        name.extend_from_slice(suffix);
         Ok(name)
+    }
+
+    /// The suffix of the "who would win" labels: `Wins_{file}`, followed by `_{edition}` if
+    /// parameter `edition` is the edition of the comparison. (The parameter part of the label
+    /// never contains `Wins_`, so labels with and without an edition can't collide.)
+    fn wins_suffix(&self, edition: Option<usize>) -> Result<Vec<u8>, String> {
+        let mut suffix = format!("Wins_{}", self.file).into_bytes();
+        if let Some(i) = edition {
+            let Some(Param::ComparisonLabel(label)) = &self.cmd.parameters[i] else { return Err(self.bad_parameter(i)) };
+            suffix.push(b'_');
+            suffix.extend_from_slice(label);
+        }
+        Ok(suffix)
     }
 
     /// `name_{file}`
@@ -290,7 +303,7 @@ impl<'a> Ctx<'a> {
 // stonks`) get the file index as a suffix, so every input file has its own.
 
 pub fn func_def(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    let name = c.sym(a, "", 0, "")?;
+    let name = c.sym(a, "", 0, b"")?;
     a.label(&name)
 }
 pub fn ret(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
@@ -305,7 +318,7 @@ pub fn ret_zero(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
     a.insn(Op::Ret, &[])
 }
 pub fn call(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    let name = c.sym(a, "", 0, "")?;
+    let name = c.sym(a, "", 0, b"")?;
     a.call(&name)
 }
 pub fn push(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
@@ -417,25 +430,37 @@ pub fn banana_jump(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
     a.jump(None, &c.file_label(".LBananaMarker"))
 }
 pub fn monke_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    let name = c.sym(a, ".L", 0, "")?;
+    let name = c.sym(a, ".L", 0, b"")?;
     a.label(&name)
 }
 pub fn monke_jump(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    let name = c.sym(a, ".L", 0, "")?;
+    let name = c.sym(a, ".L", 0, b"")?;
     a.jump(None, &name)
 }
 /// `who would win? a or b`: jumps to `a wins` if `a > b`, to `b wins` if `a < b` (signed),
 /// else continues.
 pub fn who_would_win(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    let suffix = format!("Wins_{}", c.file);
-    let (first, second) = (c.sym(a, ".L", 0, &suffix)?, c.sym(a, ".L", 1, &suffix)?);
+    compare_and_jump_to_winner(a, c, &c.wins_suffix(None)?)
+}
+pub fn wins_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, ".L", 0, &c.wins_suffix(None)?)?;
+    a.label(&name)
+}
+/// `who would win? a or b (e edition)`: like `who would win? a or b`, but jumps to `e: a wins`
+/// or `e: b wins`.
+pub fn who_would_win_edition(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    compare_and_jump_to_winner(a, c, &c.wins_suffix(Some(2))?)
+}
+/// `e: a wins`
+pub fn edition_wins_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let name = c.sym(a, ".L", 1, &c.wins_suffix(Some(0))?)?;
+    a.label(&name)
+}
+fn compare_and_jump_to_winner(a: &mut dyn Asm, c: &Ctx, suffix: &[u8]) -> AsmResult {
+    let (first, second) = (c.sym(a, ".L", 0, suffix)?, c.sym(a, ".L", 1, suffix)?);
     a.insn(Op::Cmp, &[c.op(0)?, c.op(1)?])?;
     a.jump(Some(Cond::G), &first)?;
     a.jump(Some(Cond::L), &second)
-}
-pub fn wins_label(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
-    let name = c.sym(a, ".L", 0, &format!("Wins_{}", c.file))?;
-    a.label(&name)
 }
 pub fn find_difference(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
     a.insn(Op::Cmp, &[c.op(0)?, c.op(1)?])?;
@@ -876,10 +901,10 @@ mod tests {
         assert_eq!(truncate_to_operand_size(-5, 8), -5);
     }
 
-    fn command(opcode: Opcode, params: [Option<Param>; 2], pointer: Option<usize>) -> ParsedCommand {
+    fn command(opcode: Opcode, [p0, p1]: [Option<Param>; 2], pointer: Option<usize>) -> ParsedCommand {
         let mut c = ParsedCommand::new(1);
         c.opcode = opcode;
-        c.parameters = params;
+        c.parameters = [p0, p1, None];
         c.pointer = pointer;
         c
     }
