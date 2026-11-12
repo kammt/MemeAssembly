@@ -7,6 +7,7 @@
 
 pub mod analyser;
 pub mod asm_text;
+pub mod breakfile;
 pub mod cli;
 pub mod commands;
 pub mod encoder;
@@ -43,12 +44,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
     analyser::analyse_commands(&mut state);
 
     if state.compiler_errors > 0 {
-        print_error_ascii();
-        err_str(&format!(
-            "Compilation failed with {} error(s), please check your code and try again.\n",
-            state.compiler_errors
-        ));
-        exit(1);
+        compilation_failed(&state);
     }
 
     let output_path = bytes_to_path(output_file_name);
@@ -103,6 +99,16 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         assembling_failed();
     }
     exit(0);
+}
+
+/// Reports the number of compile errors and exits with code 1.
+pub fn compilation_failed(state: &CompileState) -> ! {
+    print_error_ascii();
+    err_str(&format!(
+        "Compilation failed with {} error(s), please check your code and try again.\n",
+        state.compiler_errors
+    ));
+    exit(1);
 }
 
 /// Reports that writing the object file or executable failed and exits with code 1.

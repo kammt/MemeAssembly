@@ -1,6 +1,7 @@
 //! The `memeasm` executable: parses the command line, turns the options into a
-//! `CompileState`, reads and parses every input file and hands the result to
-//! `frontend::compile`, which analyses it and writes the requested output.
+//! `CompileState`, reads and parses every input file (those listed in the Breakfile if none are
+//! given) and hands the result to `frontend::compile`, which analyses it and writes the
+//! requested output.
 
 mod backend;
 mod frontend;
@@ -14,8 +15,9 @@ use clap::Parser;
 
 use frontend::cli::{optimisation_level, target_name, Cli};
 use frontend::state::{CompileState, LogLevel, OutputMode};
-use frontend::log::{err, err_str, out_str, print_debug, print_information_header, print_note};
-use frontend::{bytes_to_path, compile, parser, print_explanation_message};
+use frontend::breakfile::{self, BREAKFILE_NAME};
+use frontend::log::{err_str, out_str, print_debug, print_error, print_information_header, print_note};
+use frontend::{bytes_to_path, compilation_failed, compile, parser, print_explanation_message};
 use target::Target;
 
 /// Prints the help page of this command. Launched by using the -h option in the terminal
@@ -26,6 +28,7 @@ fn print_help_page(program_name: &str, target: Target) {
     out_str(&format!(" {p} [options] -o outputFile [-d] inputFile...\t\tCompiles the specified file(s) into an executable\n"));
     out_str(&format!(" {p} [options] -S -o outputFile.S [-d] inputFile...\tOnly compiles the specified file(s) and saves them as x86_64 Assembly code\n"));
     out_str(&format!(" {p} [options] -O -o outputFile.o [-d] inputFile...\tOnly compiles the specified file(s) and saves them as an object file\n"));
+    out_str(&format!(" {p} [options] -o outputFile [-d]\t\t\t\tCompiles the files listed in the Breakfile of the current directory\n"));
     out_str(&format!(" {p} (-h | --help)\t\t\t\t\t\tDisplays this help page\n"));
     out_str(&format!(" {p} (-v | --version)\t\t\t\t\tPrints version information\n\n"));
     out_str("Compiler options:\n");
@@ -54,6 +57,55 @@ fn os_to_bytes(s: &OsString) -> Vec<u8> {
     #[cfg(not(unix))]
     {
         s.to_string_lossy().into_owned().into_bytes()
+    }
+}
+
+/// Reads the file `name` (described as `what` in error messages), which must be a regular file.
+/// Exits with an error message if it cannot be read.
+fn read_file(name: &[u8], what: &str, program_name: &[u8]) -> Vec<u8> {
+    let mut file = match std::fs::File::open(bytes_to_path(name)) {
+        Ok(f) => f,
+        Err(e) => {
+            err_str(&format!("Failed to open {what}: {}\n", frontend::log::io_error_message(&e)));
+            print_explanation_message(program_name);
+            exit(1);
+        }
+    };
+
+    //Check that this is a regular file. If we did not check for this, an input file like "/dev/urandom" would pass without errors
+    if !file.metadata().map(|m| m.is_file()).unwrap_or(false) {
+        err_str(&format!("Error while opening {what}: it does not point to a regular file (e.g. it could be a directory, character device or a socket)\n"));
+        print_explanation_message(program_name);
+        exit(1);
+    }
+
+    let mut data = Vec::new();
+    if let Err(e) = file.read_to_end(&mut data) {
+        err_str(&format!("Failed to read {what}: {}\n", frontend::log::io_error_message(&e)));
+        exit(1);
+    }
+    data
+}
+
+/// The input files listed in the Breakfile of the current directory, used when no input files
+/// are given. Without a Breakfile that is an error, and so is a mistake in the Breakfile.
+fn breakfile_inputs(state: &mut CompileState, program_name: &[u8]) -> Vec<Vec<u8>> {
+    if !std::path::Path::new(BREAKFILE_NAME).exists() {
+        err_str("Error: No input file(s) specified\n");
+        print_explanation_message(program_name);
+        exit(1);
+    }
+
+    print_debug(state.log_level, format!("no input files given, using the {BREAKFILE_NAME}"));
+    let data = read_file(BREAKFILE_NAME.as_bytes(), BREAKFILE_NAME, program_name);
+    match breakfile::parse(&data) {
+        Ok(files) => files.into_iter().map(<[u8]>::to_vec).collect(),
+        Err(errors) => {
+            for e in errors {
+                print_error(state, BREAKFILE_NAME.as_bytes(), e.line, e.message);
+            }
+            compilation_failed(state);
+        }
     }
 }
 
@@ -112,38 +164,17 @@ fn main() {
         print_explanation_message(&program_name);
         exit(1);
     };
-    if cli.files.is_empty() {
-        err_str("Error: No input file(s) specified\n");
-        print_explanation_message(&program_name);
-        exit(1);
-    }
+    let input_files: Vec<Vec<u8>> = if cli.files.is_empty() {
+        breakfile_inputs(&mut state, &program_name)
+    } else {
+        cli.files.iter().map(os_to_bytes).collect()
+    };
 
     //Open each file one by one and parse it
-    for input in &cli.files {
-        let name = os_to_bytes(input);
-        let mut file = match std::fs::File::open(bytes_to_path(&name)) {
-            Ok(f) => f,
-            Err(e) => {
-                err_str(&format!("Failed to open input file: {}\n", frontend::log::io_error_message(&e)));
-                print_explanation_message(&program_name);
-                exit(1);
-            }
-        };
-
-        //Check that this is a regular file. If we did not check for this, an input file like "/dev/urandom" would pass without errors
-        if !file.metadata().map(|m| m.is_file()).unwrap_or(false) {
-            err(b"Error while opening input file: Your provided file name does not point to a regular file (e.g. it could be a directory, character device or a socket)\n");
-            print_explanation_message(&program_name);
-            exit(1);
-        }
-
-        print_debug(state.log_level, [&b"parsing "[..], &name].concat());
-        let mut data = Vec::new();
-        if let Err(e) = file.read_to_end(&mut data) {
-            err_str(&format!("Failed to read input file: {}\n", frontend::log::io_error_message(&e)));
-            exit(1);
-        }
-        let parsed = parser::parse_file(&name, &data, &mut state);
+    for name in &input_files {
+        let data = read_file(name, "input file", &program_name);
+        print_debug(state.log_level, [&b"parsing "[..], name].concat());
+        let parsed = parser::parse_file(name, &data, &mut state);
         state.files.push(parsed);
     }
 

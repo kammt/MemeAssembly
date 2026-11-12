@@ -98,6 +98,15 @@ I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main
 
 You can also check the [examples](examples/) directory to find more.
 
+## Breakfiles
+Got more than one file? Just like `make` has its Makefile, `memeasm` has its Breakfile. If you run `memeasm` without any input files (e.g. `memeasm -O-1 -o program`), it compiles the files listed in the file `Breakfile` of the current directory:
+```
+the secret ingredient is main.memeasm
+the secret ingredient is helper.memeasm
+the secret ingredient is a/subdir/to/a/file.memeasm
+```
+Paths are relative to the current directory, absolute paths work too. Empty lines and comments are not allowed, and the Breakfile must **not** end with a newline. Input files given on the command line take precedence: `memeasm -o program test.memeasm` ignores the Breakfile.
+
 ## Installation
 Ready-made packages are available, no compiling required:
 - **Arch Linux:** install [`memeassembly`](https://aur.archlinux.org/packages/memeassembly) from the AUR

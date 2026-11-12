@@ -47,6 +47,14 @@ jobs:
           make fail_no_main && exit 1
           exit 0
 
+      - name: Breakfile test
+        run: |
+          cd .github/workflows/multiple_files
+          make breakfile || exit 1
+          printf '\n' >> Breakfile
+          make breakfile && exit 1
+          exit 0
+
       # The examples link object files created with -O against C code, which needs gcc
       - name: Compile all code examples
         run: |
@@ -106,6 +114,14 @@ jobs:
           make || exit 1
           make fail_undefined && exit 1
           make fail_no_main && exit 1
+          exit 0
+
+      - name: Breakfile test
+        run: |
+          cd .github/workflows/multiple_files
+          make breakfile || exit 1
+          printf '\n' >> Breakfile
+          make breakfile && exit 1
           exit 0
 
       # memeasm always generates x86_64 code, so the C code has to be compiled for x86_64 too
