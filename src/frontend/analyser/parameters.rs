@@ -130,7 +130,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
     let ll = state.log_level;
     let target = state.target;
     print_debug(ll, "Starting parameter validity check", &[]);
-    let command = &COMMAND_LIST[cmd.opcode as usize];
+    let command = cmd.opcode.command();
     let used_parameters = command.used_parameters as usize;
     let errors_before = state.compiler_errors;
 
@@ -464,7 +464,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
     }
 
     // `push` only takes sign-extended 32-bit immediates
-    let push_too_large = cmd.opcode == OP_PUSH
+    let push_too_large = cmd.opcode == Opcode::Push
         && cmd.param_type(0) == PARAM_DECIMAL
         && !fits_sign_extended_32(decimal_param_value(cmd, 0));
     if bully {
@@ -547,7 +547,7 @@ fn needs_rex(register: Reg) -> bool {
 /// A two-operand command combining ah/bh/ch/dh with a register that needs a REX prefix
 /// (including a pointer's base register): (index of the high byte register, the other index).
 fn high_byte_conflict(cmd: &ParsedCommand) -> Option<(usize, usize)> {
-    if COMMAND_LIST[cmd.opcode as usize].used_parameters != 2 {
+    if cmd.opcode.command().used_parameters != 2 {
         return None;
     }
     let high = (0..2).find(|&i| {

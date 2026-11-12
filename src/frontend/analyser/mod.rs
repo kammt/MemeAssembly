@@ -8,10 +8,11 @@ use super::random::Rng;
 use super::log::{print_debug, print_error, print_thanos_ascii, Arg};
 use helper::{check_companion_command_existence, check_duplicate_definition};
 
-/// Runs the parameter checks on every command and then every command's analysis function.
+/// Runs the parameter checks on every command and then the analyses (in the C code's order:
+/// by the opcode of the command each one belongs to).
 pub fn analyse_commands(state: &mut CompileState) {
     let mut rng = Rng::default();
-    let mut lists: Vec<Vec<CmdLoc>> = vec![Vec::new(); NUMBER_OF_COMMANDS];
+    let mut lists: Vec<Vec<CmdLoc>> = vec![Vec::new(); COMMAND_LIST.len()];
 
     for file in 0..state.files.len() {
         for func in 0..state.files[file].functions.len() {
@@ -23,29 +24,27 @@ pub fn analyse_commands(state: &mut CompileState) {
             }
         }
     }
+    let list = |op: Opcode| &lists[op as usize];
 
-    for (opcode, command) in COMMAND_LIST.iter().enumerate() {
-        match command.analysis {
-            None => {}
-            Some(Analysis::Functions) => analyse_functions(&lists, opcode, state),
-            Some(Analysis::Call) => analyse_call(&lists, opcode, state),
-            Some(Analysis::JumpMarkers) => analyse_jump_markers(&lists, opcode, state),
-            Some(Analysis::MonkeMarkers) => analyse_monke_markers(&lists, opcode, state),
-            Some(Analysis::WhoWouldWin) => analyse_who_would_win_commands(&lists, opcode, state),
-            Some(Analysis::TheyreTheSamePicture) => {
-                analyse_theyre_the_same_picture_commands(&lists, opcode, state)
-            }
-            Some(Analysis::ConfusedStonks) => set_confused_stonks_jump_label(state, &mut rng),
-            Some(Analysis::PerfectlyBalanced) => choose_lines_to_be_deleted(&lists, opcode, state, &mut rng),
-        }
+    analyse_functions(list(Opcode::FuncDef), state);
+    if state.output_mode == OutputMode::Executable {
+        // Function calls need a defined function if an executable is created
+        check_companion_command_existence(list(Opcode::Call), list(Opcode::FuncDef), state, 1, false, "function");
     }
+    analyse_jump_markers(Opcode::Upgrade, list(Opcode::Upgrade), list(Opcode::FuckGoBack), state);
+    analyse_jump_markers(Opcode::Banana, list(Opcode::Banana), list(Opcode::WhereBanana), state);
+    analyse_monke_markers(list(Opcode::Monke), list(Opcode::ReturnToMonke), state);
+    analyse_who_would_win_commands(list(Opcode::WhoWouldWin), list(Opcode::Wins), state);
+    analyse_theyre_the_same_picture_commands(list(Opcode::FindDifference), list(Opcode::SamePicture), state);
+    set_confused_stonks_jump_label(state, &mut rng);
+    choose_lines_to_be_deleted(list(Opcode::PerfectlyBalanced).len(), state, &mut rng);
 
     print_debug(state.log_level, "Analysis done, freeing memory", &[]);
 }
 
 /// Checks that no function name is used twice and that a main function exists for executables.
-fn analyse_functions(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
-    check_duplicate_definition(&lists[opcode], state, false, 1, "function");
+fn analyse_functions(definitions: &[CmdLoc], state: &mut CompileState) {
+    check_duplicate_definition(definitions, state, false, 1, "function");
 
     if state.output_mode == OutputMode::Executable
         && state.compile_mode != CompileMode::Bully
@@ -65,39 +64,32 @@ pub fn main_function_exists(state: &CompileState) -> bool {
     })
 }
 
-/// Function calls need a defined function if an executable is created.
-fn analyse_call(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
-    if state.output_mode == OutputMode::Executable {
-        check_companion_command_existence(&lists[opcode], &lists[0], state, 1, false, "function");
-    }
-}
-
-fn analyse_monke_markers(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
+fn analyse_monke_markers(markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
     print_debug(state.log_level, "Beginning Monke jump label validity check", &[]);
-    check_duplicate_definition(&lists[opcode], state, false, 1, "monke jump marker");
-    check_companion_command_existence(&lists[opcode + 1], &lists[opcode], state, 1, false, "monke jump marker");
+    check_duplicate_definition(markers, state, false, 1, "monke jump marker");
+    check_companion_command_existence(jumps, markers, state, 1, false, "monke jump marker");
 }
 
-fn analyse_jump_markers(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
+fn analyse_jump_markers(opcode: Opcode, markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
     print_debug(state.log_level, "Starting jump label validity check for opcode %u", &[Arg::U(opcode as u64)]);
-    check_duplicate_definition(&lists[opcode], state, true, 0, "jump marker");
-    check_companion_command_existence(&lists[opcode + 1], &lists[opcode], state, 0, true, "jump marker");
+    check_duplicate_definition(markers, state, true, 0, "jump marker");
+    check_companion_command_existence(jumps, markers, state, 0, true, "jump marker");
 }
 
-fn analyse_who_would_win_commands(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
+fn analyse_who_would_win_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
     print_debug(state.log_level, "Starting analysis for \"who would win?\" command", &[]);
-    check_duplicate_definition(&lists[opcode + 1], state, true, 1, "comparison jump marker");
-    check_companion_command_existence(&lists[opcode], &lists[opcode + 1], state, 2, true, "comparison jump label");
+    check_duplicate_definition(labels, state, true, 1, "comparison jump marker");
+    check_companion_command_existence(comparisons, labels, state, 2, true, "comparison jump label");
 }
 
-fn analyse_theyre_the_same_picture_commands(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState) {
+fn analyse_theyre_the_same_picture_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
     print_debug(
         state.log_level,
         "Starting analysis for \"corporate needs you to find the difference...\" command",
         &[],
     );
-    check_duplicate_definition(&lists[opcode + 1], state, true, 0, "\"they're the same picture\"");
-    check_companion_command_existence(&lists[opcode], &lists[opcode + 1], state, 0, true, "\"they're the same picture\"");
+    check_duplicate_definition(labels, state, true, 0, "\"they're the same picture\"");
+    check_companion_command_existence(comparisons, labels, state, 0, true, "\"they're the same picture\"");
 }
 
 /// Chooses a random line of code for each input file at which the "confused stonks" jump
@@ -118,10 +110,9 @@ fn set_confused_stonks_jump_label(state: &mut CompileState, rng: &mut Rng) {
 
 /// Marks random lines as deleted depending on how often "perfectly balanced as all things
 /// should be" was used.
-fn choose_lines_to_be_deleted(lists: &[Vec<CmdLoc>], opcode: usize, state: &mut CompileState, rng: &mut Rng) {
+fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut CompileState, rng: &mut Rng) {
     let ll = state.log_level;
     print_debug(ll, "Starting analysis of the \"Perfectly balanced...\" command", &[]);
-    let perfectly_balanced_used = lists[opcode].len();
     print_debug(
         ll,
         "\tamount of times perfectly balanced was used: %u",

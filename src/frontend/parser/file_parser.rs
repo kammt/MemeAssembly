@@ -64,7 +64,7 @@ fn parse_line(
     let mut parsed = ParsedCommand::new(line_num);
     let log_level = state.log_level;
 
-    'commands: for (i, command) in COMMAND_LIST.iter().enumerate().take(NUMBER_OF_COMMANDS - 2) {
+    'commands: for command in &COMMAND_LIST[..Opcode::OrDraw25 as usize] {
         let mut pattern_rest = command.pattern.as_bytes();
         let mut line_rest = line;
         let mut parameters: Vec<Param> = Vec::new();
@@ -83,7 +83,7 @@ fn parse_line(
                     print_debug(log_level, "\t\t%s contains a parameter", &[Arg::S(lt)]);
                     let parameter_length = lt.len() - suffix.len();
                     // Function names (definitions and calls) get a `_` prefix on macOS
-                    let mangle = i == 0 || i == 4;
+                    let mangle = matches!(command.opcode, Opcode::FuncDef | Opcode::Call);
                     parameters.push(Param::Raw { text: lt[..parameter_length].to_vec(), mangle });
 
                     // If the line after this parameter contains "do you know de wey", mark it as a pointer
@@ -121,7 +121,7 @@ fn parse_line(
 
         match (command_token, line_token) {
             (None, None) => {
-                parsed.opcode = i as u8;
+                parsed.opcode = command.opcode;
                 for (slot, p) in parameters.into_iter().enumerate() {
                     parsed.parameters[slot] = Some(p);
                 }
@@ -133,7 +133,7 @@ fn parse_line(
             (None, Some(lt)) => {
                 if lt == OR_DRAW_25_START && line_rest == OR_DRAW_25_END {
                     print_debug(log_level, "\t\t'or draw 25' was found, replacing opcode", &[]);
-                    parsed.opcode = OR_DRAW_25_OPCODE;
+                    parsed.opcode = Opcode::OrDraw25;
                     return parsed;
                 }
             }
@@ -152,8 +152,10 @@ fn parse_line(
             (state.computed_index.wrapping_mul(line_num as u64) % 420).wrapping_mul(first);
         let ci = state.computed_index;
 
-        parsed.opcode = (ci % (NUMBER_OF_COMMANDS as u64 - 1)) as u8;
-        let used = COMMAND_LIST[parsed.opcode as usize].used_parameters;
+        // (any command but `Invalid`, also `OrDraw25`)
+        let command = &COMMAND_LIST[(ci % Opcode::Invalid as u64) as usize];
+        parsed.opcode = command.opcode;
+        let used = command.used_parameters;
         let count = RANDOM_PARAMS.len() as u64;
         // (no macOS `_` prefix for these)
         let random_param = |i: u64| Some(Param::Raw { text: RANDOM_PARAMS[i as usize].as_bytes().to_vec(), mangle: false });
@@ -164,7 +166,7 @@ fn parse_line(
             parsed.parameters[1] = random_param(ci.wrapping_mul(first) % count);
         }
     } else {
-        parsed.opcode = INVALID_COMMAND_OPCODE;
+        parsed.opcode = Opcode::Invalid;
         print_error(state, input_file_name, line_num as u64, "Invalid command: \"%s\"", 1, &[Arg::S(line)]);
     }
     parsed
@@ -270,10 +272,6 @@ mod tests {
         );
     }
 
-    fn opcode_of(pattern: &str) -> u8 {
-        COMMAND_LIST.iter().position(|c| c.pattern == pattern).unwrap() as u8
-    }
-
     fn parse(data: &[u8], target: Target) -> (Vec<ParsedCommand>, u32) {
         let mut state = CompileState::new(target);
         let commands = parse_commands(data, b"test.memeasm", &mut state);
@@ -305,19 +303,18 @@ mod tests {
         let (c, errors) = parse(src, Target::Linux);
         assert_eq!(errors, 0);
         let summary: Vec<_> = c.iter().map(|c| (c.line_num, c.opcode, c.is_pointer, params(c))).collect();
-        let mov = opcode_of("{p} is brilliant, but I like {p}");
-        let upvote = opcode_of("upvote {p}");
+        let (mov, upvote) = (Opcode::Mov, Opcode::Upvote);
         assert_eq!(
             summary,
             [
-                (1, 0, 0, [Some(&b"main"[..]), None]),
+                (1, Opcode::FuncDef, 0, [Some(&b"main"[..]), None]),
                 (2, upvote, 0, [Some(&b"rax"[..]), None]),
-                (5, opcode_of("{p}: whomst has summoned the almighty one"), 0, [Some(&b"f"[..]), None]),
+                (5, Opcode::Call, 0, [Some(&b"f"[..]), None]),
                 (6, mov, 1, [Some(&b"rax"[..]), Some(b"5")]),
                 (7, mov, 2, [Some(&b"rax"[..]), Some(b"rbx")]),
-                (8, OR_DRAW_25_OPCODE, 0, [None, None]),
+                (8, Opcode::OrDraw25, 0, [None, None]),
                 (9, upvote, 0, [Some(&b"rbx"[..]), None]),
-                (10, opcode_of("right back at ya, buckaroo"), 0, [None, None]),
+                (10, Opcode::Return, 0, [None, None]),
             ]
         );
 
@@ -338,7 +335,7 @@ mod tests {
             (b"upvote rax\t\x0b", b"rax\t\x0b"),
         ] {
             let (c, errors) = parse(line, Target::Linux);
-            let expected = (opcode_of("upvote {p}"), [Some(param), None], 0);
+            let expected = (Opcode::Upvote, [Some(param), None], 0);
             assert_eq!((c[0].opcode, params(&c[0]), errors), expected);
         }
 
@@ -351,7 +348,7 @@ mod tests {
             b"\0upvote rax",
         ] {
             let (c, errors) = parse(line, Target::Linux);
-            assert_eq!((c[0].opcode, errors), (INVALID_COMMAND_OPCODE, 1), "{:?}", String::from_utf8_lossy(line));
+            assert_eq!((c[0].opcode, errors), (Opcode::Invalid, 1), "{:?}", String::from_utf8_lossy(line));
         }
         let line = b"rax do you know de wey is brilliant, but I like rbx do you know de wey";
         let (c, errors) = parse(line, Target::Linux);

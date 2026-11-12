@@ -123,7 +123,7 @@ fn bully_pointer_size(state: &CompileState, cmd: &ParsedCommand) -> Option<u32> 
 /// `it's over 9000` compares with the immediate 9000, which an 8-bit operand can never exceed
 /// (gas silently truncated it to 0x28): the command then always halts.
 fn over_9000_always_halts(state: &CompileState, cmd: &ParsedCommand) -> bool {
-    cmd.opcode == OP_OVER_9000
+    cmd.opcode == Opcode::Over9000
         && match bully_pointer_size(state, cmd) {
             Some(size) => size == 1,
             None => cmd.is_pointer == 0 && cmd.param_type(0) == PARAM_REG8,
@@ -146,7 +146,7 @@ fn truncate_to_operand_size(value: i64, size: u32) -> i64 {
 fn is_translated(state: &CompileState, cmd: &ParsedCommand) -> bool {
     cmd.translate
         && (state.optimisation_level != OPT_69420
-            || COMMAND_LIST[cmd.opcode as usize].command_type == COMMAND_TYPE_FUNC_DEF)
+            || cmd.opcode.command().command_type == COMMAND_TYPE_FUNC_DEF)
 }
 
 /// Whether no command produces any code after bully mode's injected main (no functions at all,
@@ -258,7 +258,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn bad_parameter(&self, i: usize) -> String {
-        format!("internal error: unexpected parameter {:?} for opcode {}", self.cmd.parameters[i], self.cmd.opcode)
+        format!("internal error: unexpected parameter {:?} for opcode {}", self.cmd.parameters[i], self.cmd.opcode as u8)
     }
 }
 
@@ -620,7 +620,7 @@ fn translate_command(
     file: usize,
     debug_file: Option<usize>,
 ) -> AsmResult {
-    let command = &COMMAND_LIST[cmd.opcode as usize];
+    let command = cmd.opcode.command();
     let is_def = command.command_type == COMMAND_TYPE_FUNC_DEF;
     if !is_def && state.optimisation_level == OPT_69420 {
         print_debug(state.log_level, "\tCommand is not a function declaration, abort.", &[]);
@@ -749,7 +749,7 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
             state
                 .function_commands(i, func)
                 .iter()
-                .any(|cmd| cmd.opcode == OP_CONFUSED_STONKS && is_translated(state, cmd))
+                .any(|cmd| cmd.opcode == Opcode::ConfusedStonks && is_translated(state, cmd))
         });
 
         let mut line = 0usize;
@@ -822,7 +822,7 @@ mod tests {
         assert_eq!(truncate_to_operand_size(-5, 8), -5);
     }
 
-    fn command(opcode: u8, params: [Option<Param>; 2], is_pointer: u8) -> ParsedCommand {
+    fn command(opcode: Opcode, params: [Option<Param>; 2], is_pointer: u8) -> ParsedCommand {
         let mut c = ParsedCommand::new(1);
         c.opcode = opcode;
         c.parameters = params;
@@ -837,19 +837,19 @@ mod tests {
     #[test]
     fn operands() {
         let mut state = CompileState::new(Target::Linux);
-        let c = command(OP_MOV, [Some(Param::Reg(Reg::R64(0))), decimal(-5)], 0);
+        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(0))), decimal(-5)], 0);
         let ctx = Ctx { state: &state, cmd: &c, file: 0 };
         assert_eq!(ctx.op(0), Ok(RAX));
         assert_eq!(ctx.op(1), Ok(hex(-5)));
 
-        let c = command(OP_MOV, [Some(Param::Reg(Reg::R64(3))), Some(Param::Reg(Reg::R32(0)))], 1);
+        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(3))), Some(Param::Reg(Reg::R32(0)))], 1);
         let ctx = Ctx { state: &state, cmd: &c, file: 0 };
         assert_eq!(ctx.op(0), Ok(Opnd::Mem(Mem { size: None, base: Base::Reg(Reg::R64(3)), disp: 0 })));
 
         // Bully mode guesses the operand size from computedIndex (69 % 4 == 1 → WORD PTR) and
         // truncates the immediate to it
         state.compile_mode = CompileMode::Bully;
-        let c = command(OP_MOV, [Some(Param::Reg(Reg::R64(3))), decimal(65537)], 1);
+        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(3))), decimal(65537)], 1);
         let ctx = Ctx { state: &state, cmd: &c, file: 0 };
         assert_eq!(ctx.op(0), Ok(Opnd::Mem(Mem { size: Some(Size::Word), base: Base::Reg(Reg::R64(3)), disp: 0 })));
         assert_eq!(ctx.op(1), Ok(hex(1)));

@@ -6,10 +6,6 @@ use std::borrow::Cow;
 
 use crate::target::Target;
 
-pub const NUMBER_OF_COMMANDS: usize = 46;
-pub const OR_DRAW_25_OPCODE: u8 = (NUMBER_OF_COMMANDS - 2) as u8;
-pub const INVALID_COMMAND_OPCODE: u8 = (NUMBER_OF_COMMANDS - 1) as u8;
-
 // Parameter types
 pub const PARAM_REG64: u8 = 1;
 pub const PARAM_REG32: u8 = 2;
@@ -37,100 +33,123 @@ pub const OR_DRAW_25_START: &[u8] = b"or";
 pub const OR_DRAW_25_END: &[u8] = b"draw 25";
 pub const POINTER_SUFFIX: &[u8] = b"do you know de wey";
 
-/// The analysis function attached to a command (the C function pointer).
+/// A command: its index in [`COMMAND_LIST`] (the C opcode).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Analysis {
-    Functions,
-    Call,
-    JumpMarkers,
-    MonkeMarkers,
-    WhoWouldWin,
-    TheyreTheSamePicture,
-    ConfusedStonks,
-    PerfectlyBalanced,
+#[repr(u8)]
+pub enum Opcode {
+    FuncDef, Return, ReturnOne, ReturnZero, Call,
+    Push, Pop,
+    And, Not,
+    Zero, Mov,
+    Upvote, Downvote, Parry, Add, Shl, Shr, Imul, Divide, Power,
+    Upgrade, FuckGoBack, Banana, WhereBanana, Monke, ReturnToMonke, WhoWouldWin, Wins,
+    FindDifference, SamePicture,
+    WriteChar, ReadChar,
+    Die, ConfusedStonks, PerfectlyBalanced, Illegal, OhNo, Over9000, RefusesToElaborate,
+    ShallNotPass, Houston, Rdrand, AirSupport,
+    Trap,
+    /// "or draw 25" at the end of a line replaces the command
+    OrDraw25,
+    /// A line that is no command
+    Invalid,
+}
+
+impl Opcode {
+    pub fn command(self) -> &'static Command {
+        &COMMAND_LIST[self as usize]
+    }
 }
 
 pub struct Command {
+    pub opcode: Opcode,
     pub pattern: &'static str,
     pub command_type: u8,
     pub used_parameters: u8,
     pub allowed_param_types: [u8; 2],
-    pub analysis: Option<Analysis>,
     /// Generates the command's code (for `-S` text and object code alike).
     pub code: CodeGen,
 }
 
 const fn cmd(
+    opcode: Opcode,
     pattern: &'static str,
     command_type: u8,
     used_parameters: u8,
     allowed_param_types: [u8; 2],
-    analysis: Option<Analysis>,
     code: CodeGen,
 ) -> Command {
-    Command { pattern, command_type, used_parameters, allowed_param_types, analysis, code }
+    Command { opcode, pattern, command_type, used_parameters, allowed_param_types, code }
 }
 
 const N: u8 = COMMAND_TYPE_NONE;
 
-pub static COMMAND_LIST: [Command; NUMBER_OF_COMMANDS] = [
+pub static COMMAND_LIST: [Command; 46] = [
     // Functions
-    cmd("I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}", COMMAND_TYPE_FUNC_DEF, 1, [PARAM_FUNC_NAME, 0], Some(Analysis::Functions), tr::func_def),
-    cmd("right back at ya, buckaroo", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, tr::ret),
-    cmd("no, I don't think I will", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, tr::ret_one),
-    cmd("I see this as an absolute win", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, tr::ret_zero),
-    cmd("{p}: whomst has summoned the almighty one", COMMAND_TYPE_FUNC_CALL, 1, [PARAM_FUNC_NAME, 0], Some(Analysis::Call), tr::call),
+    cmd(Opcode::FuncDef, "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}", COMMAND_TYPE_FUNC_DEF, 1, [PARAM_FUNC_NAME, 0], tr::func_def),
+    cmd(Opcode::Return, "right back at ya, buckaroo", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], tr::ret),
+    cmd(Opcode::ReturnOne, "no, I don't think I will", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], tr::ret_one),
+    cmd(Opcode::ReturnZero, "I see this as an absolute win", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], tr::ret_zero),
+    cmd(Opcode::Call, "{p}: whomst has summoned the almighty one", COMMAND_TYPE_FUNC_CALL, 1, [PARAM_FUNC_NAME, 0], tr::call),
     // Stack operations
-    cmd("stonks {p}", N, 1, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, 0], None, tr::push),
-    cmd("not stonks {p}", N, 1, [PARAM_REG64, 0], None, tr::pop),
+    cmd(Opcode::Push, "stonks {p}", N, 1, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, 0], tr::push),
+    cmd(Opcode::Pop, "not stonks {p}", N, 1, [PARAM_REG64, 0], tr::pop),
     // Logical Operations
-    cmd("bitconneeeeeeect {p} {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, tr::and),
-    cmd("{p} \\s", N, 1, [PARAM_REG, 0], None, tr::not),
+    cmd(Opcode::And, "bitconneeeeeeect {p} {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::and),
+    cmd(Opcode::Not, "{p} \\s", N, 1, [PARAM_REG, 0], tr::not),
     // Register Manipulation
-    cmd("sneak 100 {p}", N, 1, [PARAM_REG, 0], None, tr::zero),
-    cmd("{p} is brilliant, but I like {p}", COMMAND_TYPE_MOV, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, tr::mov),
+    cmd(Opcode::Zero, "sneak 100 {p}", N, 1, [PARAM_REG, 0], tr::zero),
+    cmd(Opcode::Mov, "{p} is brilliant, but I like {p}", COMMAND_TYPE_MOV, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::mov),
     // Arithmetic operations
-    cmd("upvote {p}", N, 1, [PARAM_REG, 0], None, tr::upvote),
-    cmd("downvote {p}", N, 1, [PARAM_REG, 0], None, tr::downvote),
-    cmd("parry {p} you filthy casual {p}", N, 2, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG], None, tr::parry),
-    cmd("{p} units are ready, with {p} more well on the way", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, tr::add),
-    cmd("upgrades, people. Upgrades {p}", N, 1, [PARAM_REG, 0], None, tr::shl),
-    cmd("they had us in the first half, not gonna lie {p}", N, 1, [PARAM_REG, 0], None, tr::shr),
-    cmd("{p} is getting out of hand, now there are {p} of them", N, 2, [PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR], None, tr::imul),
-    cmd("look at what {p} needs to mimic a fraction of {p}", N, 2, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64], None, tr::divide),
-    cmd("{p} UNLIMITED POWER {p}", N, 2, [PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR], None, tr::power),
+    cmd(Opcode::Upvote, "upvote {p}", N, 1, [PARAM_REG, 0], tr::upvote),
+    cmd(Opcode::Downvote, "downvote {p}", N, 1, [PARAM_REG, 0], tr::downvote),
+    cmd(Opcode::Parry, "parry {p} you filthy casual {p}", N, 2, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG], tr::parry),
+    cmd(Opcode::Add, "{p} units are ready, with {p} more well on the way", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::add),
+    cmd(Opcode::Shl, "upgrades, people. Upgrades {p}", N, 1, [PARAM_REG, 0], tr::shl),
+    cmd(Opcode::Shr, "they had us in the first half, not gonna lie {p}", N, 1, [PARAM_REG, 0], tr::shr),
+    cmd(Opcode::Imul, "{p} is getting out of hand, now there are {p} of them", N, 2, [PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR], tr::imul),
+    cmd(Opcode::Divide, "look at what {p} needs to mimic a fraction of {p}", N, 2, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64], tr::divide),
+    cmd(Opcode::Power, "{p} UNLIMITED POWER {p}", N, 2, [PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR], tr::power),
     // Jumps and Jump Markers
-    cmd("upgrade", N, 0, [0, 0], Some(Analysis::JumpMarkers), tr::upgrade_label),
-    cmd("fuck go back", N, 0, [0, 0], None, tr::upgrade_jump),
-    cmd("banana", N, 0, [0, 0], Some(Analysis::JumpMarkers), tr::banana_label),
-    cmd("where banana", N, 0, [0, 0], None, tr::banana_jump),
-    cmd("monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], Some(Analysis::MonkeMarkers), tr::monke_label),
-    cmd("return to monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], None, tr::monke_jump),
-    cmd("who would win? {p} or {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], Some(Analysis::WhoWouldWin), tr::who_would_win),
-    cmd("{p} wins", N, 1, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, 0], None, tr::wins_label),
-    cmd("corporate needs you to find the difference between {p} and {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], Some(Analysis::TheyreTheSamePicture), tr::find_difference),
-    cmd("they're the same picture", N, 0, [0, 0], None, tr::same_picture_label),
+    cmd(Opcode::Upgrade, "upgrade", N, 0, [0, 0], tr::upgrade_label),
+    cmd(Opcode::FuckGoBack, "fuck go back", N, 0, [0, 0], tr::upgrade_jump),
+    cmd(Opcode::Banana, "banana", N, 0, [0, 0], tr::banana_label),
+    cmd(Opcode::WhereBanana, "where banana", N, 0, [0, 0], tr::banana_jump),
+    cmd(Opcode::Monke, "monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], tr::monke_label),
+    cmd(Opcode::ReturnToMonke, "return to monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], tr::monke_jump),
+    cmd(Opcode::WhoWouldWin, "who would win? {p} or {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::who_would_win),
+    cmd(Opcode::Wins, "{p} wins", N, 1, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, 0], tr::wins_label),
+    cmd(Opcode::FindDifference, "corporate needs you to find the difference between {p} and {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::find_difference),
+    cmd(Opcode::SamePicture, "they're the same picture", N, 0, [0, 0], tr::same_picture_label),
     // IO-Operations
-    cmd("what can I say except {p}", N, 1, [PARAM_REG8 | PARAM_CHAR, 0], None, tr::write_char),
-    cmd("let me in. LET ME IIIIIIIIN {p}", N, 1, [PARAM_REG8, 0], None, tr::read_char),
+    cmd(Opcode::WriteChar, "what can I say except {p}", N, 1, [PARAM_REG8 | PARAM_CHAR, 0], tr::write_char),
+    cmd(Opcode::ReadChar, "let me in. LET ME IIIIIIIIN {p}", N, 1, [PARAM_REG8, 0], tr::read_char),
     // Random commands
-    cmd("guess I'll die", N, 0, [0, 0], None, tr::die),
-    cmd("confused stonks", N, 0, [0, 0], Some(Analysis::ConfusedStonks), tr::confused_stonks),
-    cmd("perfectly balanced as all things should be", N, 0, [0, 0], Some(Analysis::PerfectlyBalanced), tr::perfectly_balanced),
-    cmd("wait, that's illegal", N, 0, [0, 0], None, tr::illegal),
-    cmd("oh no! anyway", N, 0, [0, 0], None, tr::oh_no),
-    cmd("it's over 9000 {p}", N, 1, [PARAM_REG, 0], None, tr::over_9000),
-    cmd("refuses to elaborate and leaves", N, 0, [0, 0], None, tr::refuses_to_elaborate),
-    cmd("you shall not pass!", N, 0, [0, 0], None, tr::shall_not_pass),
-    cmd("Houston, we have a problem", N, 0, [0, 0], None, tr::houston),
-    cmd("it's dangerous to go alone, take {p}", N, 1, [PARAM_REG64 | PARAM_REG32 | PARAM_REG16, 0], None, tr::rdrand),
-    cmd("we need air support", N, 0, [0, 0], None, tr::air_support),
+    cmd(Opcode::Die, "guess I'll die", N, 0, [0, 0], tr::die),
+    cmd(Opcode::ConfusedStonks, "confused stonks", N, 0, [0, 0], tr::confused_stonks),
+    cmd(Opcode::PerfectlyBalanced, "perfectly balanced as all things should be", N, 0, [0, 0], tr::perfectly_balanced),
+    cmd(Opcode::Illegal, "wait, that's illegal", N, 0, [0, 0], tr::illegal),
+    cmd(Opcode::OhNo, "oh no! anyway", N, 0, [0, 0], tr::oh_no),
+    cmd(Opcode::Over9000, "it's over 9000 {p}", N, 1, [PARAM_REG, 0], tr::over_9000),
+    cmd(Opcode::RefusesToElaborate, "refuses to elaborate and leaves", N, 0, [0, 0], tr::refuses_to_elaborate),
+    cmd(Opcode::ShallNotPass, "you shall not pass!", N, 0, [0, 0], tr::shall_not_pass),
+    cmd(Opcode::Houston, "Houston, we have a problem", N, 0, [0, 0], tr::houston),
+    cmd(Opcode::Rdrand, "it's dangerous to go alone, take {p}", N, 1, [PARAM_REG64 | PARAM_REG32 | PARAM_REG16, 0], tr::rdrand),
+    cmd(Opcode::AirSupport, "we need air support", N, 0, [0, 0], tr::air_support),
     // Debug commands
-    cmd("it's a trap", N, 0, [0, 0], None, tr::trap),
+    cmd(Opcode::Trap, "it's a trap", N, 0, [0, 0], tr::trap),
     //Insert commands above this one
-    cmd("or draw 25", N, 0, [0, 0], None, tr::draw_25),
-    cmd("", N, 0, [0, 0], None, tr::invalid),
+    cmd(Opcode::OrDraw25, "or draw 25", N, 0, [0, 0], tr::draw_25),
+    cmd(Opcode::Invalid, "", N, 0, [0, 0], tr::invalid),
 ];
+
+// Every command is at the index of its opcode.
+const _: () = {
+    let mut i = 0;
+    while i < COMMAND_LIST.len() {
+        assert!(COMMAND_LIST[i].opcode as usize == i);
+        i += 1;
+    }
+};
 
 /// Function names used for bully-mode replacements.
 pub const FUNCTION_NAMES: [&str; 16] = [
@@ -192,7 +211,7 @@ impl Param {
 
 #[derive(Debug, Clone)]
 pub struct ParsedCommand {
-    pub opcode: u8,
+    pub opcode: Opcode,
     /// `None` stands for a parameter slot the C code never initialised for this command.
     pub parameters: [Option<Param>; 2],
     /// 0 = no pointer, 1 = first parameter, 2 = second parameter
@@ -204,7 +223,7 @@ pub struct ParsedCommand {
 
 impl ParsedCommand {
     pub fn new(line_num: usize) -> ParsedCommand {
-        ParsedCommand { opcode: 0, parameters: [None, None], is_pointer: 0, line_num, translate: true }
+        ParsedCommand { opcode: Opcode::Invalid, parameters: [None, None], is_pointer: 0, line_num, translate: true }
     }
 
     /// The text of parameter `i` (see [`Param::text`]; an uninitialised slot reads as an empty
@@ -251,34 +270,15 @@ pub enum PointerUse {
     Unsupported,
 }
 
-// Opcodes (indices into COMMAND_LIST) referred to by the analyser and translator.
-pub const OP_PUSH: u8 = 5;
-pub const OP_POP: u8 = 6;
-pub const OP_AND: u8 = 7;
-pub const OP_NOT: u8 = 8;
-pub const OP_MOV: u8 = 10;
-pub const OP_UPVOTE: u8 = 11;
-pub const OP_DOWNVOTE: u8 = 12;
-pub const OP_PARRY: u8 = 13;
-pub const OP_ADD: u8 = 14;
-pub const OP_SHL: u8 = 15;
-pub const OP_SHR: u8 = 16;
-pub const OP_IMUL: u8 = 17;
-pub const OP_DIVIDE: u8 = 18;
-pub const OP_FIND_DIFFERENCE: u8 = 28;
-pub const OP_CONFUSED_STONKS: u8 = 33;
-pub const OP_OVER_9000: u8 = 37;
-
-pub fn pointer_use(opcode: u8, index: usize) -> PointerUse {
+pub fn pointer_use(opcode: Opcode, index: usize) -> PointerUse {
+    use Opcode::*;
     match (opcode, index) {
-        (OP_AND | OP_MOV | OP_PARRY | OP_ADD | OP_FIND_DIFFERENCE, _) => PointerUse::Sized,
+        (And | Mov | Parry | Add | FindDifference, _) => PointerUse::Sized,
         // imul: only the source can be memory
-        (OP_IMUL, 1) => PointerUse::Sized,
+        (Imul, 1) => PointerUse::Sized,
         // the dividend of the division is pushed and popped
-        (OP_PUSH | OP_POP, 0) | (OP_DIVIDE, 1) => PointerUse::Implicit,
-        (OP_NOT | OP_UPVOTE | OP_DOWNVOTE | OP_SHL | OP_SHR | OP_OVER_9000, 0) => {
-            PointerUse::NeedsSize
-        }
+        (Push | Pop, 0) | (Divide, 1) => PointerUse::Implicit,
+        (Not | Upvote | Downvote | Shl | Shr | Over9000, 0) => PointerUse::NeedsSize,
         _ => PointerUse::Unsupported,
     }
 }
@@ -414,32 +414,6 @@ impl CompileState {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn opcode_constants_match_command_list() {
-        let expect = [
-            (OP_PUSH, "stonks {p}"),
-            (OP_POP, "not stonks {p}"),
-            (OP_AND, "bitconneeeeeeect"),
-            (OP_NOT, "{p} \\s"),
-            (OP_MOV, "{p} is brilliant"),
-            (OP_UPVOTE, "upvote"),
-            (OP_DOWNVOTE, "downvote"),
-            (OP_PARRY, "parry"),
-            (OP_ADD, "{p} units are ready"),
-            (OP_SHL, "upgrades, people"),
-            (OP_SHR, "they had us in the first half"),
-            (OP_IMUL, "{p} is getting out of hand"),
-            (OP_DIVIDE, "look at what {p} needs"),
-            (OP_FIND_DIFFERENCE, "corporate needs you"),
-            (OP_CONFUSED_STONKS, "confused stonks"),
-            (OP_OVER_9000, "it's over 9000"),
-        ];
-        for (op, start) in expect {
-            let p = COMMAND_LIST[op as usize].pattern;
-            assert!(p.starts_with(start), "opcode {op}: {p:?}");
-        }
-    }
 
     #[test]
     fn parameter_text_and_type() {

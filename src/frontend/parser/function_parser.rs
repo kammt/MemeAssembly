@@ -4,7 +4,7 @@ use crate::frontend::commands::*;
 use crate::frontend::log::{print_debug, print_error, Arg};
 
 fn command_type(cmd: &ParsedCommand) -> u8 {
-    COMMAND_LIST[cmd.opcode as usize].command_type
+    cmd.opcode.command().command_type
 }
 
 /// Creates a function by starting at the function definition and then traversing the command
@@ -99,14 +99,14 @@ pub fn parse_functions(file: &mut File, state: &mut CompileState) {
             let mut owned = Vec::with_capacity(command_array_index - start_index + 2);
 
             let mut def = ParsedCommand::new(69);
-            def.opcode = 0;
+            def.opcode = Opcode::FuncDef;
             def.parameters[0] = Some(Param::Raw { text: func_name.as_bytes().to_vec(), mangle: false });
             owned.push(def);
 
             owned.extend_from_slice(&commands[start_index..command_array_index]);
 
             let mut ret = ParsedCommand::new(420);
-            ret.opcode = 1;
+            ret.opcode = Opcode::Return;
             owned.push(ret);
 
             functions.push(Function {
