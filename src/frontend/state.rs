@@ -69,7 +69,7 @@ pub enum LogLevel {
 
 /// `optimisationLevel` values. In the C enum `o_s` followed `o_3 = -3` and therefore had the
 /// value -2 (the same as `o_2`), so `-O-2` and `-O-s` both did both things. Here they are
-/// distinct, as the help page describes them (see docs/rust-rewrite-changes.md).
+/// distinct, as the help page describes them.
 pub const OPT_NONE: i64 = 0;
 pub const OPT_1: i64 = -1;
 pub const OPT_2: i64 = -2;

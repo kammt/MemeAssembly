@@ -66,7 +66,7 @@ impl Printer {
 
     fn branch(&mut self, mnemonic: &str, target: &[u8]) {
         let mut text = format!("{mnemonic} ").into_bytes();
-        // gas would read `rax`, `byte`, `$`, ... as something other than a symbol (fix #19)
+        // gas would read `rax`, `byte`, `$`, ... as something other than a symbol
         let quote = !gas_reads_as_symbol(target);
         if quote {
             text.push(b'"');
