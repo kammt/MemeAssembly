@@ -12,7 +12,8 @@ Environment:
 
 Reference outcomes are computed live when the reference compilers exist (and can be stored with
 --update-expected), otherwise they are read from tests/e2e/expected/.  See tests/e2e/README.md (status
-meanings, how documented fixes are judged) and tests/e2e/gen_programs.py for the corpus.
+meanings, how documented fixes are judged) and tests/e2e/gen_programs.py for the corpus, which is
+regenerated into tests/e2e/programs/ at the start of every run.
 
 Command line flags (manifest, check tables) are written in the reference's getopt spelling
 (-fcompile-mode bully, -O-1, -fno-martyrdom); the new compiler gets the clap spelling of the same
@@ -810,13 +811,6 @@ def bully_size(new_asm):
     return ""
 
 
-def strip_debug(t):
-    """frontend_parity.sh normalize_asm(): removes the STABS (reference) and DWARF (new) directives."""
-    t = re.sub(r"^\n(?=\.LEOF:$)", "", t, flags=re.M)
-    return re.sub(r"^(?:\.stabs .*|\t?\.stabn .*|\t\.Lcmd_\d*:|\t\.Lret_.*:|\.LEOF:|\.file \d+ \".*|\t\.loc \d+ \d+)\n",
-                  "", t, flags=re.M)
-
-
 def whitelist(asm, target, flags, new_asm=""):
     """The reference -S text with the documented fixes applied.  Raises if the script fails."""
     mode, opt = flag_context(flags)
@@ -859,11 +853,10 @@ def gas_objinfo(asm, target, d):
 
 def k_asm(cid, entry, flags, target="lin"):
     kind = "lin-asm" if target == "lin" else "win-asm"
-    debug = "-g" in flags
 
     def ref_fn():
         r = asm_build("ref", entry, flags, cid, target)
-        if CFG.faketime and not debug:
+        if CFG.faketime:
             r2 = asm_build("ref", entry, flags, cid, target, when=REF_TIME2)
             r["nondet"] = r2 != r
         return r
@@ -878,14 +871,7 @@ def k_asm(cid, entry, flags, target="lin"):
         if ref["compile"]["rc"] != 0:
             return Result("PASS", "", det)
         ra, na = ref.get("asm") or "", new.get("asm") or ""
-        if debug:
-            if not CFG.new_is_ref and target == "lin" and "bully" not in flags and na and not re.search(r"^\s*\.(loc|file)\b", na, re.M):
-                return Result("WARN", "-g: no DWARF .file/.loc directives in -S output", det)
-            # STABS (reference) vs DWARF (new): both are removed before comparing, as in frontend_parity.sh
-            ra, na = strip_debug(ra), strip_debug(na)
         st, summary, d2 = judge(ra, whitelist(ra, target, flags, na), na)
-        if debug:
-            summary = "-g: compared without the STABS/DWARF directives" + (f"; {summary}" if summary else "")
         return Result(st, summary, det + d2)
     return generic(cid, entry, kind, ref_fn, lambda: asm_build("new", entry, flags, cid, target), cmp)
 
@@ -935,7 +921,6 @@ def k_obj(cid, entry, flags, target="lin"):
     assembled with the cross gas.  A self-check makes sure that assembling the unmodified reference -S text gives
     the reference's own -O object (same objdump info), and the mingw link of the object is compared as before."""
     kind = "lin-obj" if target == "lin" else "win-obj"
-    debug = "-g" in flags
 
     def cmp(ref, new):
         det = fmt_compile("reference", ref["compile"]) + fmt_compile("new", new["compile"])
@@ -943,8 +928,6 @@ def k_obj(cid, entry, flags, target="lin"):
             return Result("ERROR", "stored reference outcome has no -S text: regenerate expected/ (--update-expected)", det)
         no = new.get("obj")
         ra = ref.get("asm")
-        if ra is not None and debug:
-            ra = strip_debug(ra)   # STABS: not comparable with DWARF, and -g with several files does not assemble
         gas_dir = workdir(cid, "gas")
         try:
             wa = whitelist(ra, target, flags, new.get("asm") or "") if ra is not None else None
@@ -1490,8 +1473,7 @@ MODES = [
     ("O69420", ["-O69420"], ["lin-exe", "lin-asm", "lin-obj", "win-asm", "win-obj"]),
     ("no-martyrdom", ["-fno-martyrdom"], ["lin-exe", "lin-asm", "lin-obj"]),
     ("d", ["-d"], ["lin-exe", "lin-asm"]),
-    ("g", ["-g"], ["lin-exe", "lin-asm", "lin-obj"]),
-    ("d-g-O-1", ["-d", "-g", "-O-1"], ["lin-exe"]),
+    ("d-O-1", ["-d", "-O-1"], ["lin-exe"]),
 ]
 # -O-2 / -O-s executables are ~1.6 GB (reference enum bug, see bugs/opt_minus_*): only built there
 GDB_CASES = [("calc/factorials", "upvote rcx"), ("misc/many_functions", None)]
@@ -1508,16 +1490,7 @@ def synth_entries(manifest):
             e["name"] = f"modes/{name}/{tag}"
             e["category"] = "modes"
             e["flags"] = base.get("flags", []) + mflags
-            if "-g" in mflags and "bully" in e["flags"]:
-                continue
             e["kinds"] = [k for k in kinds if k in base["kinds"] or k in ("lin-asm", "win-asm")]
-            if "-g" in mflags and len(base["files"]) > 1 and not e.get("ref_bug"):
-                e["ref_bug"] = {
-                    "desc": "-g with several input files: the STABS labels .Lcmd_N/.Lret_* restart at 0 in every file, "
-                            "so gas fails with \"symbol `.Lcmd_2' is already defined\"",
-                    "bug_kinds": ["lin-exe", "lin-obj"],
-                    "correct": {"kind": "per_kind", "lin-obj": {"kind": "compile_ok"},
-                                "lin-exe": {"kind": "runs", "oracle_flags": [f for f in e["flags"] if f != "-g"]}}}
             out.append(e)
     for tag, mflags in [("O69420", ["-O69420"]), ("O-1", ["-O-1"]), ("obfuscated", ["-fcompile-mode", "obfuscated"])]:
         e = dict(by["martyrdom/loop"])
@@ -1634,6 +1607,8 @@ def main():
     if CFG.live and not CFG.faketime:
         print("warning: libfaketime not found; random programs cannot be sampled reproducibly", file=sys.stderr)
 
+    # the corpus is generated, not committed
+    subprocess.run([sys.executable, "-I", str(HERE / "gen_programs.py")], check=True, stdout=subprocess.DEVNULL)
     manifest = json.loads(MANIFEST.read_text())
     checks = plan(manifest)
     if a.filters:

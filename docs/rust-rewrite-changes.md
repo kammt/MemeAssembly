@@ -110,7 +110,9 @@ behaviour is kept.
   `debug_file`, `debug_line` and `debug_function_begin`/`end` instead.
 - The `-g` notes for Windows, macOS and bully mode are unchanged. The help line now reads
   "Currently, only the DWARF format is supported (Linux-only)".
-- The parity script strips both debug formats before diffing.
+- `-g` output is not compared with the C compiler: its STABS output was already broken (see
+  above). The parity script and the e2e suite leave `-g` out. The DWARF is checked on its own
+  instead, with llvm-dwarfdump, objdump and gdb (writer tests and the e2e `gdb` checks).
 
 ### Command line: plain clap instead of getopt_long_only
 

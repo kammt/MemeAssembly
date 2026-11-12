@@ -28,8 +28,8 @@
 # "perfectly balanced" lines. With -d, the debug lines that show random choices are masked.
 #
 # Intentional divergences that are filtered/skipped here:
-#  * -g: the C compiler writes STABS, the Rust one gas DWARF directives (.file/.loc). The
-#    debug directives are removed from both outputs before diffing.
+#  * -g is not compared: the C compiler's STABS output was already broken (and the Rust one
+#    writes DWARF instead).
 #  * the help page (-h) and clap's argument errors are not compared.
 #  * bugs of the C compiler that the Rust port fixes (docs/rust-rewrite-changes.md): the
 #    reference output is rewritten by tests/frontend_parity_whitelist.pl, one rule per fix;
@@ -117,15 +117,10 @@ set_args() {
     done
 }
 
-# Removes the header comment, the randomly placed confused stonks labels and (for -g) the debug
-# directives of both debug formats.
+# Removes the header comment and the randomly placed confused stonks labels.
 normalize_asm() {
     [ -f "$1" ] || return 0
-    LC_ALL=C sed -e '2s/ on .*$//' -e '/^[ \t]*\.LConfusedStonks_[0-9]*:[ \t]*$/d' \
-        -e '/^$/{N;/^\n\.LEOF:$/d;P;D}' \
-        -e '/^\.stabs /d' -e '/^\t\.stabn /d' -e '/^\.stabn /d' \
-        -e '/^\t\.Lcmd_[0-9]*:$/d' -e '/^\t\.Lret_.*:$/d' -e '/^\.LEOF:$/d' \
-        -e '/^\.file [0-9]* "/d' -e '/^\t\.loc [0-9]* [0-9]*$/d' "$1"
+    LC_ALL=C sed -e '2s/ on .*$//' -e '/^[ \t]*\.LConfusedStonks_[0-9]*:[ \t]*$/d' "$1"
 }
 
 # -d prints parameters[0] of commands without parameters, which is an uninitialised pointer in
@@ -367,7 +362,7 @@ OK_INPUTS=(examples/*.memeasm examples/*/*.memeasm .github/workflows/*.memeasm t
 ERR_INPUTS=(tests/frontend_cases/err/*.memeasm)
 BULLY_INPUTS=(tests/frontend_cases/bully/*.memeasm)
 OPTS=("" -O-1 -O-2 -O-3 -O-s -O69420)
-EXTRA=("-g" "-fno-martyrdom" "-d" "-g -fno-martyrdom -O-1" "-d -O69420")
+EXTRA=("-fno-martyrdom" "-d" "-fno-martyrdom -O-1" "-d -O69420")
 
 for target in "${TARGETS[@]}"; do
     for mode in noob bully obfuscated; do
@@ -383,7 +378,7 @@ for target in "${TARGETS[@]}"; do
         done
         # multiple files
         check "$target/$mode/multi/ab" "$target" -fcompile-mode "$mode" -S -o OUT tests/frontend_cases/multi/a.memeasm tests/frontend_cases/multi/b.memeasm
-        check "$target/$mode/multi/ab -d -g" "$target" -fcompile-mode "$mode" -d -g -S -o OUT tests/frontend_cases/multi/a.memeasm tests/frontend_cases/multi/b.memeasm
+        check "$target/$mode/multi/ab -d" "$target" -fcompile-mode "$mode" -d -S -o OUT tests/frontend_cases/multi/a.memeasm tests/frontend_cases/multi/b.memeasm
         check "$target/$mode/multi/abc" "$target" -fcompile-mode "$mode" -S -o OUT tests/frontend_cases/multi/a.memeasm tests/frontend_cases/multi/b.memeasm tests/frontend_cases/multi/c_dup.memeasm
         check "$target/$mode/multi/github" "$target" -fcompile-mode "$mode" -S -o OUT .github/workflows/multiple_files/*.memeasm
         check "$target/$mode/multi/empty+ok" "$target" -fcompile-mode "$mode" -S -o OUT tests/frontend_cases/err/empty.memeasm tests/frontend_cases/ok/simple.memeasm
@@ -439,8 +434,6 @@ for target in "${TARGETS[@]}"; do
     check "$target/cli/permute" "$target" "$in" -S -o OUT -O-3
     check "$target/cli/last-O-wins" "$target" -O-1 -O69420 -S -o OUT "$in"
     check "$target/cli/terminator" "$target" -S -o OUT -- "$in"
-    check "$target/cli/-g" "$target" -g -S -o OUT "$in"
-    check "$target/cli/-g-bully" "$target" -g -fcompile-mode bully -S -o OUT "$in"
     # memeasm.c's own CLI messages
     check "$target/cli/version" "$target" -v
     check "$target/cli/no-output" "$target" "$in"

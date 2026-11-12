@@ -6,15 +6,17 @@ use crate::backend::writers::write;
 use crate::backend::OutputKind;
 use crate::target::Target;
 
-/// Plain fixtures plus the `-g` ones (named `<name>_g`).
-fn linux_fixtures() -> Vec<(String, PathBuf)> {
-    let mut v = fixtures("linux");
-    v.extend(debug_fixtures());
-    v
-}
-
-fn debug_fixtures() -> Vec<(String, PathBuf)> {
-    fixtures("linux_g").into_iter().map(|(n, p)| (format!("{n}_g"), p)).collect()
+/// Programs compiled with `-g` by the frontend: a program (`HelloWorld`), a library function
+/// (`toupper`) and two files with four functions (the CI's `multiple_files`).
+fn debug_modules() -> Vec<(&'static str, ObjModule)> {
+    vec![
+        ("helloworld", compile_with_debug(&["examples/HelloWorld.memeasm"])),
+        ("toupper", compile_with_debug(&["examples/toupper/toupper.memeasm"])),
+        (
+            "multiple_files",
+            compile_with_debug(&[".github/workflows/multiple_files/main.memeasm", ".github/workflows/multiple_files/function.memeasm"]),
+        ),
+    ]
 }
 
 /// What `readelf` shows of a relocatable object, minus what only depends on the layout:
@@ -68,8 +70,7 @@ fn elf_structure(readelf: &Path, obj: &Path) -> ElfStructure {
 
 /// Our ELF objects have the sections, symbols, relocations and section contents GNU as writes
 /// for the same source (the layout differs: no empty `.bss`, sections in index order, a section
-/// symbol for every section). (The `-g` fixtures are excluded: gas writes their STABS, we write
-/// DWARF.)
+/// symbol for every section).
 #[test]
 fn elf_objects_match_gas() {
     let dir = scratch("elf_objects_match_gas");
@@ -101,14 +102,13 @@ fn elf_objects_link_with_ld() {
     let dir = scratch("elf_objects_link_with_ld");
     let Some(gcc) = need(tool(&["x86_64-linux-gnu-gcc"]), "x86_64-linux-gnu-gcc") else { return };
     let Some(readelf) = need(tool(&["x86_64-linux-gnu-readelf", "readelf"]), "readelf") else { return };
-    for (name, src) in linux_fixtures() {
+    for (name, src) in fixtures("linux") {
         let Some(m) = module_for(&src, &dir) else { return };
         let obj = dir.join(format!("{name}.o"));
         write_file(&obj, &write(&m, Target::Linux, OutputKind::Object).unwrap());
         let out = run_ok(Command::new(&readelf).arg("-aW").arg("--debug-dump").arg(&obj));
         assert!(out.stderr.is_empty(), "{name}: readelf: {}", String::from_utf8_lossy(&out.stderr));
-        let base = name.trim_end_matches("_g");
-        let Some((args, input)) = program_input(base) else { continue };
+        let Some((args, input)) = program_input(&name) else { continue };
         let exe = dir.join(format!("{name}.ld"));
         run_ok(Command::new(&gcc).args(["-static", "-no-pie", "-z", "execstack", "-o"]).arg(&exe).arg(&obj));
         let Some(mut c) = linux_runner(&exe) else { return };
@@ -124,9 +124,8 @@ fn elf_executables_match_reference() {
     let dir = scratch("elf_executables_match_reference");
     let Some(gcc) = need(tool(&["x86_64-linux-gnu-gcc"]), "x86_64-linux-gnu-gcc") else { return };
     let mut ran = 0;
-    for (name, src) in linux_fixtures() {
-        let base = name.trim_end_matches("_g");
-        let Some((args, input)) = program_input(base) else { continue };
+    for (name, src) in fixtures("linux") {
+        let Some((args, input)) = program_input(&name) else { continue };
         let Some(m) = module_for(&src, &dir) else { return };
         let exe = dir.join(&name);
         write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
@@ -145,7 +144,7 @@ fn elf_executables_match_reference() {
         );
         ran += 1;
     }
-    assert!(ran >= 10, "only {ran} programs ran");
+    assert!(ran >= 9, "only {ran} programs ran");
 }
 
 /// `_start` passes argc/argv/envp like crt1 and aligns the stack the same way; `.quad`
@@ -167,7 +166,7 @@ fn elf_executable_args_env_and_alignment() {
 fn elf_executable_headers_are_sane() {
     let dir = scratch("elf_executable_headers");
     let Some(readelf) = need(tool(&["x86_64-linux-gnu-readelf", "readelf"]), "readelf") else { return };
-    let Some(m) = module_for(&fixture_dir().join("helloworld.linux_g.s"), &dir) else { return };
+    let m = compile_with_debug(&["examples/HelloWorld.memeasm"]);
     let exe = dir.join("hello");
     write_file(&exe, &write(&m, Target::Linux, OutputKind::Executable).unwrap());
     let out = run_ok(Command::new(&readelf).arg("-aW").arg(&exe));
@@ -229,9 +228,8 @@ fn elf_dwarf_objects_verify_and_decode() {
     let Some(gcc) = need(tool(&["x86_64-linux-gnu-gcc"]), "x86_64-linux-gnu-gcc") else { return };
     let Some(nm) = need(tool(&["x86_64-linux-gnu-nm"]), "x86_64-linux-gnu-nm") else { return };
     let mut checked = 0;
-    for (name, src) in debug_fixtures() {
-        let Some(m) = module_for(&src, &dir) else { return };
-        let d = m.debug.as_ref().expect("-g fixture has debug info");
+    for (name, m) in debug_modules() {
+        let d = m.debug.as_ref().expect("-g module has debug info");
         assert!(d.lines.len() > 3 && !d.functions.is_empty(), "{name}: {d:?}");
         let obj = dir.join(format!("{name}.o"));
         write_file(&obj, &write(&m, Target::Linux, OutputKind::Object).unwrap());
@@ -250,7 +248,7 @@ fn elf_dwarf_objects_verify_and_decode() {
         }
         checked += 1;
     }
-    assert!(checked >= 9, "only {checked} fixtures checked");
+    assert_eq!(checked, 3);
 }
 
 /// Our executables carry DWARF with final addresses: the line table and every subprogram's
@@ -261,10 +259,9 @@ fn elf_dwarf_executables_are_resolved() {
     let Some(dwarfdump) = need(llvm("llvm-dwarfdump"), "llvm-dwarfdump") else { return };
     let Some(objdump) = need(tool(&["x86_64-linux-gnu-objdump"]), "x86_64-linux-gnu-objdump") else { return };
     let Some(nm) = need(tool(&["x86_64-linux-gnu-nm"]), "x86_64-linux-gnu-nm") else { return };
-    for (name, src) in debug_fixtures() {
-        let Some(m) = module_for(&src, &dir) else { return };
+    for (name, m) in debug_modules() {
         let d = m.debug.as_ref().unwrap();
-        let exe = dir.join(&name);
+        let exe = dir.join(name);
         let bytes = match write(&m, Target::Linux, OutputKind::Executable) {
             Ok(b) => b,
             Err(e) if e.contains("undefined reference to `main'") => continue, // library-style
@@ -316,8 +313,7 @@ fn gdb_session(dir: &Path, exe: &Path, location: &str) -> Option<String> {
 fn elf_dwarf_gdb_breakpoint() {
     let dir = scratch("elf_dwarf_gdb");
     // A real program: break on its third source line.
-    let src = fixture_dir().join("helloworld.linux_g.s");
-    let Some(m) = module_for(&src, &dir) else { return };
+    let m = compile_with_debug(&["examples/HelloWorld.memeasm"]);
     let d = m.debug.as_ref().unwrap();
     let row = &d.lines[2];
     let exe = dir.join("helloworld");

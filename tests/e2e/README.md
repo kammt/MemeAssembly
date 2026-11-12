@@ -2,12 +2,13 @@
 
     NEW=$PWD/target/release/memeasm WINE_RUN=/path/to/run-exe.sh tests/e2e/run.sh [FILTER ...]
 
-`gen_programs.py` writes the corpus (`programs/`, `manifest.json`). `run.py` compiles every program with
+`gen_programs.py` writes the corpus (`programs/`, `programs/manifest.json`); `run.py` runs it first, so
+the corpus is always current and is not committed. `run.py` compiles every program with
 both compilers and compares the results per check kind (`lin-asm`, `lin-obj`, `lin-exe`, `win-asm`,
 `win-obj`, `win-exe`, `win-run`, `martyrdom`, ...). Results go to `out/` (`details.txt`,
 `results.json`). Reference outcomes are recomputed live when `/opt/memeasm-ref` exists. With
-`--expected` they are read from `expected/` instead (written by `--update-expected`). `out/` and
-`expected/` are not tracked.
+`--expected` they are read from `expected/` instead (written by `--update-expected`). `programs/`,
+`out/` and `expected/` are not tracked.
 
 ## Statuses
 
@@ -29,8 +30,8 @@ both compilers and compares the results per check kind (`lin-asm`, `lin-obj`, `l
 * asm (`-S`): the reference text is rewritten by `tests/frontend_parity_whitelist.pl` before it is
   compared. The suite runs the script itself and gives it the same context that `tests/frontend_parity.sh`
   gives it: target, compile mode, `-O` flag, and `BULLY_SIZE` taken from the new output. The rules
-  live only in that script. With `-g`, both sides have their STABS/DWARF directives stripped, as in
-  the parity script's `normalize_asm`.
+  live only in that script. `-g` output is not compared: the reference's STABS output was already
+  broken. The `gdb` checks test the new compiler's DWARF on its own.
   * new == whitelisted != reference: FIXED.
   * new == unrewritten reference: OLDBUG.
   * anything else: FAIL.

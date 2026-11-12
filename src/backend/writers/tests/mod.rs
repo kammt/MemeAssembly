@@ -30,7 +30,7 @@ pub fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/backend/writers/tests/fixtures")
 }
 
-/// All fixtures for a target suffix (`linux`, `linux_g`, `windows`, `macos`), sorted by name.
+/// All fixtures for a target suffix (`linux`, `windows`, `macos`), sorted by name.
 pub fn fixtures(suffix: &str) -> Vec<(String, PathBuf)> {
     let mut v: Vec<_> = std::fs::read_dir(fixture_dir())
         .unwrap()
@@ -113,11 +113,31 @@ pub fn gas_elf(src: &Path, out: &Path) -> Option<Vec<u8>> {
 }
 
 /// The module the real assembler should produce for `src` (via gas + [`elf_import`]).
-/// The gas object is kept at [`gas_obj_path`]. For `-g` fixtures the module gets the
-/// `DebugInfo` equivalent of the original compiler's STABS.
+/// The gas object is kept at [`gas_obj_path`].
 pub fn module_for(src: &Path, dir: &Path) -> Option<ObjModule> {
     let obj = gas_elf(src, &gas_obj_path(src, dir))?;
     Some(elf_import::import(&obj))
+}
+
+/// `memeasm -g -O` compiled in-process: the module the frontend generates for `files` (paths
+/// relative to the repository root), with debug information. The original compiler's `-g`
+/// output (STABS) was broken, so there are no `-g` fixtures to compare with; the DWARF tests
+/// check this module's debug information with the tools instead.
+pub fn compile_with_debug(files: &[&str]) -> ObjModule {
+    use crate::frontend::commands::{CompileState, OutputMode};
+    use crate::frontend::{analyser, encoder, parser};
+    let mut state = CompileState::new(crate::target::Target::Linux);
+    state.output_mode = OutputMode::ObjectFile;
+    state.use_debug_info = true;
+    for f in files {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(f);
+        let data = std::fs::read(&path).unwrap();
+        let file = parser::parse_file(path.to_str().unwrap().as_bytes(), &data, &mut state);
+        state.files.push(file);
+    }
+    analyser::analyse_commands(&mut state);
+    assert_eq!(state.compiler_errors, 0, "{files:?}");
+    encoder::encode_module(&state).unwrap()
 }
 
 pub fn gas_obj_path(src: &Path, dir: &Path) -> PathBuf {
@@ -167,7 +187,7 @@ pub fn write_file(path: &Path, bytes: &[u8]) {
 pub fn program_input(name: &str) -> Option<(Vec<&'static str>, &'static [u8])> {
     const BF_HELLO: &str = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.";
     match name {
-        "brainfuck" | "brainfuck_o1" => Some((vec![BF_HELLO], b"")),
+        "brainfuck" => Some((vec![BF_HELLO], b"")),
         "reverse_string" => Some((vec![], b"Hello, World\n")),
         "is_nice" => Some((vec![], b"69\n")),
         "helloworld" | "helloworld_o69420" | "helloworld_nomartyr" | "alphabet" | "alphabet_bully" | "the_link" => {

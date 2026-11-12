@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generates the e2e test corpus under tests/e2e/programs/ and programs/manifest.json.
 
-Run with `python3 -I tests/e2e/gen_programs.py`. The generated files are committed, so this only
-needs to be re-run after editing the specs below. Every program is described once here; the
+run.py runs this at the start of every run (by hand: `python3 -I tests/e2e/gen_programs.py`); the
+generated files are not committed. Every program is described once here; the
 manifest tells run.py which checks to run for it (see run.py for the meaning of the fields).
 
 Conventions for runtime programs: values are printed with the `printhex` (16 hex digits) or
@@ -837,7 +837,6 @@ bully("mixed", func("main", say("x") + ["stonks al", "blub", "upvote 5", "rax is
                        "after 'xy\\n'; new executables enter main with rax = &main (docs/rust-rewrite-changes.md, "
                        "'Other known divergences') and print 'xy\\n' twice. The -S/-O output is still compared exactly.",
                "bug_kinds": ["lin-exe"], "correct": {"kind": "unspecified"}})
-bully("with_g_note", func("main", say("g\n")), flags=BF + ["-g"])
 add("bully/dot_path", None, "bully", flags=BF, cwd="tests/e2e/programs/bully/dot_path", files={
     "zz_main.memeasm": func("main", say("<") + ["some invalid thing", "another 1 2 3", "stonks al"] + say(">\n")),
     "aa_other.memeasm": func("other", ["what is this", "rax is brilliant, but I like xyz"], ret=RET)}, timeout=3,
@@ -1019,11 +1018,11 @@ ext("examples/reverse-string", ["examples/reverse-string.memeasm"], "examples",
     runs=[{"stdin": b"Hello, MemeAssembly!\n"}, {"stdin": b"x\n"}])
 ext("examples/the-link", ["examples/the-link.memeasm"], "examples")
 ext("examples/rot13", ["examples/rot13/rot13.memeasm"], "examples", kinds=["lin-obj", "lin-asm", "win-asm", "win-obj"],
-    driver="examples/rot13/rot13_test.c", flags=["-g"])
+    driver="examples/rot13/rot13_test.c")
 ext("examples/Stalinsort", ["examples/Stalinsort/stalin-sort.memeasm"], "examples",
-    kinds=["lin-obj", "lin-asm", "win-asm", "win-obj"], driver="examples/Stalinsort/stalinsort_test.c", flags=["-g"])
+    kinds=["lin-obj", "lin-asm", "win-asm", "win-obj"], driver="examples/Stalinsort/stalinsort_test.c")
 ext("examples/toupper", ["examples/toupper/toupper.memeasm"], "examples", kinds=["lin-obj", "lin-asm", "win-asm", "win-obj"],
-    driver="examples/toupper/toupper_test.c", flags=["-g"])
+    driver="examples/toupper/toupper_test.c")
 ext("workflows/example", [".github/workflows/example.memeasm"], "examples",
     kinds=["lin-asm", "lin-obj", "win-asm", "win-obj"], random=True,
     note="contains confused stonks; CI compiles it with -S -d")
