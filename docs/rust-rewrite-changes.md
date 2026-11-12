@@ -2,7 +2,8 @@
 
 The Rust frontend (`src/main.rs`, `src/frontend/`) reproduces the C compiler (`compiler/`):
 the `-S` output, the diagnostics on each of stdout and stderr, and the exit codes match for
-every compile mode, optimisation level and target. The exceptions are listed here. The
+every compile mode, optimisation level and target. The exceptions are listed here; the `-d`
+debug messages are new (see "Debug output"). The
 command line itself is new (clap, see "Command line"), random choices are not
 reproducible (see "Randomness"), and the confused stonks label is only emitted in files that
 use `confused stonks` (see "Possible bugs, kept"). The code is generated once
@@ -11,7 +12,7 @@ use `confused stonks` (see "Possible bugs, kept"). The code is generated once
 spelling of each option to the Rust compiler. It whitelists exactly these differences: the
 per-fix rewrite rules are in `tests/frontend_parity_whitelist.pl`, `check_fixed` covers the
 cases where the C compiler crashes or hangs, `check_new_error` the inputs that are now
-rejected (#14, #18) and `check_assembles` the bully fix-ups that now assemble (#18). Programs
+rejected (#14, #18, #23) and `check_assembles` the bully fix-ups that now assemble (#18, #23). Programs
 with random choices are compared structurally (see "Randomness").
 
 Line numbers refer to the C sources in `compiler/` at commit 8f186d8 (still on `main`).
@@ -45,6 +46,8 @@ Rust port implements the intended behaviour instead.
 | 19 | `compiler/compiler.c:69` | Calling a function whose name gas reads as something else: `$`, `.`, a register name (`rax`, `r8d`, `xmm0`, …), an operator (`and`, `not`, …) or a size/segment keyword (`byte`, `near`, `fs`, `rip`, …), e.g. `$: whomst has summoned the almighty one` | `call $` calls the current address (endless recursion, SIGSEGV), `call rax` is an indirect call, `call byte` a call to address 1. | `call "$"`: gas's quoted symbol syntax. The function label and `.global` keep the plain name (gas reads those correctly), and every name that worked before is unchanged. The direct path calls the same symbol. |
 | 20 | `compiler/translator/translator.c:472` | `-O-s` for macOS | `.align 536870912`: Apple's `as` (and llvm-mc) read `.align n` as 2^n on Mach-O and reject n >= 32 ("invalid alignment value"), so `-O-s` never assembled for macOS. | `.p2align 29` (the intended 512 MiB) for macOS, in `-S` and on the direct path. Linux and Windows keep `.align 536870912`. |
 | 21 | `compiler/parser/functionParser.c:126-163` (copy), `compiler/analyser/randomCommands.c:92-98` (deletion) | Bully mode, "perfectly balanced" in a file with orphaned commands (commands outside of any function), e.g. `perfectly balanced as all things should be` / `upvote rax` / `upvote rbx` / `upvote rcx` without a function definition | Bully mode translates orphaned commands from a *copy* (an injected function), but "perfectly balanced" marks lines as deleted in the file's original command array. Deleting an orphaned line has no effect: the Snap banner reports "2 lines of code", yet all three `add` instructions remain. The count of lines that can still be deleted (#8) also counted orphaned lines that bully fixes had already dropped. | Each command exists once (functions own their commands), so a deleted orphaned line is removed from the injected function. Only random programs ("perfectly balanced" in bully mode with orphaned lines) change. |
+| 22 | `compiler/parser/functionParser.c:49-76` | noob/obfuscated mode, the **first** function of a file runs into the next function definition without a return statement, e.g. `I like to have fun, … main` / `I like to have fun, … f` / `right back at ya, buckaroo` | `functionEndIndex` is 0 both for "no return statement found" and for a return statement at index 0. For the first function (definition at index 0) directly followed by a definition, `functionEndIndex != functionStartAtIndex + index - 1` compares 0 with 0, so `expected a return statement, but got a new function definition` is missing. The same function later in the file gets the error. | The error is reported for every function, including the first one. |
+| 23 | `compiler/parser/fileParser.c:198-210` (`{p}:`), `compiler/analyser/parameters.c:404-430` | An empty function name: `: whomst has summoned the almighty one` | The `{p}:` word matches `:` with an empty parameter, and the function name check loops over no characters, so the name is valid. The output contains `call ` (and `-S`/`-O` do not check that the function exists), which gas rejects. | An empty function name is invalid: noob/obfuscated `invalid parameter provided: ""`, bully mode replaces it like every other invalid parameter. |
 
 ## Undefined behaviour given a defined result (no visible change)
 
@@ -54,10 +57,6 @@ produce a sensible result. The Rust port defines that result explicitly.
 - `compiler/analyser/parameters.c:523`: `__builtin_clzll(~number)` is undefined for
   `number == -1`. The port computes the intended 1 bit, which is what the aarch64 reference
   gives, and does not depend on `clz(0)`.
-- `compiler/analyser/analysisHelper.c:45`: the `-d` message "Comparing against parameter %s"
-  prints `parameters[0]` of parameterless jump markers such as `upgrade`. That slot is
-  uninitialised stack memory (garbage, or a stale string). The port prints `(null)`. The parity
-  script masks this one debug line.
 - `compiler/parser/fileParser.c:41`: `removeLineBreaksAndTabs` underflows its index when a line
   is all whitespace before a NUL byte. The port returns the empty line.
 - `compiler/translator/translator.c:173`: the out-of-bounds read of `paramTypes[2]`. It is
@@ -113,6 +112,15 @@ behaviour is kept.
 - `-g` output is not compared with the C compiler: its STABS output was already broken (see
   above). The parity script and the e2e suite leave `-g` out. The DWARF is checked on its own
   instead, with llvm-dwarfdump, objdump and gdb (writer tests and the e2e `gdb` checks).
+
+### Debug output (`-d`)
+
+The `-d` messages are not the C compiler's: they are written for debugging the Rust port and
+start with `debug: `, e.g. `debug: line 6: Mov ["rax" (pointer), "5"]` or
+`debug: line 6: "5" is a decimal number`. The parser reports what each line was parsed as, the
+function splitter the lines of each function, the analyser what each parameter was recognised as
+(and what bully mode replaced), and the random choices. `tests/frontend_parity.sh` runs the C
+compiler without `-d` and removes the `debug: ` lines from the Rust output before comparing.
 
 ### Command line: plain clap instead of getopt_long_only
 
@@ -183,7 +191,7 @@ but they are no longer tied to the clock, cannot be reproduced and differ from g
 `rand()` sequences. `tests/frontend_parity.sh` therefore removes the label from both outputs and
 checks that every `jmp` to it has exactly one definition; for "perfectly balanced" programs the
 Rust output must be a line-subsequence of the reference output of the program without those
-lines, and the `-d` lines that show random choices are masked. `tests/e2e/run.py` compares the
+lines. `tests/e2e/run.py` compares the
 Rust results with the set of reference results sampled at several frozen times.
 
 ### Other known divergences

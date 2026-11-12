@@ -3,7 +3,7 @@
 pub mod file_parser;
 pub mod function_parser;
 
-use super::commands::{CompileState, File};
+use super::state::{CompileState, File};
 
 /// Parses the contents of one input file into a [`File`].
 pub fn parse_file(file_name: &[u8], data: &[u8], state: &mut CompileState) -> File {

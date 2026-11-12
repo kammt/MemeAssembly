@@ -1,4 +1,4 @@
-//! Port of compiler/commands.h and the command table of compiler/compiler.c.
+//! The commands of MemeAssembly: their patterns, parameter types and code generators.
 
 use super::translator::{self as tr, CodeGen};
 use crate::backend::emitter::Reg;
@@ -6,7 +6,7 @@ use std::borrow::Cow;
 
 use crate::target::Target;
 
-// Parameter types
+// Parameter types (bit flags)
 pub const PARAM_REG64: u8 = 1;
 pub const PARAM_REG32: u8 = 2;
 pub const PARAM_REG16: u8 = 4;
@@ -16,140 +16,120 @@ pub const PARAM_CHAR: u8 = 32;
 pub const PARAM_MONKE_LABEL: u8 = 64;
 pub const PARAM_FUNC_NAME: u8 = 128;
 pub const PARAM_REG: u8 = PARAM_REG64 | PARAM_REG32 | PARAM_REG16 | PARAM_REG8;
+/// An immediate: a decimal number or a character.
+pub const PARAM_IMM: u8 = PARAM_DECIMAL | PARAM_CHAR;
+pub const PARAM_REG_OR_IMM: u8 = PARAM_REG | PARAM_IMM;
 
 pub fn param_is_reg(param: u8) -> bool {
-    param <= PARAM_REG8 && param > 0
+    param & PARAM_REG != 0
 }
-
-// Command types
-pub const COMMAND_TYPE_NONE: u8 = 0;
-pub const COMMAND_TYPE_MOV: u8 = 1;
-pub const COMMAND_TYPE_FUNC_RETURN: u8 = 2;
-pub const COMMAND_TYPE_FUNC_DEF: u8 = 3;
-pub const COMMAND_TYPE_FUNC_CALL: u8 = 4;
 
 pub const COMMENT_START: &[u8] = b"What the hell happened here?";
 pub const OR_DRAW_25_START: &[u8] = b"or";
 pub const OR_DRAW_25_END: &[u8] = b"draw 25";
 pub const POINTER_SUFFIX: &[u8] = b"do you know de wey";
 
-/// A command: its index in [`COMMAND_LIST`] (the C opcode).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Opcode {
-    FuncDef, Return, ReturnOne, ReturnZero, Call,
-    Push, Pop,
-    And, Not,
-    Zero, Mov,
-    Upvote, Downvote, Parry, Add, Shl, Shr, Imul, Divide, Power,
-    Upgrade, FuckGoBack, Banana, WhereBanana, Monke, ReturnToMonke, WhoWouldWin, Wins,
-    FindDifference, SamePicture,
-    WriteChar, ReadChar,
-    Die, ConfusedStonks, PerfectlyBalanced, Illegal, OhNo, Over9000, RefusesToElaborate,
-    ShallNotPass, Houston, Rdrand, AirSupport,
-    Trap,
+pub struct Command {
+    pub opcode: Opcode,
+    /// The text of the command; every `{p}` (at the start of a word) is a parameter.
+    pub pattern: &'static str,
+    /// The allowed `PARAM_*` types of each parameter.
+    pub allowed_param_types: &'static [u8],
+    /// Generates the command's code (for `-S` text and object code alike).
+    pub code: CodeGen,
+}
+
+impl Command {
+    pub fn used_parameters(&self) -> usize {
+        self.allowed_param_types.len()
+    }
+}
+
+/// Defines [`Opcode`] and [`COMMAND_LIST`] (every command at the index of its opcode).
+macro_rules! commands {
+    ($($(#[$doc:meta])* $op:ident => $pattern:literal, [$($ty:expr),*], $code:expr;)*) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[repr(u8)]
+        pub enum Opcode {
+            $($(#[$doc])* $op,)*
+        }
+
+        pub static COMMAND_LIST: &[Command] = &[
+            $(Command { opcode: Opcode::$op, pattern: $pattern, allowed_param_types: &[$($ty),*], code: $code },)*
+        ];
+    };
+}
+
+commands! {
+    // Functions
+    FuncDef => "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}", [PARAM_FUNC_NAME], tr::func_def;
+    Return => "right back at ya, buckaroo", [], tr::ret;
+    ReturnOne => "no, I don't think I will", [], tr::ret_one;
+    ReturnZero => "I see this as an absolute win", [], tr::ret_zero;
+    Call => "{p}: whomst has summoned the almighty one", [PARAM_FUNC_NAME], tr::call;
+    // Stack operations
+    Push => "stonks {p}", [PARAM_REG64 | PARAM_IMM], tr::push;
+    Pop => "not stonks {p}", [PARAM_REG64], tr::pop;
+    // Logical Operations
+    And => "bitconneeeeeeect {p} {p}", [PARAM_REG, PARAM_REG_OR_IMM], tr::and;
+    Not => "{p} \\s", [PARAM_REG], tr::not;
+    // Register Manipulation
+    Zero => "sneak 100 {p}", [PARAM_REG], tr::zero;
+    Mov => "{p} is brilliant, but I like {p}", [PARAM_REG, PARAM_REG_OR_IMM], tr::mov;
+    // Arithmetic operations
+    Upvote => "upvote {p}", [PARAM_REG], tr::upvote;
+    Downvote => "downvote {p}", [PARAM_REG], tr::downvote;
+    Parry => "parry {p} you filthy casual {p}", [PARAM_REG_OR_IMM, PARAM_REG], tr::parry;
+    Add => "{p} units are ready, with {p} more well on the way", [PARAM_REG, PARAM_REG_OR_IMM], tr::add;
+    Shl => "upgrades, people. Upgrades {p}", [PARAM_REG], tr::shl;
+    Shr => "they had us in the first half, not gonna lie {p}", [PARAM_REG], tr::shr;
+    Imul => "{p} is getting out of hand, now there are {p} of them", [PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_IMM], tr::imul;
+    Divide => "look at what {p} needs to mimic a fraction of {p}", [PARAM_REG64 | PARAM_IMM, PARAM_REG64], tr::divide;
+    Power => "{p} UNLIMITED POWER {p}", [PARAM_REG64, PARAM_REG64 | PARAM_IMM], tr::power;
+    // Jumps and Jump Markers
+    Upgrade => "upgrade", [], tr::upgrade_label;
+    FuckGoBack => "fuck go back", [], tr::upgrade_jump;
+    Banana => "banana", [], tr::banana_label;
+    WhereBanana => "where banana", [], tr::banana_jump;
+    Monke => "monke {p}", [PARAM_MONKE_LABEL], tr::monke_label;
+    ReturnToMonke => "return to monke {p}", [PARAM_MONKE_LABEL], tr::monke_jump;
+    WhoWouldWin => "who would win? {p} or {p}", [PARAM_REG, PARAM_REG_OR_IMM], tr::who_would_win;
+    Wins => "{p} wins", [PARAM_REG_OR_IMM], tr::wins_label;
+    FindDifference => "corporate needs you to find the difference between {p} and {p}", [PARAM_REG, PARAM_REG_OR_IMM], tr::find_difference;
+    SamePicture => "they're the same picture", [], tr::same_picture_label;
+    // IO-Operations
+    WriteChar => "what can I say except {p}", [PARAM_REG8 | PARAM_CHAR], tr::write_char;
+    ReadChar => "let me in. LET ME IIIIIIIIN {p}", [PARAM_REG8], tr::read_char;
+    // Random commands
+    Die => "guess I'll die", [], tr::die;
+    ConfusedStonks => "confused stonks", [], tr::confused_stonks;
+    PerfectlyBalanced => "perfectly balanced as all things should be", [], tr::perfectly_balanced;
+    Illegal => "wait, that's illegal", [], tr::illegal;
+    OhNo => "oh no! anyway", [], tr::oh_no;
+    Over9000 => "it's over 9000 {p}", [PARAM_REG], tr::over_9000;
+    RefusesToElaborate => "refuses to elaborate and leaves", [], tr::refuses_to_elaborate;
+    ShallNotPass => "you shall not pass!", [], tr::shall_not_pass;
+    Houston => "Houston, we have a problem", [], tr::houston;
+    Rdrand => "it's dangerous to go alone, take {p}", [PARAM_REG64 | PARAM_REG32 | PARAM_REG16], tr::rdrand;
+    AirSupport => "we need air support", [], tr::air_support;
+    // Debug commands
+    Trap => "it's a trap", [], tr::trap;
+    //Insert commands above this one
     /// "or draw 25" at the end of a line replaces the command
-    OrDraw25,
+    OrDraw25 => "or draw 25", [], tr::draw_25;
     /// A line that is no command
-    Invalid,
+    Invalid => "", [], tr::invalid;
 }
 
 impl Opcode {
     pub fn command(self) -> &'static Command {
         &COMMAND_LIST[self as usize]
     }
-}
 
-pub struct Command {
-    pub opcode: Opcode,
-    pub pattern: &'static str,
-    pub command_type: u8,
-    pub used_parameters: u8,
-    pub allowed_param_types: [u8; 2],
-    /// Generates the command's code (for `-S` text and object code alike).
-    pub code: CodeGen,
-}
-
-const fn cmd(
-    opcode: Opcode,
-    pattern: &'static str,
-    command_type: u8,
-    used_parameters: u8,
-    allowed_param_types: [u8; 2],
-    code: CodeGen,
-) -> Command {
-    Command { opcode, pattern, command_type, used_parameters, allowed_param_types, code }
-}
-
-const N: u8 = COMMAND_TYPE_NONE;
-
-pub static COMMAND_LIST: [Command; 46] = [
-    // Functions
-    cmd(Opcode::FuncDef, "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}", COMMAND_TYPE_FUNC_DEF, 1, [PARAM_FUNC_NAME, 0], tr::func_def),
-    cmd(Opcode::Return, "right back at ya, buckaroo", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], tr::ret),
-    cmd(Opcode::ReturnOne, "no, I don't think I will", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], tr::ret_one),
-    cmd(Opcode::ReturnZero, "I see this as an absolute win", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], tr::ret_zero),
-    cmd(Opcode::Call, "{p}: whomst has summoned the almighty one", COMMAND_TYPE_FUNC_CALL, 1, [PARAM_FUNC_NAME, 0], tr::call),
-    // Stack operations
-    cmd(Opcode::Push, "stonks {p}", N, 1, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, 0], tr::push),
-    cmd(Opcode::Pop, "not stonks {p}", N, 1, [PARAM_REG64, 0], tr::pop),
-    // Logical Operations
-    cmd(Opcode::And, "bitconneeeeeeect {p} {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::and),
-    cmd(Opcode::Not, "{p} \\s", N, 1, [PARAM_REG, 0], tr::not),
-    // Register Manipulation
-    cmd(Opcode::Zero, "sneak 100 {p}", N, 1, [PARAM_REG, 0], tr::zero),
-    cmd(Opcode::Mov, "{p} is brilliant, but I like {p}", COMMAND_TYPE_MOV, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::mov),
-    // Arithmetic operations
-    cmd(Opcode::Upvote, "upvote {p}", N, 1, [PARAM_REG, 0], tr::upvote),
-    cmd(Opcode::Downvote, "downvote {p}", N, 1, [PARAM_REG, 0], tr::downvote),
-    cmd(Opcode::Parry, "parry {p} you filthy casual {p}", N, 2, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG], tr::parry),
-    cmd(Opcode::Add, "{p} units are ready, with {p} more well on the way", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::add),
-    cmd(Opcode::Shl, "upgrades, people. Upgrades {p}", N, 1, [PARAM_REG, 0], tr::shl),
-    cmd(Opcode::Shr, "they had us in the first half, not gonna lie {p}", N, 1, [PARAM_REG, 0], tr::shr),
-    cmd(Opcode::Imul, "{p} is getting out of hand, now there are {p} of them", N, 2, [PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR], tr::imul),
-    cmd(Opcode::Divide, "look at what {p} needs to mimic a fraction of {p}", N, 2, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64], tr::divide),
-    cmd(Opcode::Power, "{p} UNLIMITED POWER {p}", N, 2, [PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR], tr::power),
-    // Jumps and Jump Markers
-    cmd(Opcode::Upgrade, "upgrade", N, 0, [0, 0], tr::upgrade_label),
-    cmd(Opcode::FuckGoBack, "fuck go back", N, 0, [0, 0], tr::upgrade_jump),
-    cmd(Opcode::Banana, "banana", N, 0, [0, 0], tr::banana_label),
-    cmd(Opcode::WhereBanana, "where banana", N, 0, [0, 0], tr::banana_jump),
-    cmd(Opcode::Monke, "monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], tr::monke_label),
-    cmd(Opcode::ReturnToMonke, "return to monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], tr::monke_jump),
-    cmd(Opcode::WhoWouldWin, "who would win? {p} or {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::who_would_win),
-    cmd(Opcode::Wins, "{p} wins", N, 1, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, 0], tr::wins_label),
-    cmd(Opcode::FindDifference, "corporate needs you to find the difference between {p} and {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], tr::find_difference),
-    cmd(Opcode::SamePicture, "they're the same picture", N, 0, [0, 0], tr::same_picture_label),
-    // IO-Operations
-    cmd(Opcode::WriteChar, "what can I say except {p}", N, 1, [PARAM_REG8 | PARAM_CHAR, 0], tr::write_char),
-    cmd(Opcode::ReadChar, "let me in. LET ME IIIIIIIIN {p}", N, 1, [PARAM_REG8, 0], tr::read_char),
-    // Random commands
-    cmd(Opcode::Die, "guess I'll die", N, 0, [0, 0], tr::die),
-    cmd(Opcode::ConfusedStonks, "confused stonks", N, 0, [0, 0], tr::confused_stonks),
-    cmd(Opcode::PerfectlyBalanced, "perfectly balanced as all things should be", N, 0, [0, 0], tr::perfectly_balanced),
-    cmd(Opcode::Illegal, "wait, that's illegal", N, 0, [0, 0], tr::illegal),
-    cmd(Opcode::OhNo, "oh no! anyway", N, 0, [0, 0], tr::oh_no),
-    cmd(Opcode::Over9000, "it's over 9000 {p}", N, 1, [PARAM_REG, 0], tr::over_9000),
-    cmd(Opcode::RefusesToElaborate, "refuses to elaborate and leaves", N, 0, [0, 0], tr::refuses_to_elaborate),
-    cmd(Opcode::ShallNotPass, "you shall not pass!", N, 0, [0, 0], tr::shall_not_pass),
-    cmd(Opcode::Houston, "Houston, we have a problem", N, 0, [0, 0], tr::houston),
-    cmd(Opcode::Rdrand, "it's dangerous to go alone, take {p}", N, 1, [PARAM_REG64 | PARAM_REG32 | PARAM_REG16, 0], tr::rdrand),
-    cmd(Opcode::AirSupport, "we need air support", N, 0, [0, 0], tr::air_support),
-    // Debug commands
-    cmd(Opcode::Trap, "it's a trap", N, 0, [0, 0], tr::trap),
-    //Insert commands above this one
-    cmd(Opcode::OrDraw25, "or draw 25", N, 0, [0, 0], tr::draw_25),
-    cmd(Opcode::Invalid, "", N, 0, [0, 0], tr::invalid),
-];
-
-// Every command is at the index of its opcode.
-const _: () = {
-    let mut i = 0;
-    while i < COMMAND_LIST.len() {
-        assert!(COMMAND_LIST[i].opcode as usize == i);
-        i += 1;
+    pub fn is_return(self) -> bool {
+        matches!(self, Opcode::Return | Opcode::ReturnOne | Opcode::ReturnZero)
     }
-};
+}
 
 /// Function names used for bully-mode replacements.
 pub const FUNCTION_NAMES: [&str; 16] = [
@@ -214,8 +194,8 @@ pub struct ParsedCommand {
     pub opcode: Opcode,
     /// `None` stands for a parameter slot the C code never initialised for this command.
     pub parameters: [Option<Param>; 2],
-    /// 0 = no pointer, 1 = first parameter, 2 = second parameter
-    pub is_pointer: u8,
+    /// The index of the parameter followed by "do you know de wey" (a pointer).
+    pub pointer: Option<usize>,
     pub line_num: usize,
     /// Set to false if the command must not be translated
     pub translate: bool,
@@ -223,7 +203,7 @@ pub struct ParsedCommand {
 
 impl ParsedCommand {
     pub fn new(line_num: usize) -> ParsedCommand {
-        ParsedCommand { opcode: Opcode::Invalid, parameters: [None, None], is_pointer: 0, line_num, translate: true }
+        ParsedCommand { opcode: Opcode::Invalid, parameters: [None, None], pointer: None, line_num, translate: true }
     }
 
     /// The text of parameter `i` (see [`Param::text`]; an uninitialised slot reads as an empty
@@ -233,6 +213,10 @@ impl ParsedCommand {
             Some(p) => p.text(target),
             None => Cow::Borrowed(b""),
         }
+    }
+
+    pub fn is_pointer(&self, i: usize) -> bool {
+        self.pointer == Some(i)
     }
 
     /// The `PARAM_*` type of parameter `i`.
@@ -245,10 +229,10 @@ impl ParsedCommand {
     /// register; always for the one-operand commands that need a size.
     ///
     /// The C code checked `paramTypes[index + 1 % 2]` (= `paramTypes[index + 1]`, reading past
-    /// the array for the second parameter); this is the intended `(index + 1) % 2`.
+    /// the array for the second parameter); this checks the other parameter, as intended.
     pub fn bully_pointer_needs_size(&self, index: usize) -> bool {
         match pointer_use(self.opcode, index) {
-            PointerUse::Sized => !param_is_reg(self.param_type((index + 1) % 2)),
+            PointerUse::Sized => !param_is_reg(self.param_type(1 - index)),
             PointerUse::NeedsSize => true,
             PointerUse::Implicit | PointerUse::Unsupported => false,
         }
@@ -283,140 +267,21 @@ pub fn pointer_use(opcode: Opcode, index: usize) -> PointerUse {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Function {
-    /// The definition (`commands[0]`, which holds the name) and the rest of the function.
-    pub commands: Vec<ParsedCommand>,
-    /// A function that bully mode made up for orphaned commands: its definition and return
-    /// statement are not lines of the file.
-    pub injected: bool,
-}
-
-impl Function {
-    /// The commands that are lines of the file.
-    fn lines_mut(&mut self) -> &mut [ParsedCommand] {
-        let n = self.commands.len();
-        if self.injected {
-            &mut self.commands[1..n - 1]
-        } else {
-            &mut self.commands
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct File {
-    pub file_name: Vec<u8>,
-    /// lines of code
-    pub loc: usize,
-    pub functions: Vec<Function>,
-    /// Commands outside of any function (an error; bully mode puts them into injected
-    /// functions instead).
-    pub orphans: Vec<ParsedCommand>,
-    /// A variable necessary for the "confused stonks" command
-    pub random_index: usize,
-}
-
-impl File {
-    /// The commands of the file's `loc` lines of code, in source order.
-    pub fn lines_mut(&mut self) -> Vec<&mut ParsedCommand> {
-        let mut lines: Vec<_> =
-            self.functions.iter_mut().flat_map(Function::lines_mut).chain(&mut self.orphans).collect();
-        lines.sort_by_key(|c| c.line_num);
-        lines
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum CompileMode {
-    Noob,
-    Bully,
-    Obfuscated,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputMode {
-    Executable,
-    AssemblyFile,
-    ObjectFile,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LogLevel {
-    Normal,
-    Debug,
-}
-
-/// `optimisationLevel` values. In the C enum `o_s` followed `o_3 = -3` and therefore had the
-/// value -2 (the same as `o_2`), so `-O-2` and `-O-s` both did both things. Here they are
-/// distinct, as the help page describes them (see docs/rust-rewrite-changes.md).
-pub const OPT_NONE: i64 = 0;
-pub const OPT_1: i64 = -1;
-pub const OPT_2: i64 = -2;
-pub const OPT_3: i64 = -3;
-pub const OPT_S: i64 = -4;
-pub const OPT_69420: i64 = 69420;
-
-/// Location of a command: file index, function index, command index within the function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CmdLoc {
-    pub file: usize,
-    pub func: usize,
-    pub k: usize,
-}
-
-pub struct CompileState {
-    pub compile_mode: CompileMode,
-    pub output_mode: OutputMode,
-    pub files: Vec<File>,
-    /// `-g`: emit debug information (DWARF; the C compiler wrote STABS).
-    pub use_debug_info: bool,
-    pub martyrdom: bool,
-    pub optimisation_level: i64,
-    pub compiler_errors: u32,
-    pub log_level: LogLevel,
-    pub target: Target,
-    /// The C global `computedIndex` used for bully-mode pseudo-randomness.
-    pub computed_index: u64,
-}
-
-impl CompileState {
-    pub fn new(target: Target) -> CompileState {
-        CompileState {
-            compile_mode: CompileMode::Noob,
-            output_mode: OutputMode::Executable,
-            files: Vec::new(),
-            use_debug_info: false,
-            martyrdom: true,
-            optimisation_level: OPT_NONE,
-            compiler_errors: 0,
-            log_level: LogLevel::Normal,
-            target,
-            computed_index: 69,
-        }
-    }
-
-    pub fn cmd(&self, l: CmdLoc) -> &ParsedCommand {
-        &self.files[l.file].functions[l.func].commands[l.k]
-    }
-
-    pub fn cmd_mut(&mut self, l: CmdLoc) -> &mut ParsedCommand {
-        &mut self.files[l.file].functions[l.func].commands[l.k]
-    }
-
-    /// Name of the `main` function on the current target.
-    pub fn main_function_name(&self) -> &'static [u8] {
-        if self.target == Target::MacOS {
-            b"_main"
-        } else {
-            b"main"
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn command_table() {
+        for (i, command) in COMMAND_LIST.iter().enumerate() {
+            assert_eq!(command.opcode as usize, i);
+            // every parameter has a type, and parse_line only supports "{p}" at the start of a word
+            assert_eq!(command.pattern.matches("{p}").count(), command.used_parameters(), "{:?}", command.pattern);
+            for word in command.pattern.split(' ').filter(|w| w.contains("{p}")) {
+                assert!(word == "{p}" || word == "{p}:", "{:?}", command.pattern);
+            }
+        }
+    }
 
     #[test]
     fn parameter_text_and_type() {

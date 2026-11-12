@@ -1,7 +1,7 @@
 //! Direct code generation for object files and executables: the backend's [`Emitter`] as the
 //! [`Asm`] of the code generation (the C compiler piped the `-S` text into gcc instead).
 
-use super::commands::CompileState;
+use super::state::CompileState;
 use super::log::VERSION_STRING;
 use super::translator::{getcwd_bytes, translate, Asm, AsmResult, Imm, Opnd};
 use crate::backend::emitter::{BranchTarget, Cond, Emitter, Op, Operand, SectionKind};

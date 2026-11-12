@@ -13,12 +13,13 @@ pub mod encoder;
 pub mod log;
 pub mod parser;
 pub mod random;
+pub mod state;
 pub mod translator;
 
 use std::path::PathBuf;
 
 use crate::backend::{self, OutputKind};
-use commands::{CompileState, OutputMode};
+use state::{CompileState, OutputMode};
 use std::process::exit;
 
 use log::{err, err_str, print_error_ascii};

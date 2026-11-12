@@ -2,7 +2,7 @@
 
 use std::io::{ErrorKind, Write};
 
-use super::commands::{CompileMode, CompileState, LogLevel};
+use super::state::{CompileMode, CompileState, LogLevel};
 use crate::target::Target;
 
 pub const RED: &str = "\x1B[31m";
@@ -171,11 +171,10 @@ pub fn print_nice_ascii() {
     out_str(&format!("\x1B[38;5;199m |_| \\_|_|\\___\\___|\n\n{RESET}"));
 }
 
-/// `printDebugMessage`: prints `message` (raw bytes: file names and parameters need not be
-/// UTF-8) if `-d` was given.
+/// Prints a debug message if `-d` was given. Debug messages start with "debug: ".
 pub fn print_debug(log_level: LogLevel, message: impl AsRef<[u8]>) {
     if log_level == LogLevel::Debug {
-        out(&[message.as_ref(), b"\n"].concat());
+        out(&[b"debug: ", message.as_ref(), b"\n"].concat());
     }
 }
 
@@ -201,6 +200,30 @@ impl ErrorKey {
 /// `printError` for an error without parameters (its text is its C format string).
 pub fn print_error(state: &mut CompileState, input_file_name: &[u8], line_num: usize, message: &str) {
     print_error_with_key(state, input_file_name, line_num, ErrorKey::new(message, 0), message.as_bytes());
+}
+
+/// `printError` for an error with parameters: `c_format` is the C format string, whose `%s`,
+/// `%u` and `%lu` are replaced by `args` in order. The obfuscated-mode key counts `args`.
+pub fn print_error_fmt(state: &mut CompileState, input_file_name: &[u8], line_num: usize, c_format: &str, args: &[&[u8]]) {
+    let key = ErrorKey::new(c_format, args.len() as u64);
+    print_error_with_key(state, input_file_name, line_num, key, &format_c(c_format, args));
+}
+
+/// Replaces the `%s`, `%u` and `%lu` of `c_format` by `args`, in order.
+pub fn format_c(c_format: &str, args: &[&[u8]]) -> Vec<u8> {
+    let mut message = Vec::new();
+    let mut args = args.iter();
+    let mut rest = c_format;
+    while let Some(i) = rest.find('%') {
+        message.extend_from_slice(&rest.as_bytes()[..i]);
+        rest = &rest[i..];
+        let spec = ["%s", "%u", "%lu"].into_iter().find(|s| rest.starts_with(s)).expect("supported conversion");
+        message.extend_from_slice(args.next().expect("an argument for every conversion"));
+        rest = &rest[spec.len()..];
+    }
+    message.extend_from_slice(rest.as_bytes());
+    assert!(args.next().is_none(), "an argument without a conversion in {c_format:?}");
+    message
 }
 
 /// `printError` for an error message that contains parameters (see [`ErrorKey`]).
@@ -245,4 +268,16 @@ pub fn print_internal_compiler_error(message: &str, report: bool) {
         m.push_str("Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
     }
     err_str(&m);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn c_format() {
+        assert_eq!(format_c("no args", &[]), b"no args");
+        let message = format_c("'%s' (%u bits) in %s:%lu", &[b"x", b"9", b"f", b"3"]);
+        assert_eq!(message, b"'x' (9 bits) in f:3");
+    }
 }

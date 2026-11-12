@@ -25,7 +25,10 @@
 # for every file) is removed from both outputs, and the Rust output must contain it exactly
 # once for every `jmp` to it. For "perfectly balanced" programs the Rust output must be a
 # line-subsequence of the (whitelisted) reference output of the same program without its
-# "perfectly balanced" lines. With -d, the debug lines that show random choices are masked.
+# "perfectly balanced" lines.
+#
+# Debug messages (-d) are not compared: the reference runs without -d, and the Rust output
+# without its "debug: " lines.
 #
 # Intentional divergences that are filtered/skipped here:
 #  * -g is not compared: the C compiler's STABS output was already broken (and the Rust one
@@ -112,7 +115,10 @@ set_args() {
             *.memeasm) grep -q 'perfectly balanced as all things should be' "$a" 2>/dev/null && CASE_PB=1 ;;
         esac
         prev=$a
-        REF_ARGS+=("${a//OUT/$WORK/ref/out.S}")
+        # the debug messages are not compared: the reference runs without -d (also in clusters)
+        local ref_a=$a
+        [[ $a =~ ^-d[A-Za-z]+$ ]] && ref_a=-${a#-d}
+        [ "$ref_a" = -d ] || REF_ARGS+=("${ref_a//OUT/$WORK/ref/out.S}")
         MINE_ARGS+=("$(new_spelling "${a//OUT/$WORK/mine/out.S}")")
     done
 }
@@ -123,19 +129,10 @@ normalize_asm() {
     LC_ALL=C sed -e '2s/ on .*$//' -e '/^[ \t]*\.LConfusedStonks_[0-9]*:[ \t]*$/d' "$1"
 }
 
-# -d prints parameters[0] of commands without parameters, which is an uninitialised pointer in
-# C (garbage or a stale string); the Rust port prints "(null)". Those lines are masked, and so
-# are the random choices. With "perfectly balanced", how often -O69420 skips a command depends
-# on which lines were deleted, so that message is dropped too.
-normalize_stdout() {
-    local pb_skip=()
-    [ "${CASE_PB:-0}" = 1 ] && pb_skip=(-e '/^\tCommand is not a function declaration, abort\.$/d')
-    LC_ALL=C sed "${pb_skip[@]}" \
-        -e 's/^\t\tComparing against parameter .*$/\t\tComparing against parameter <masked>/' \
-        -e 's/^Chose random line for jump marker: [0-9]*$/Chose random line for jump marker: <N>/' \
-        -e 's/^\x1b\[0m\(\tGenerated random line \)/\1/' \
-        -e '/^\tGenerated random line [0-9]* in file [0-9]*$/d' \
-        -e '/^\t\tLine was already generated$/d' -e '/^\t\tLine was added to the list$/d' "$1"
+# The Rust output without its debug messages (-d). A message that follows output without a line
+# end (such as the colour reset after the Snap banner) is cut out of its line.
+strip_debug() {
+    LC_ALL=C perl -0pe 's/^((?:\x1b\[0m)?)debug: [^\n]*\n/$1/mg' "$1"
 }
 
 # Every confused stonks label that is jumped to must be defined exactly once, the others at
@@ -204,7 +201,7 @@ expected_asm() {
 compare_dirs() {
     local name=$1 ref=$2
     local ok=1
-    cmp -s <(normalize_stdout "$WORK/ref/stdout") <(normalize_stdout "$WORK/mine/stdout") || ok=0
+    cmp -s "$WORK/ref/stdout" <(strip_debug "$WORK/mine/stdout") || ok=0
     cmp -s "$WORK/ref/stderr" "$WORK/mine/stderr" || ok=0
     cmp -s "$WORK/ref/code" "$WORK/mine/code" || ok=0
     local ref_exists=0 mine_exists=0
@@ -226,7 +223,7 @@ compare_dirs() {
         if [ $VERBOSE = 1 ]; then
             echo "=== FAIL: $name"
             diff "$WORK/ref/code" "$WORK/mine/code" | head -5
-            diff <(normalize_stdout "$WORK/ref/stdout") <(normalize_stdout "$WORK/mine/stdout") | head -20
+            diff "$WORK/ref/stdout" <(strip_debug "$WORK/mine/stdout") | head -20
             diff "$WORK/ref/stderr" "$WORK/mine/stderr" | head -20
             [ $CASE_PB = 1 ] && echo "(perfectly balanced: the Rust output must be a subsequence of the reference without those lines)"
             diff <(expected_asm) <(normalize_asm "$WORK/mine/out.S") | head -20
@@ -393,7 +390,7 @@ for target in "${TARGETS[@]}"; do
         fi
         # Inputs the C compiler accepted although gas rejects its output (or the decimal
         # overflowed): an error in noob/obfuscated mode, a bully fix-up in bully mode.
-        for input in tests/frontend_cases/fixes/{high_byte_with_*,pointer_*,push_imm*,decimal_overflow}.memeasm; do
+        for input in tests/frontend_cases/fixes/{high_byte_with_*,pointer_*,push_imm*,decimal_overflow,empty_function_name}.memeasm; do
             if [ "$mode" = bully ]; then
                 flag=--ref-fails
                 [[ $input == */decimal_overflow.memeasm ]] && flag=
@@ -410,6 +407,7 @@ for target in "${TARGETS[@]}"; do
                     *pointer_*) message="invalid parameter combination: this command cannot use a pointer here" ;;
                     *push_imm*) message="invalid parameter combination: pushed decimal numbers must be sign-extendable from 32 Bits" ;;
                     *decimal_overflow*) message='invalid parameter provided: "99999999999999999999" does not fit into 64 Bits' ;;
+                    *empty_function_name*) message='invalid parameter provided: ""' ;;
                 esac
                 # obfuscated mode replaces every message with a random one
                 [ "$mode" = obfuscated ] && message="error: "

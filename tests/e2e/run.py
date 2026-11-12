@@ -242,8 +242,12 @@ def new_spelling(args):
 
 
 def side_args(side, args):
-    """args as the compiler of side expects them (sanity mode: NEW is the reference)."""
-    return new_spelling(args) if side == "new" and not CFG.new_is_ref else list(args)
+    """args as the compiler of side expects them (sanity mode: NEW is the reference). Debug
+    messages are not compared: the C compiler runs without -d, and norm_text removes the "debug: "
+    lines of the new compiler (docs/rust-rewrite-changes.md, "Debug output")."""
+    if side == "ref" or CFG.new_is_ref:
+        return [a for a in args if a != "-d"]
+    return new_spelling(args)
 
 
 def faketime_env(env, when):
@@ -254,12 +258,9 @@ def faketime_env(env, when):
     return env
 
 
-RANDOM_DEBUG = [
-    (re.compile(r"(Chose random line for jump marker: )\d+"), r"\1<N>"),
-    (re.compile(r"(Generated random line )\d+( in file )\d+"), r"\1<N>\2<N>"),
-]
-RANDOM_DEBUG_DROP = re.compile(r"^.*(Generated random line <N>|Line was already generated|Line was added to the list).*\n?",
-                               re.M)
+# A debug message of the new compiler; one that follows output without a line end (such as the
+# colour reset after the Snap banner) is cut out of its line.
+DEBUG_LINE = re.compile(r"^((?:\x1b\[0m)?)debug: [^\n]*\n", re.M)
 
 
 def norm_text(b, out=None, argv0=None):
@@ -271,34 +272,7 @@ def norm_text(b, out=None, argv0=None):
         t = t.replace(a, "<MEMEASM>")
     t = re.sub(r"/opt/memeasm-ref/[\w.-]+", "<MEMEASM>", t)
     t = re.sub(r"/tmp/cc\w+\.(o|s)", "/tmp/<TMP>", t)
-    for rx, repl in RANDOM_DEBUG:
-        t = rx.sub(repl, t)
-    t = RANDOM_DEBUG_DROP.sub("", t)
-    t = mask_uninit_param(t)
-    return t
-
-
-_DUP_HDR = re.compile(r"^\tLabel duplicity check for (.*) in line \d+ in file \d+$")
-_CMP_PARAM = re.compile(r"^(\t\tComparing against parameter ).*$")
-
-
-def mask_uninit_param(t):
-    """-d: for parameterless jump markers ('upgrade', "they're the same picture") the C compiler
-    prints parameters[0], which is uninitialised memory (garbage or a stale string); the Rust port
-    prints '(null)' (docs/rust-rewrite-changes.md, "Undefined behaviour given a defined result")."""
-    if "Comparing against parameter" not in t:
-        return t
-    out, masked = [], False
-    for line in t.split("\n"):
-        m = _DUP_HDR.match(line)
-        if m:
-            masked = m.group(1) in ("jump marker", "\"they're the same picture\"")
-        elif masked and _CMP_PARAM.match(line):
-            line = _CMP_PARAM.sub(r"\1<UNINITIALISED>", line)
-        elif not line.startswith("\t\t"):
-            masked = False
-        out.append(line)
-    return "\n".join(out)
+    return DEBUG_LINE.sub(r"\1", t)
 
 
 def classify(c):

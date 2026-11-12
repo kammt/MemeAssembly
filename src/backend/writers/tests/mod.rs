@@ -124,7 +124,7 @@ pub fn module_for(src: &Path, dir: &Path) -> Option<ObjModule> {
 /// output (STABS) was broken, so there are no `-g` fixtures to compare with; the DWARF tests
 /// check this module's debug information with the tools instead.
 pub fn compile_with_debug(files: &[&str]) -> ObjModule {
-    use crate::frontend::commands::{CompileState, OutputMode};
+    use crate::frontend::state::{CompileState, OutputMode};
     use crate::frontend::{analyser, encoder, parser};
     let mut state = CompileState::new(crate::target::Target::Linux);
     state.output_mode = OutputMode::ObjectFile;

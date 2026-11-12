@@ -1,7 +1,10 @@
 //! Port of compiler/parser/fileParser.c
 
 use crate::frontend::commands::*;
-use crate::frontend::log::{print_debug, print_error, print_error_with_key, ErrorKey};
+use crate::frontend::log::{print_debug, print_error, print_error_fmt};
+use crate::frontend::state::CompileState;
+use crate::target::Target;
+use std::borrow::Cow;
 
 fn is_blank(b: &u8) -> bool {
     matches!(b, b' ' | b'\t')
@@ -54,140 +57,131 @@ const RANDOM_PARAMS: [&str; 41] = [
     "space",
 ];
 
-fn parse_line(
-    input_file_name: &[u8],
-    line_num: usize,
-    line: &[u8],
-    state: &mut CompileState,
-) -> ParsedCommand {
-    let mut parsed = ParsedCommand::new(line_num);
-    let log_level = state.log_level;
+/// The result of matching a line against the pattern of one command.
+enum Match {
+    /// The parameters (unclassified) and the index of the pointer parameter
+    Command(Vec<Param>, Option<usize>),
+    /// The line matches up to a trailing "or draw 25"
+    OrDraw25,
+    Mismatch,
+}
 
-    'commands: for command in &COMMAND_LIST[..Opcode::OrDraw25 as usize] {
-        let mut pattern_rest = command.pattern.as_bytes();
-        let mut line_rest = line;
-        let mut parameters: Vec<Param> = Vec::new();
-        parsed.is_pointer = 0;
+/// Matches `line` against the pattern of `command` word by word. Words are separated by runs of
+/// spaces; the first word may also be separated by tabs.
+fn match_command(command: &Command, line: &[u8], input_file_name: &[u8], line_num: usize, state: &mut CompileState) -> Match {
+    let mut pattern_rest = command.pattern.as_bytes();
+    let mut line_rest = line;
+    let mut parameters = Vec::new();
+    let mut pointer = None;
+    let mut delims: &[u8] = b" \t";
+    loop {
+        let pattern_word = next_token(&mut pattern_rest, delims);
+        let line_word = next_token(&mut line_rest, delims);
+        delims = b" ";
+        let (pattern_word, line_word) = match (pattern_word, line_word) {
+            (Some(p), Some(l)) => (p, l),
+            (None, None) => return Match::Command(parameters, pointer),
+            (None, Some(l)) if l == OR_DRAW_25_START && line_rest == OR_DRAW_25_END => return Match::OrDraw25,
+            _ => return Match::Mismatch,
+        };
 
-        // Only the first token may also be separated by tabs
-        let mut command_token = next_token(&mut pattern_rest, b" \t");
-        let mut line_token = next_token(&mut line_rest, b" \t");
-
-        while let (Some(ct), Some(lt)) = (command_token, line_token) {
-            print_debug(log_level, [b"\tcomparing with ", ct].concat());
-
-            // A parameter token of a pattern is "{p}" or "{p}:"
-            if let Some(suffix) = ct.strip_prefix(b"{p}") {
-                if lt.ends_with(suffix) {
-                    print_debug(log_level, [&b"\t\t"[..], lt, b" contains a parameter"].concat());
-                    let parameter_length = lt.len() - suffix.len();
-                    // Function names (definitions and calls) get a `_` prefix on macOS
-                    let mangle = matches!(command.opcode, Opcode::FuncDef | Opcode::Call);
-                    parameters.push(Param::Raw { text: lt[..parameter_length].to_vec(), mangle });
-
-                    // If the line after this parameter contains "do you know de wey", mark it as a pointer
-                    if let Some(after_suffix) = line_rest.strip_prefix(POINTER_SUFFIX) {
-                        print_debug(log_level, "\t\t\t'do you know de wey' was found, interpreting as pointer");
-                        if parsed.is_pointer != 0 && state.compile_mode != CompileMode::Bully {
-                            print_error(state, input_file_name, line_num, "Only one parameter is allowed to be a pointer");
-                        }
-                        parsed.is_pointer = parameters.len() as u8;
-                        line_rest = after_suffix;
-                    }
-                } else {
-                    print_debug(log_level, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command");
-                    continue 'commands;
-                }
-            } else if ct != lt {
-                print_debug(log_level, "\t\tMatching failed, attempting to match next command");
-                continue 'commands;
+        // A parameter word of a pattern is "{p}" or "{p}:"
+        let Some(suffix) = pattern_word.strip_prefix(b"{p}") else {
+            if pattern_word != line_word {
+                return Match::Mismatch;
             }
+            continue;
+        };
+        let Some(text) = line_word.strip_suffix(suffix) else { return Match::Mismatch };
+        // Function names (definitions and calls) get a `_` prefix on macOS
+        let mangle = matches!(command.opcode, Opcode::FuncDef | Opcode::Call);
+        parameters.push(Param::Raw { text: text.to_vec(), mangle });
 
-            command_token = next_token(&mut pattern_rest, b" ");
-            line_token = next_token(&mut line_rest, b" ");
-        }
-
-        match (command_token, line_token) {
-            (None, None) => {
-                parsed.opcode = command.opcode;
-                for (slot, p) in parameters.into_iter().enumerate() {
-                    parsed.parameters[slot] = Some(p);
-                }
-                return parsed;
+        if let Some(after_suffix) = line_rest.strip_prefix(POINTER_SUFFIX) {
+            if pointer.is_some() && !state.bully() {
+                print_error(state, input_file_name, line_num, "Only one parameter is allowed to be a pointer");
             }
-            (Some(_), None) => {
-                print_debug(log_level, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command");
-            }
-            (None, Some(lt)) => {
-                if lt == OR_DRAW_25_START && line_rest == OR_DRAW_25_END {
-                    print_debug(log_level, "\t\t'or draw 25' was found, replacing opcode");
-                    parsed.opcode = Opcode::OrDraw25;
-                    return parsed;
-                }
-            }
-            (Some(_), Some(_)) => unreachable!(),
+            pointer = Some(parameters.len() - 1);
+            line_rest = after_suffix;
         }
     }
+}
 
-    if state.compile_mode == CompileMode::Bully {
-        // In bully mode, we replace this non-working command with a (deterministic) valid one.
-        // "computedIndex" is global, so the value depends on the previous illegal commands.
-        for &b in line {
-            state.computed_index = state.computed_index.wrapping_add(u64::from(b));
-        }
-        let first = u64::from(input_file_name.first().copied().unwrap_or(0));
-        state.computed_index =
-            (state.computed_index.wrapping_mul(line_num as u64) % 420).wrapping_mul(first);
-        let ci = state.computed_index;
+/// Bully mode replaces a line that is no command with a (deterministic) valid one, chosen by
+/// the global `computed_index`, so it also depends on the previous invalid lines.
+fn bully_replacement(parsed: &mut ParsedCommand, line: &[u8], input_file_name: &[u8], state: &mut CompileState) {
+    for &b in line {
+        state.computed_index = state.computed_index.wrapping_add(u64::from(b));
+    }
+    let first = u64::from(input_file_name.first().copied().unwrap_or(0));
+    state.computed_index = (state.computed_index.wrapping_mul(parsed.line_num as u64) % 420).wrapping_mul(first);
+    let ci = state.computed_index;
 
-        // (any command but `Invalid`, also `OrDraw25`)
-        let command = &COMMAND_LIST[(ci % Opcode::Invalid as u64) as usize];
-        parsed.opcode = command.opcode;
-        let used = command.used_parameters;
-        let count = RANDOM_PARAMS.len() as u64;
+    // (any command but `Invalid`, also `OrDraw25`)
+    let command = &COMMAND_LIST[(ci % Opcode::Invalid as u64) as usize];
+    parsed.opcode = command.opcode;
+    let count = RANDOM_PARAMS.len() as u64;
+    let picks = [ci % count, ci.wrapping_mul(first) % count];
+    for (slot, pick) in parsed.parameters.iter_mut().zip(picks).take(command.used_parameters()) {
         // (no macOS `_` prefix for these)
-        let random_param = |i: u64| Some(Param::Raw { text: RANDOM_PARAMS[i as usize].as_bytes().to_vec(), mangle: false });
-        if used > 0 {
-            parsed.parameters[0] = random_param(ci % count);
+        *slot = Some(Param::Raw { text: RANDOM_PARAMS[pick as usize].as_bytes().to_vec(), mangle: false });
+    }
+}
+
+fn parse_line(input_file_name: &[u8], line_num: usize, line: &[u8], state: &mut CompileState) -> ParsedCommand {
+    let mut parsed = ParsedCommand::new(line_num);
+    for command in &COMMAND_LIST[..Opcode::OrDraw25 as usize] {
+        match match_command(command, line, input_file_name, line_num, state) {
+            Match::Mismatch => continue,
+            Match::OrDraw25 => parsed.opcode = Opcode::OrDraw25,
+            Match::Command(parameters, pointer) => {
+                parsed.opcode = command.opcode;
+                parsed.pointer = pointer;
+                for (slot, p) in parsed.parameters.iter_mut().zip(parameters) {
+                    *slot = Some(p);
+                }
+            }
         }
-        if used > 1 {
-            parsed.parameters[1] = random_param(ci.wrapping_mul(first) % count);
-        }
+        print_debug(state.log_level, format!("line {line_num}: {}", describe(&parsed, state.target)));
+        return parsed;
+    }
+
+    if state.bully() {
+        bully_replacement(&mut parsed, line, input_file_name, state);
+        print_debug(state.log_level, format!("line {line_num}: invalid, bully mode replaces it with {}", describe(&parsed, state.target)));
     } else {
-        parsed.opcode = Opcode::Invalid;
-        let message = [&b"Invalid command: \""[..], line, b"\""].concat();
-        print_error_with_key(state, input_file_name, line_num, ErrorKey::new("Invalid command: \"%s\"", 1), &message);
+        print_debug(state.log_level, format!("line {line_num}: invalid"));
+        print_error_fmt(state, input_file_name, line_num, "Invalid command: \"%s\"", &[line]);
     }
     parsed
+}
+
+/// A parsed command for debug messages, e.g. `Mov ["rax" (pointer), "5"]`.
+fn describe(cmd: &ParsedCommand, target: Target) -> String {
+    let params: Vec<String> = (0..cmd.opcode.command().used_parameters())
+        .map(|i| {
+            let text = cmd.parameters[i].as_ref().map_or(Cow::Borrowed(&b""[..]), |p| p.text(target));
+            let pointer = if cmd.is_pointer(i) { " (pointer)" } else { "" };
+            format!("{:?}{pointer}", String::from_utf8_lossy(&text))
+        })
+        .collect();
+    format!("{:?} [{}]", cmd.opcode, params.join(", "))
 }
 
 /// Parses an input file line by line and returns the parsed commands (one per line of interest).
 pub fn parse_commands(data: &[u8], input_file_name: &[u8], state: &mut CompileState) -> Vec<ParsedCommand> {
     let lines = lines_of_interest(data);
-    print_debug(state.log_level, format!("The number of lines are {}", lines.len()));
+    print_debug(state.log_level, format!("{}: {} lines of code", String::from_utf8_lossy(input_file_name), lines.len()));
 
-    if lines.is_empty() {
-        if state.compile_mode != CompileMode::Bully {
-            print_error(state, input_file_name, 0, "file does not contain any commands");
-        }
-        return Vec::new();
+    if lines.is_empty() && !state.bully() {
+        print_error(state, input_file_name, 0, "file does not contain any commands");
     }
-    print_debug(state.log_level, "Struct array was created successfully");
-
-    lines
-        .into_iter()
-        .map(|(line_num, line)| {
-            let line = line_text(line);
-            print_debug(state.log_level, [b"Parsing line: ", line].concat());
-            parse_line(input_file_name, line_num, line, state)
-        })
-        .collect()
+    lines.into_iter().map(|(line_num, line)| parse_line(input_file_name, line_num, line_text(line), state)).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::target::Target;
 
     fn tokens(s: &[u8]) -> Vec<&[u8]> {
         let mut rest = s;
@@ -219,16 +213,6 @@ mod tests {
         assert_eq!(next_token(&mut rest, b" "), Some(&b"25"[..]));
         assert_eq!(next_token(&mut rest, b" "), None);
         assert!(rest.is_empty());
-    }
-
-    #[test]
-    fn parameter_tokens_are_prefixes() {
-        // parse_line only supports "{p}" at the start of a pattern token
-        for command in COMMAND_LIST.iter() {
-            for token in command.pattern.split(' ').filter(|t| t.contains("{p}")) {
-                assert!(token == "{p}" || token == "{p}:", "{:?}", command.pattern);
-            }
-        }
     }
 
     fn lines(data: &[u8]) -> Vec<(usize, &[u8])> {
@@ -291,19 +275,19 @@ mod tests {
             right back at ya, buckaroo";
         let (c, errors) = parse(src, Target::Linux);
         assert_eq!(errors, 0);
-        let summary: Vec<_> = c.iter().map(|c| (c.line_num, c.opcode, c.is_pointer, params(c))).collect();
+        let summary: Vec<_> = c.iter().map(|c| (c.line_num, c.opcode, c.pointer, params(c))).collect();
         let (mov, upvote) = (Opcode::Mov, Opcode::Upvote);
         assert_eq!(
             summary,
             [
-                (1, Opcode::FuncDef, 0, [Some(&b"main"[..]), None]),
-                (2, upvote, 0, [Some(&b"rax"[..]), None]),
-                (5, Opcode::Call, 0, [Some(&b"f"[..]), None]),
-                (6, mov, 1, [Some(&b"rax"[..]), Some(b"5")]),
-                (7, mov, 2, [Some(&b"rax"[..]), Some(b"rbx")]),
-                (8, Opcode::OrDraw25, 0, [None, None]),
-                (9, upvote, 0, [Some(&b"rbx"[..]), None]),
-                (10, Opcode::Return, 0, [None, None]),
+                (1, Opcode::FuncDef, None, [Some(&b"main"[..]), None]),
+                (2, upvote, None, [Some(&b"rax"[..]), None]),
+                (5, Opcode::Call, None, [Some(&b"f"[..]), None]),
+                (6, mov, Some(0), [Some(&b"rax"[..]), Some(b"5")]),
+                (7, mov, Some(1), [Some(&b"rax"[..]), Some(b"rbx")]),
+                (8, Opcode::OrDraw25, None, [None, None]),
+                (9, upvote, None, [Some(&b"rbx"[..]), None]),
+                (10, Opcode::Return, None, [None, None]),
             ]
         );
 
@@ -341,7 +325,7 @@ mod tests {
         }
         let line = b"rax do you know de wey is brilliant, but I like rbx do you know de wey";
         let (c, errors) = parse(line, Target::Linux);
-        assert_eq!((c[0].is_pointer, errors), (2, 1));
+        assert_eq!((c[0].pointer, errors), (Some(1), 1));
 
         for empty in [&b""[..], b"\n \t\r\nWhat the hell happened here?"] {
             let (c, errors) = parse(empty, Target::Linux);

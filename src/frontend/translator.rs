@@ -5,6 +5,7 @@
 
 use super::analyser::main_function_exists;
 use super::commands::*;
+use super::state::*;
 use super::log::print_debug;
 use crate::backend::emitter::{Base, Cond, Mem, Op, Reg, SectionKind, Size};
 use crate::target::Target;
@@ -115,8 +116,8 @@ pub(super) const BULLY_POINTER_SIZES: [u32; 4] = [1, 2, 4, 8];
 /// In bully mode, the "operand size unknown" checks of the analyser are skipped and the operand
 /// size of a pointer is chosen here (in bytes), if it is needed.
 fn bully_pointer_size(state: &CompileState, cmd: &ParsedCommand) -> Option<u32> {
-    let index = (cmd.is_pointer as usize).checked_sub(1)?;
-    (state.compile_mode == CompileMode::Bully && cmd.bully_pointer_needs_size(index))
+    let index = cmd.pointer?;
+    (state.bully() && cmd.bully_pointer_needs_size(index))
         .then(|| BULLY_POINTER_SIZES[(state.computed_index % 4) as usize])
 }
 
@@ -126,7 +127,7 @@ fn over_9000_always_halts(state: &CompileState, cmd: &ParsedCommand) -> bool {
     cmd.opcode == Opcode::Over9000
         && match bully_pointer_size(state, cmd) {
             Some(size) => size == 1,
-            None => cmd.is_pointer == 0 && cmd.param_type(0) == PARAM_REG8,
+            None => cmd.pointer.is_none() && cmd.param_type(0) == PARAM_REG8,
         }
 }
 
@@ -146,7 +147,7 @@ fn truncate_to_operand_size(value: i64, size: u32) -> i64 {
 fn is_translated(state: &CompileState, cmd: &ParsedCommand) -> bool {
     cmd.translate
         && (state.optimisation_level != OPT_69420
-            || cmd.opcode.command().command_type == COMMAND_TYPE_FUNC_DEF)
+            || cmd.opcode == Opcode::FuncDef)
 }
 
 /// Whether no command produces any code after bully mode's injected main (no functions at all,
@@ -211,7 +212,7 @@ impl<'a> Ctx<'a> {
     fn op(&self, i: usize) -> Result<Opnd<'a>, String> {
         let size = bully_pointer_size(self.state, self.cmd);
         Ok(match &self.cmd.parameters[i] {
-            Some(Param::Reg(r)) if self.cmd.is_pointer as usize == i + 1 => {
+            Some(Param::Reg(r)) if self.cmd.is_pointer(i) => {
                 let size = size.map(|bytes| match bytes {
                     1 => Size::Byte,
                     2 => Size::Word,
@@ -619,9 +620,9 @@ fn translate_command(
     debug_file: Option<usize>,
 ) -> AsmResult {
     let command = cmd.opcode.command();
-    let is_def = command.command_type == COMMAND_TYPE_FUNC_DEF;
+    let is_def = cmd.opcode == Opcode::FuncDef;
     if !is_def && state.optimisation_level == OPT_69420 {
-        print_debug(state.log_level, "\tCommand is not a function declaration, abort.");
+        print_debug(state.log_level, format!("line {}: not translated, -O69420 only translates function definitions", cmd.line_num));
         return Ok(());
     }
 
@@ -714,7 +715,7 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
 
     // In bully mode, a missing main function is "fixed" by making the code at the start main
     // (only for executables, so never part of the -S text).
-    if state.compile_mode == CompileMode::Bully
+    if state.bully()
         && state.output_mode == OutputMode::Executable
         && !main_function_exists(state)
     {
@@ -817,11 +818,11 @@ mod tests {
         assert_eq!(truncate_to_operand_size(-5, 8), -5);
     }
 
-    fn command(opcode: Opcode, params: [Option<Param>; 2], is_pointer: u8) -> ParsedCommand {
+    fn command(opcode: Opcode, params: [Option<Param>; 2], pointer: Option<usize>) -> ParsedCommand {
         let mut c = ParsedCommand::new(1);
         c.opcode = opcode;
         c.parameters = params;
-        c.is_pointer = is_pointer;
+        c.pointer = pointer;
         c
     }
 
@@ -832,19 +833,19 @@ mod tests {
     #[test]
     fn operands() {
         let mut state = CompileState::new(Target::Linux);
-        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(0))), decimal(-5)], 0);
+        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(0))), decimal(-5)], None);
         let ctx = Ctx { state: &state, cmd: &c, file: 0 };
         assert_eq!(ctx.op(0), Ok(RAX));
         assert_eq!(ctx.op(1), Ok(hex(-5)));
 
-        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(3))), Some(Param::Reg(Reg::R32(0)))], 1);
+        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(3))), Some(Param::Reg(Reg::R32(0)))], Some(0));
         let ctx = Ctx { state: &state, cmd: &c, file: 0 };
         assert_eq!(ctx.op(0), Ok(Opnd::Mem(Mem { size: None, base: Base::Reg(Reg::R64(3)), disp: 0 })));
 
         // Bully mode guesses the operand size from computedIndex (69 % 4 == 1 → WORD PTR) and
         // truncates the immediate to it
         state.compile_mode = CompileMode::Bully;
-        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(3))), decimal(65537)], 1);
+        let c = command(Opcode::Mov, [Some(Param::Reg(Reg::R64(3))), decimal(65537)], Some(0));
         let ctx = Ctx { state: &state, cmd: &c, file: 0 };
         assert_eq!(ctx.op(0), Ok(Opnd::Mem(Mem { size: Some(Size::Word), base: Base::Reg(Reg::R64(3)), disp: 0 })));
         assert_eq!(ctx.op(1), Ok(hex(1)));

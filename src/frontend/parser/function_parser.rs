@@ -1,56 +1,48 @@
-//! Port of compiler/parser/functionParser.c
+//! Splits the commands of a file into functions.
 
 use crate::frontend::commands::*;
 use crate::frontend::log::{print_debug, print_error};
+use crate::frontend::state::{CompileState, Function};
 
-fn command_type(cmd: &ParsedCommand) -> u8 {
-    cmd.opcode.command().command_type
+/// The number of commands of the function whose definition is `commands[0]`: up to its last
+/// return statement before the next function definition. A function without a return statement
+/// is only its definition (the commands after it then belong to no function).
+fn function_length(commands: &[ParsedCommand], input_file_name: &[u8], state: &mut CompileState) -> usize {
+    let body = &commands[1..];
+    let end = body.iter().position(|c| c.opcode == Opcode::FuncDef).unwrap_or(body.len());
+    let last_return = body[..end].iter().rposition(|c| c.opcode.is_return());
+    if !state.bully() {
+        if let Some(next_definition) = body.get(end) {
+            if !body[..end].last().is_some_and(|c| c.opcode.is_return()) {
+                let message = "expected a return statement, but got a new function definition";
+                print_error(state, input_file_name, next_definition.line_num, message);
+            }
+        }
+        if last_return.is_none() {
+            print_error(state, input_file_name, commands[0].line_num, "function does not return");
+        }
+    }
+    last_return.map_or(1, |r| r + 2)
 }
 
-/// Creates a function by starting at the function definition and then traversing the command
-/// array until a return statement, new function definition or end of array is found.
-/// Returns the number of commands of the function.
-fn parse_function(
-    commands: &[ParsedCommand],
-    input_file_name: &[u8],
-    function_start_at_index: usize,
-    state: &mut CompileState,
-) -> usize {
-    let function_start = &commands[function_start_at_index];
-    let start_line = function_start.line_num;
+/// A function that bully mode makes up for commands outside of any function, named after the
+/// number of commands up to the end of `commands`.
+fn injected_function(commands: Vec<ParsedCommand>, end_index: usize) -> Function {
+    let func_name = FUNCTION_NAMES[end_index % FUNCTION_NAMES.len()];
+    let mut def = ParsedCommand::new(69);
+    def.opcode = Opcode::FuncDef;
+    def.parameters[0] = Some(Param::Raw { text: func_name.as_bytes().to_vec(), mangle: false });
+    let mut ret = ParsedCommand::new(420);
+    ret.opcode = Opcode::Return;
+    let commands = std::iter::once(def).chain(commands).chain(std::iter::once(ret)).collect();
+    Function { commands, injected: true }
+}
 
-    print_debug(state.log_level, "\tParsing function:");
-
-    let mut index = 1;
-    // Points to the last found return-statement and is 0 if none was found until now
-    let mut function_end_index = 0;
-
-    while function_start_at_index + index < commands.len() {
-        let parsed = &commands[function_start_at_index + index];
-        let ty = command_type(parsed);
-
-        if ty == COMMAND_TYPE_FUNC_DEF {
-            if function_end_index != function_start_at_index + index - 1
-                && state.compile_mode != CompileMode::Bully
-            {
-                print_error(state, input_file_name, parsed.line_num, "expected a return statement, but got a new function definition");
-            }
-            break;
-        } else if ty == COMMAND_TYPE_FUNC_RETURN {
-            function_end_index = function_start_at_index + index;
-        }
-        index += 1;
-    }
-    print_debug(state.log_level, format!("\t\tIteration stopped at index {index}"));
-
-    if function_end_index == 0 && state.compile_mode != CompileMode::Bully {
-        print_error(state, input_file_name, start_line, "function does not return");
-    }
-
-    if function_end_index != 0 {
-        function_end_index - function_start_at_index + 1
-    } else {
-        1
+fn lines(commands: &[ParsedCommand]) -> String {
+    match commands {
+        [first, .., last] => format!("lines {}-{}", first.line_num, last.line_num),
+        [only] => format!("line {}", only.line_num),
+        [] => "no lines".into(),
     }
 }
 
@@ -58,57 +50,76 @@ fn parse_function(
 /// orphaned commands into an injected function of its own).
 pub fn parse_functions(
     file_name: &[u8],
-    commands: Vec<ParsedCommand>,
+    mut commands: Vec<ParsedCommand>,
     state: &mut CompileState,
 ) -> (Vec<Function>, Vec<ParsedCommand>) {
-    let function_definitions =
-        commands.iter().filter(|c| command_type(c) == COMMAND_TYPE_FUNC_DEF).count();
-    print_debug(state.log_level, format!("Number of functions: {function_definitions}"));
-
-    // The file is a sequence of runs: (is a function, number of commands)
-    let mut runs = Vec::new();
-    let mut index = 0;
-    while index < commands.len() {
-        let start_index = index;
-        while index < commands.len() && command_type(&commands[index]) != COMMAND_TYPE_FUNC_DEF {
-            if state.compile_mode != CompileMode::Bully {
-                let line = commands[index].line_num;
-                print_error(state, file_name, line, "command does not belong to any function");
-            }
-            index += 1;
-        }
-        if index > start_index {
-            runs.push((false, index - start_index));
-        }
-        if index < commands.len() {
-            let number_of_commands = parse_function(&commands, file_name, index, state);
-            runs.push((true, number_of_commands));
-            index += number_of_commands;
-        }
-    }
-
-    let mut functions = Vec::with_capacity(function_definitions);
+    let mut functions = Vec::new();
     let mut orphans = Vec::new();
-    let mut commands = commands.into_iter();
-    let mut end_index = 0;
-    for (is_function, length) in runs {
-        let run = commands.by_ref().take(length);
-        end_index += length;
-        if is_function {
-            functions.push(Function { commands: run.collect(), injected: false });
-        } else if state.compile_mode == CompileMode::Bully {
-            // A function named after the index of the command that follows
-            let func_name = FUNCTION_NAMES[end_index % FUNCTION_NAMES.len()];
-            let mut def = ParsedCommand::new(69);
-            def.opcode = Opcode::FuncDef;
-            def.parameters[0] = Some(Param::Raw { text: func_name.as_bytes().to_vec(), mangle: false });
-            let mut ret = ParsedCommand::new(420);
-            ret.opcode = Opcode::Return;
-            let commands = std::iter::once(def).chain(run).chain(std::iter::once(ret)).collect();
-            functions.push(Function { commands, injected: true });
-        } else {
-            orphans.extend(run);
+    let mut taken = 0;
+    while !commands.is_empty() {
+        let orphan_count = commands.iter().position(|c| c.opcode == Opcode::FuncDef).unwrap_or(commands.len());
+        if orphan_count > 0 {
+            let run: Vec<_> = commands.drain(..orphan_count).collect();
+            taken += orphan_count;
+            if state.bully() {
+                let function = injected_function(run, taken);
+                let name = String::from_utf8_lossy(&function.commands[0].param_text(0, state.target)).into_owned();
+                print_debug(state.log_level, format!("{} belong to no function, bully mode puts them into {name}", lines(&function.commands[1..function.commands.len() - 1])));
+                functions.push(function);
+            } else {
+                for c in &run {
+                    print_error(state, file_name, c.line_num, "command does not belong to any function");
+                }
+                orphans.extend(run);
+            }
+        }
+        if !commands.is_empty() {
+            let length = function_length(&commands, file_name, state);
+            taken += length;
+            let function = Function { commands: commands.drain(..length).collect(), injected: false };
+            let name = String::from_utf8_lossy(&function.commands[0].param_text(0, state.target)).into_owned();
+            print_debug(state.log_level, format!("function {name}: {}", lines(&function.commands)));
+            functions.push(function);
         }
     }
     (functions, orphans)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::frontend::parser::file_parser::parse_commands;
+    use crate::target::Target;
+
+    /// (number of commands of each function, number of orphans, number of errors)
+    fn split(src: &str) -> (Vec<usize>, usize, u32) {
+        let mut state = CompileState::new(Target::Linux);
+        let commands = parse_commands(src.as_bytes(), b"t.memeasm", &mut state);
+        let (functions, orphans) = parse_functions(b"t.memeasm", commands, &mut state);
+        (functions.iter().map(|f| f.commands.len()).collect(), orphans.len(), state.compiler_errors)
+    }
+
+    const DEF: &str = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun";
+
+    #[test]
+    fn functions() {
+        let ret = "right back at ya, buckaroo";
+        // a function ends at its last return statement before the next definition
+        assert_eq!(split(&format!("{DEF} a\n{ret}\nupvote rax\n{ret}\n{DEF} b\n{ret}\n")), (vec![4, 2], 0, 0));
+        // commands after the last return statement belong to no function
+        assert_eq!(split(&format!("{DEF} a\n{ret}\nupvote rax\n{DEF} b\n{ret}\n")), (vec![2, 2], 1, 2));
+        assert_eq!(split(&format!("upvote rax\n{DEF} a\n{ret}\n")), (vec![2], 1, 1));
+        // without a return statement, a function is only its definition
+        assert_eq!(split(&format!("{DEF} a\nupvote rax\n")), (vec![1], 1, 2));
+    }
+
+    #[test]
+    fn missing_return_before_next_definition() {
+        let ret = "right back at ya, buckaroo";
+        // "expected a return statement" and "function does not return", also for the first
+        // function of the file (the C code missed that one)
+        assert_eq!(split(&format!("{DEF} a\n{DEF} b\n{ret}\n")), (vec![1, 2], 0, 2));
+        assert_eq!(split(&format!("{DEF} x\n{ret}\n{DEF} a\n{DEF} b\n{ret}\n")), (vec![2, 1, 2], 0, 2));
+        assert_eq!(split(&format!("{DEF} a\nupvote rax\n{DEF} b\n{ret}\n")), (vec![1, 2], 1, 3));
+    }
 }

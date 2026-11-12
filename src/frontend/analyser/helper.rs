@@ -1,15 +1,8 @@
 //! Port of compiler/analyser/analysisHelper.c
 
-use crate::frontend::commands::{CmdLoc, CompileMode, CompileState, ParsedCommand};
-use crate::frontend::log::{print_debug, print_error_with_key, ErrorKey};
-
-/// What the C code's `printf("%s", parameters[0])` shows for a slot it never initialised.
-fn param_for_debug(state: &CompileState, l: CmdLoc) -> Vec<u8> {
-    match &state.cmd(l).parameters[0] {
-        Some(p) => p.text(state.target).into_owned(),
-        None => b"(null)".to_vec(),
-    }
-}
+use crate::frontend::commands::ParsedCommand;
+use crate::frontend::state::{CmdLoc, CompileState};
+use crate::frontend::log::{format_c, print_debug, print_error_fmt, print_error_with_key, ErrorKey};
 
 /// Labels match by their text, as in the C code.
 fn param_eq(state: &CompileState, a: &ParsedCommand, i: usize, b: &ParsedCommand, j: usize) -> bool {
@@ -27,32 +20,23 @@ pub fn check_duplicate_definition(
     let parameters_to_check = parameters_to_check.min(2);
     for (idx, &item) in list.iter().enumerate() {
         let line_num = state.cmd(item).line_num;
-        print_debug(
-            state.log_level,
-            format!("\tLabel duplicity check for {item_name} in line {line_num} in file {}", item.file),
-        );
+        print_debug(state.log_level, format!("checking for duplicates of the {item_name} in line {line_num} of file {}", item.file));
 
         for &dup in &list[idx + 1..] {
-            let p = param_for_debug(state, dup);
-            print_debug(state.log_level, [&b"\t\tComparing against parameter "[..], &p].concat());
             let command = state.cmd(item);
             let duplicate = state.cmd(dup);
             if (!once_per_file || dup.file == item.file)
                 && (parameters_to_check < 1 || param_eq(state, command, 0, duplicate, 0))
                 && (parameters_to_check != 2 || param_eq(state, command, 1, duplicate, 1))
             {
-                if state.compile_mode != CompileMode::Bully {
+                if !state.bully() {
                     let dup_file = state.files[dup.file].file_name.clone();
                     let item_file = state.files[item.file].file_name.clone();
                     let dup_line = duplicate.line_num;
-                    let message = [
-                        format!("{item_name} defined twice (already defined in ").as_bytes(),
-                        &item_file,
-                        format!(":{line_num})").as_bytes(),
-                    ]
-                    .concat();
-                    let key = ErrorKey::new("%s defined twice (already defined in %s:%lu)", 2);
-                    print_error_with_key(state, &dup_file, dup_line, key, &message);
+                    let format = "%s defined twice (already defined in %s:%lu)";
+                    let message = format_c(format, &[item_name.as_bytes(), &item_file, line_num.to_string().as_bytes()]);
+                    // (the C code passed 2 as the argument count)
+                    print_error_with_key(state, &dup_file, dup_line, ErrorKey::new(format, 2), &message);
                 } else {
                     // In bully mode, only the first definition is valid
                     state.cmd_mut(dup).translate = false;
@@ -79,7 +63,7 @@ pub fn check_companion_command_existence(
 
         print_debug(
             state.log_level,
-            format!("\tLooking for {item_name} of parent command in line {} in file {}", command.line_num, parent.file),
+            format!("looking for the {item_name} of line {} in file {}", command.line_num, parent.file),
         );
 
         for &child in children {
@@ -97,10 +81,8 @@ pub fn check_companion_command_existence(
         let line = command.line_num;
         if parameters_to_check == 0 {
             if !child_found[0] {
-                if state.compile_mode != CompileMode::Bully {
-                    let message = format!("{item_name} was not defined");
-                    let key = ErrorKey::new("%s was not defined", 1);
-                    print_error_with_key(state, &file_name, line, key, message.as_bytes());
+                if !state.bully() {
+                    print_error_fmt(state, &file_name, line, "%s was not defined", &[item_name.as_bytes()]);
                 } else {
                     state.cmd_mut(parent).translate = false;
                 }
@@ -108,12 +90,10 @@ pub fn check_companion_command_existence(
         } else {
             for (i, &found) in child_found.iter().enumerate().take(parameters_to_check as usize) {
                 if !found {
-                    if state.compile_mode != CompileMode::Bully {
+                    if !state.bully() {
                         let parameter = command.param_text(i, state.target);
-                        let message =
-                            [format!("{item_name} was not defined for parameter \"").as_bytes(), &parameter, b"\""].concat();
-                        let key = ErrorKey::new("%s was not defined for parameter \"%s\"", 2);
-                        print_error_with_key(state, &file_name, line, key, &message);
+                        let format = "%s was not defined for parameter \"%s\"";
+                        print_error_fmt(state, &file_name, line, format, &[item_name.as_bytes(), &parameter]);
                     } else {
                         state.cmd_mut(parent).translate = false;
                     }

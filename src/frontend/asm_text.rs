@@ -1,6 +1,6 @@
 //! The `-S` output: an [`Asm`] that prints GNU as text (Intel syntax).
 
-use super::commands::CompileState;
+use super::state::CompileState;
 use super::log::VERSION_STRING;
 use super::translator::{translate, Asm, AsmResult, Imm, Opnd};
 use crate::backend::emitter::{Base, Cond, Mem, Op, Reg, SectionKind, Size};

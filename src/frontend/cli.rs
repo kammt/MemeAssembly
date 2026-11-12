@@ -8,7 +8,7 @@ use std::ffi::OsString;
 
 use clap::{Parser, ValueEnum};
 
-use super::commands::{CompileMode, OPT_1, OPT_2, OPT_3, OPT_69420, OPT_NONE, OPT_S};
+use super::state::{CompileMode, OPT_1, OPT_2, OPT_3, OPT_69420, OPT_NONE, OPT_S};
 use crate::target::Target;
 
 #[derive(Parser, Debug)]
