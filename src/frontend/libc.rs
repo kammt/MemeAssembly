@@ -1,5 +1,4 @@
-//! Helpers for the C-string handling the original compiler relied on, decimal parsing and
-//! I/O error texts.
+//! Helpers for C-string cutting, decimal parsing and I/O error texts.
 
 use std::num::IntErrorKind;
 
@@ -45,57 +44,6 @@ pub fn cstr(s: &[u8]) -> &[u8] {
     match s.iter().position(|&b| b == 0) {
         Some(p) => &s[..p],
         None => s,
-    }
-}
-
-/// `strncmp(a, b, n) == 0` for C strings.
-pub fn strncmp_eq(a: &[u8], b: &[u8], n: usize) -> bool {
-    for i in 0..n {
-        let ca = a.get(i).copied().unwrap_or(0);
-        let cb = b.get(i).copied().unwrap_or(0);
-        if ca != cb {
-            return false;
-        }
-        if ca == 0 {
-            return true;
-        }
-    }
-    true
-}
-
-/// `strtok_r` over an owned copy of a C string. Tokens are returned as index ranges; the save
-/// pointer is exposed because the original parser peeks at (and advances) it directly.
-pub struct StrTok {
-    buf: Vec<u8>,
-    pub save: usize,
-}
-
-impl StrTok {
-    pub fn new(s: &[u8]) -> StrTok {
-        StrTok { buf: cstr(s).to_vec(), save: 0 }
-    }
-
-    pub fn next_token(&mut self, delims: &[u8]) -> Option<&[u8]> {
-        let len = self.buf.len();
-        let mut s = self.save.min(len);
-        while s < len && delims.contains(&self.buf[s]) {
-            s += 1;
-        }
-        if s == len {
-            self.save = len;
-            return None;
-        }
-        let mut e = s;
-        while e < len && !delims.contains(&self.buf[e]) {
-            e += 1;
-        }
-        self.save = if e == len { len } else { e + 1 };
-        Some(&self.buf[s..e])
-    }
-
-    /// The C string the save pointer currently points to.
-    pub fn rest(&self) -> &[u8] {
-        &self.buf[self.save.min(self.buf.len())..]
     }
 }
 
