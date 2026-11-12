@@ -16,7 +16,7 @@ pub const RESET: &str = "\x1B[0m";
 
 /// The compiler version, shown in the help header and by `-v` (without the `v`), and written
 /// into the `-S` header and the debug information.
-pub const VERSION_STRING: &str = "v1.6";
+pub const VERSION_STRING: &str = "v2.0";
 
 /// Exit code when stdout is a closed pipe (what shells report for a process killed by SIGPIPE).
 pub const BROKEN_PIPE_EXIT_CODE: i32 = 141;

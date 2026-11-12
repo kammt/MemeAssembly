@@ -106,7 +106,7 @@ pub struct DebugInfo {
     pub files: Vec<Vec<u8>>,
     /// DW_AT_comp_dir (current working directory at compile time, raw bytes).
     pub comp_dir: Vec<u8>,
-    /// DW_AT_producer, e.g. "MemeAssembly compiler v1.6".
+    /// DW_AT_producer, e.g. "MemeAssembly compiler v2.0".
     pub producer: String,
     pub lines: Vec<LineRow>,
     pub functions: Vec<DebugFunction>,
