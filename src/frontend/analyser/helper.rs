@@ -56,9 +56,9 @@ pub fn check_duplicate_definition(
 /// Checks that for every parent command (e.g. "where banana") a companion command
 /// (e.g. "banana") exists, in the same file if `same_file`. With `parameters_to_check` = 0 any
 /// companion will do; otherwise each of the parent's first `parameters_to_check` parameters needs
-/// a companion whose first parameter has its text. A companion counts for the parent's first
-/// parameter before its second, so a parent with two equal parameters always lacks one for the
-/// second. Bully mode excludes the parent from translation instead of reporting it.
+/// a companion whose first parameter has its text; one companion can satisfy both parameters
+/// (`who would win? rax or rax` needs just `rax wins`). Bully mode excludes the parent from
+/// translation instead of reporting it.
 pub fn check_companion_command_existence(
     parents: &[CmdLoc],
     children: &[CmdLoc],
@@ -82,7 +82,8 @@ pub fn check_companion_command_existence(
                 let child_cmd = state.cmd(child);
                 if parameters_to_check == 0 || param_eq(state, &command, 0, child_cmd, 0) {
                     child_found[0] = true;
-                } else if parameters_to_check == 2 && param_eq(state, &command, 1, child_cmd, 0) {
+                }
+                if parameters_to_check == 2 && param_eq(state, &command, 1, child_cmd, 0) {
                     child_found[1] = true;
                 }
             }
@@ -114,3 +115,32 @@ pub fn check_companion_command_existence(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::frontend::state::CompileState;
+    use crate::frontend::{analyser, parser};
+    use crate::target::Target;
+
+    /// The number of errors the analysis reports for `body` as the code of `main`.
+    fn errors_in_main(body: &str) -> u32 {
+        let src = format!(
+            "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n{body}\n\
+             right back at ya, buckaroo\n"
+        );
+        let mut state = CompileState::new(Target::Linux);
+        let file = parser::parse_file(b"t.memeasm", src.as_bytes(), &mut state);
+        state.files.push(file);
+        assert_eq!(state.compiler_errors, 0, "parse errors in {src:?}");
+        analyser::analyse_commands(&mut state);
+        state.compiler_errors
+    }
+
+    #[test]
+    fn comparison_labels() {
+        assert_eq!(errors_in_main("who would win? rax or rbx\nrax wins\nrbx wins"), 0);
+        // one label serves both parameters if they are equal
+        assert_eq!(errors_in_main("who would win? rax or rax\nrax wins"), 0);
+        assert_eq!(errors_in_main("who would win? rax or rbx\nrax wins"), 1);
+        assert_eq!(errors_in_main("who would win? rax or rbx"), 2);
+    }
+}
