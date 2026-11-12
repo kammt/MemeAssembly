@@ -121,7 +121,7 @@ fn main() {
         let mut file = match std::fs::File::open(bytes_to_path(&name)) {
             Ok(f) => f,
             Err(e) => {
-                err_str(&format!("Failed to open input file: {}\n", frontend::libc::io_error_message(&e)));
+                err_str(&format!("Failed to open input file: {}\n", frontend::log::io_error_message(&e)));
                 print_explanation_message(&program_name);
                 exit(1);
             }
@@ -137,7 +137,7 @@ fn main() {
         print_debug(state.log_level, "Opening file \"%s\" successful, parsing file...", &[Arg::S(&name)]);
         let mut data = Vec::new();
         if let Err(e) = file.read_to_end(&mut data) {
-            err_str(&format!("Failed to read input file: {}\n", frontend::libc::io_error_message(&e)));
+            err_str(&format!("Failed to read input file: {}\n", frontend::log::io_error_message(&e)));
             exit(1);
         }
         let parsed = parser::parse_file(&name, &data, &mut state);

@@ -28,8 +28,21 @@ pub fn out(bytes: &[u8]) {
         if e.kind() == ErrorKind::BrokenPipe {
             std::process::exit(BROKEN_PIPE_EXIT_CODE);
         }
-        err_str(&format!("Failed to write to stdout: {}\n", super::libc::io_error_message(&e)));
+        err_str(&format!("Failed to write to stdout: {}\n", io_error_message(&e)));
         std::process::exit(1);
+    }
+}
+
+/// The text of an I/O error without Rust's ` (os error N)` suffix.
+pub fn io_error_message(e: &std::io::Error) -> String {
+    strip_os_error(&e.to_string())
+}
+
+/// Removes Rust's ` (os error N)` suffix, leaving a perror-style `context: message`.
+pub(super) fn strip_os_error(s: &str) -> String {
+    match s.rfind(" (os error ") {
+        Some(p) => s[..p].to_string(),
+        None => s.to_string(),
     }
 }
 
@@ -240,7 +253,7 @@ pub fn print_error(
         m.extend_from_slice(&cformat(fmt, args));
     } else {
         let mut computed_index = line_num as u64;
-        for &b in super::libc::cstr(input_file_name) {
+        for &b in input_file_name {
             computed_index = computed_index.wrapping_add(u64::from(b));
         }
         for &b in fmt.as_bytes() {

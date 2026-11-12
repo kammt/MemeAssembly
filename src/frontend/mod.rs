@@ -10,7 +10,6 @@ pub mod asm_text;
 pub mod cli;
 pub mod commands;
 pub mod encoder;
-pub mod libc;
 pub mod log;
 pub mod parser;
 pub mod random;
@@ -56,7 +55,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         let mut file = match std::fs::File::create(&output_path) {
             Ok(f) => f,
             Err(e) => {
-                err_str(&format!("Failed to open output file: {}\n", libc::io_error_message(&e)));
+                err_str(&format!("Failed to open output file: {}\n", log::io_error_message(&e)));
                 exit(1);
             }
         };
@@ -69,7 +68,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         };
         use std::io::Write;
         if let Err(e) = file.write_all(&asm) {
-            err_str(&format!("Failed to write output file: {}\n", libc::io_error_message(&e)));
+            err_str(&format!("Failed to write output file: {}\n", log::io_error_message(&e)));
             exit(1);
         }
         exit(0);
@@ -91,7 +90,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
     };
     if let Err(msg) = backend::emit(&module, state.target, kind, &output_path) {
         // e.g. "cannot write out: Is a directory (os error 21)" -> perror style
-        let msg: Vec<String> = msg.lines().map(libc::strip_os_error).collect();
+        let msg: Vec<String> = msg.lines().map(log::strip_os_error).collect();
         let mut m = msg.join("\n").into_bytes();
         if m.last() != Some(&b'\n') {
             m.push(b'\n');

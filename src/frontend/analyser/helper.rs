@@ -1,7 +1,6 @@
 //! Port of compiler/analyser/analysisHelper.c
 
 use crate::frontend::commands::{CmdLoc, CompileMode, CompileState, ParsedCommand};
-use crate::frontend::libc::cstr;
 use crate::frontend::log::{print_debug, print_error, Arg};
 
 /// What the C code's `printf("%s", parameters[0])` shows for a slot it never initialised.
@@ -14,7 +13,7 @@ fn param_for_debug(state: &CompileState, l: CmdLoc) -> Vec<u8> {
 
 /// Labels match by their text, as in the C code.
 fn param_eq(state: &CompileState, a: &ParsedCommand, i: usize, b: &ParsedCommand, j: usize) -> bool {
-    cstr(&a.param_text(i, state.target)) == cstr(&b.param_text(j, state.target))
+    a.param_text(i, state.target) == b.param_text(j, state.target)
 }
 
 /// Checks for duplicate definitions of commands and prints an error if there is one.

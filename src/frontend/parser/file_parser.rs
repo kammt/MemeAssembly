@@ -1,7 +1,6 @@
 //! Port of compiler/parser/fileParser.c
 
 use crate::frontend::commands::*;
-use crate::frontend::libc::cstr;
 use crate::frontend::log::{print_debug, print_error, Arg};
 
 fn is_blank(b: &u8) -> bool {
@@ -31,7 +30,7 @@ fn lines_of_interest(data: &[u8]) -> Vec<(usize, &[u8])> {
 /// The text of a line that is matched against the commands: everything before the first NUL
 /// byte, without trailing spaces and tabs. Leading whitespace is kept for error messages.
 fn line_text(line: &[u8]) -> &[u8] {
-    let line = cstr(line);
+    let line = line.split(|&b| b == 0).next().unwrap_or(line);
     &line[..line.iter().rposition(|b| !is_blank(b)).map_or(0, |p| p + 1)]
 }
 

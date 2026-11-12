@@ -2,10 +2,47 @@
 
 use crate::backend::emitter::Reg;
 use crate::frontend::commands::*;
-use crate::frontend::libc::{cstr, decimal_value, parse_decimal};
 use crate::frontend::log::{
     print_debug, print_error, print_internal_compiler_error, print_nice_ascii, print_note, Arg,
 };
+use std::num::IntErrorKind;
+
+/// A decimal number parameter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Decimal {
+    /// The value, saturated to `i64::MIN`/`i64::MAX` if it does not fit into 64 bits.
+    value: i64,
+    /// Whether the number does not fit into 64 bits.
+    overflow: bool,
+}
+
+/// Parses a decimal number: optional leading ASCII whitespace, an optional sign and digits,
+/// nothing else. The empty string counts as 0 (bully mode can shorten a number to nothing).
+fn parse_decimal(s: &[u8]) -> Option<Decimal> {
+    if s.is_empty() {
+        return Some(Decimal { value: 0, overflow: false });
+    }
+    let s = s.trim_ascii_start();
+    let digits = s.strip_prefix(b"-").or_else(|| s.strip_prefix(b"+")).unwrap_or(s);
+    if digits.is_empty() || !digits.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let text = std::str::from_utf8(s).ok()?;
+    match text.parse::<i64>() {
+        Ok(value) => Some(Decimal { value, overflow: false }),
+        Err(e) => match e.kind() {
+            IntErrorKind::PosOverflow => Some(Decimal { value: i64::MAX, overflow: true }),
+            IntErrorKind::NegOverflow => Some(Decimal { value: i64::MIN, overflow: true }),
+            _ => None,
+        },
+    }
+}
+
+/// The value of a decimal number parameter, 0 if `s` is not one (e.g. only a sign is left
+/// after bully mode shortened it).
+fn decimal_value(s: &[u8]) -> i64 {
+    parse_decimal(s).map_or(0, |d| d.value)
+}
 
 const PARAM_NAMES: [&str; 8] = [
     "64 bit Register",
@@ -135,7 +172,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
     let errors_before = state.compiler_errors;
 
     'params: for parameter_num in 0..used_parameters {
-        let parameter = cstr(&cmd.param_text(parameter_num, target)).to_vec();
+        let parameter = cmd.param_text(parameter_num, target).into_owned();
         print_debug(ll, "\tChecking parameter %s", &[Arg::S(&parameter)]);
 
         let allowed_types = command.allowed_param_types[parameter_num];
@@ -268,7 +305,7 @@ fn check_command(cmd: &mut ParsedCommand, input_file_name: &[u8], state: &mut Co
                 check_not_pointer(cmd, parameter_num, input_file_name, state, "a function name cannot be a pointer");
                 // (validated with the macOS `_` prefix, which is added again when generating code)
                 let func = match &cmd.parameters[parameter_num] {
-                    Some(Param::Raw { text, mangle }) => Param::FuncName { name: cstr(text).to_vec(), mangle: *mangle },
+                    Some(Param::Raw { text, mangle }) => Param::FuncName { name: text.clone(), mangle: *mangle },
                     _ => Param::FuncName { name: parameter, mangle: false },
                 };
                 cmd.parameters[parameter_num] = Some(func);
@@ -523,7 +560,7 @@ const NON_HIGH_8_BIT: [&str; 16] = [
 enum PointerProblem {
     /// `[al]`, `[ax]`: only 64 and 32 bit registers can address memory
     Base,
-    /// The translation pattern can't use a memory operand there (see [`PointerUse`])
+    /// The generated code can't use a memory operand there (see [`PointerUse`])
     Unsupported,
 }
 
@@ -560,4 +597,26 @@ fn high_byte_conflict(cmd: &ParsedCommand) -> Option<(usize, usize)> {
 /// Whether a 64 bit immediate can be encoded as a sign-extended 32 bit immediate.
 fn fits_sign_extended_32(number: i64) -> bool {
     i32::try_from(number).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decimals() {
+        let d = |s: &[u8]| parse_decimal(s).map(|d| (d.value, d.overflow));
+        assert_eq!(d(b"42"), Some((42, false)));
+        assert_eq!(d(b" \t-12"), Some((-12, false)));
+        assert_eq!(d(b"+7"), Some((7, false)));
+        assert_eq!(d(b""), Some((0, false)));
+        assert_eq!(d(b"-9223372036854775808"), Some((i64::MIN, false)));
+        assert_eq!(d(b"99999999999999999999"), Some((i64::MAX, true)));
+        assert_eq!(d(b"-99999999999999999999"), Some((i64::MIN, true)));
+        for s in [&b"-"[..], b"+", b" ", b"12x", b"99999999999999999999x", b"1 2", b"0x10", b"--1", b"1\0"] {
+            assert_eq!(d(s), None, "{:?}", String::from_utf8_lossy(s));
+        }
+        assert_eq!(decimal_value(b"-"), 0);
+        assert_eq!(decimal_value(b"123"), 123);
+    }
 }
