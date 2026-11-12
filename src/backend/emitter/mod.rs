@@ -98,10 +98,11 @@ pub enum Op {
     Ret, Nop, Hlt, Int3, Syscall, Rdrand,
 }
 
-/// Condition of a `jcc` (`E` and `Z` encode the same instruction).
+/// Condition of a `jcc` (`E` and `Z` encode the same instruction). `B` and `Ae` are the
+/// unsigned below / above-or-equal (carry set / clear).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cond {
-    E, Z, G, L, Ge,
+    E, Z, Ne, G, L, Ge, B, Ae,
 }
 
 /// Target of [`Emitter::jump`] and [`Emitter::call`].

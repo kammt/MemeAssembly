@@ -202,7 +202,8 @@ pub fn program_input(name: &str) -> Option<(Vec<&'static str>, &'static [u8])> {
         "brainfuck" => Some((vec![BF_HELLO], b"")),
         "reverse_string" => Some((vec![], b"Hello, World\n")),
         "is_nice" => Some((vec![], b"69\n")),
-        "helloworld" | "helloworld_o69420" | "helloworld_nomartyr" | "alphabet" | "alphabet_bully" | "the_link" => {
+        "helloworld" | "helloworld_o69420" | "helloworld_nomartyr" | "alphabet" | "alphabet_bully" | "the_link"
+        | "free_real_estate" => {
             Some((vec![], b""))
         }
         _ => None,

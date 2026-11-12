@@ -492,54 +492,120 @@ pub fn read_char(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
 ///
 /// Linux / macOS: the `write`/`read` syscall (macOS: BSD class `0x2000000`).
 ///
-/// Windows: `GetStdHandle`, then `WriteFile`/`ReadFile`, the byte count going to `.Ltmp64`. The
-/// stack alignment at a command is unknown (pushes and pops in the program), but the Windows API
-/// needs it 16-byte aligned: rsp is saved in rbx (callee-saved, so the calls keep it) and rounded
-/// down. The 48-byte frame holds the 32 bytes of shadow space plus the 5th argument
-/// (`lpOverlapped` = NULL at `[rsp + 32]`) above them.
+/// Windows: `GetStdHandle`, then `WriteFile`/`ReadFile` ([`windows_api_call`]), the byte count
+/// going to `.Ltmp64`. The 5th argument (`lpOverlapped` = NULL) goes to `[rsp + 32]`.
 fn io_syscall(a: &mut dyn Asm, target: Target, read: bool) -> AsmResult {
     if target == Target::Windows {
-        let saved = [RCX, RAX, RDX, R8, R9, R10, R11, RBX];
-        for r in &saved {
-            a.insn(Op::Push, &[r.clone()])?;
-        }
+        return windows_api_call(a, |a| {
+            a.insn(Op::Mov, &[RCX, dec(if read { -10 } else { -11 })])?;
+            a.call(b"GetStdHandle")?;
+            a.insn(Op::Mov, &[RCX, RAX])?;
+            a.insn(Op::Lea, &[RDX, rip(None, ".LCharacter")])?;
+            a.insn(Op::Mov, &[R8, dec(1)])?;
+            a.insn(Op::Lea, &[R9, rip(None, ".Ltmp64")])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 32), dec(0)])?;
+            a.call(if read { b"ReadFile".as_slice() } else { b"WriteFile" })
+        });
+    }
+    let linux = target == Target::Linux;
+    preserving(a, &[RCX, R11, RAX, RDI, RSI, RDX], |a| {
+        a.insn(Op::Mov, &[RDX, dec(1)])?;
+        a.insn(Op::Lea, &[RSI, rip(None, ".LCharacter")])?;
+        a.insn(Op::Mov, &[RDI, dec(if read { 0 } else { 1 })])?;
+        let syscall = match (linux, read) {
+            (true, true) => dec(0),
+            (true, false) => dec(1),
+            (false, true) => hex(0x2000003),
+            (false, false) => hex(0x2000004),
+        };
+        a.insn(Op::Mov, &[RAX, syscall])?;
+        a.insn(Op::Syscall, &[])
+    })
+}
+/// `it's free real estate r`: allocates `r` bytes of zeroed memory and puts its address into
+/// `r`. The memory is never freed. If the allocation fails (also for a size of 0 or a
+/// "negative" size), `r` gets a random number from `rdrand` instead, so the program cannot
+/// tell. Every other register is preserved.
+///
+/// Linux / macOS: an anonymous private `mmap` (rounded up to whole pages). Linux reports an
+/// error as -4095..-1 in rax, macOS by setting the carry flag.
+///
+/// Windows: `VirtualAlloc` with `MEM_COMMIT | MEM_RESERVE`, which returns NULL on failure.
+///
+/// The size and the result pass through `.Ltmp64`, so the register may be one of those saved
+/// around the call.
+pub fn free_real_estate(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let target = c.state.target;
+    let reg = c.op(0)?;
+    let tmp = || rip(Some(Size::Qword), ".Ltmp64");
+    a.insn(Op::Mov, &[tmp(), reg.clone()])?;
+    // On success, skips the rdrand that replaces the result of a failed allocation.
+    let random_on_failure = |a: &mut dyn Asm, success: Cond| -> AsmResult {
+        a.jump_local(Some(success), 1, true)?;
+        a.insn(Op::Rdrand, &[RAX])?;
+        a.local_label(1);
+        a.insn(Op::Mov, &[tmp(), RAX])
+    };
+    if target == Target::Windows {
+        windows_api_call(a, |a| {
+            a.insn(Op::Mov, &[RCX, dec(0)])?;
+            a.insn(Op::Mov, &[RDX, tmp()])?;
+            // MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE
+            a.insn(Op::Mov, &[R8, hex(0x3000)])?;
+            a.insn(Op::Mov, &[R9, dec(4)])?;
+            a.call(b"VirtualAlloc")?;
+            a.insn(Op::Test, &[RAX, RAX])?;
+            random_on_failure(a, Cond::Ne)
+        })?;
+    } else {
+        let linux = target == Target::Linux;
+        preserving(a, &[RCX, R11, RAX, RDI, RSI, RDX, R10, R8, R9], |a| {
+            a.insn(Op::Mov, &[RSI, tmp()])?;
+            a.insn(Op::Mov, &[RDI, dec(0)])?;
+            // PROT_READ | PROT_WRITE
+            a.insn(Op::Mov, &[RDX, dec(3)])?;
+            // MAP_PRIVATE | MAP_ANONYMOUS
+            a.insn(Op::Mov, &[R10, hex(if linux { 0x22 } else { 0x1002 })])?;
+            a.insn(Op::Mov, &[R8, dec(-1)])?;
+            a.insn(Op::Mov, &[R9, dec(0)])?;
+            a.insn(Op::Mov, &[RAX, if linux { dec(9) } else { hex(0x20000C5) }])?;
+            a.insn(Op::Syscall, &[])?;
+            if linux {
+                a.insn(Op::Cmp, &[RAX, dec(-4096)])?;
+                random_on_failure(a, Cond::B)
+            } else {
+                random_on_failure(a, Cond::Ae)
+            }
+        })?;
+    }
+    a.insn(Op::Mov, &[reg, tmp()])?;
+    a.gap();
+    Ok(())
+}
+/// Pushes `regs`, runs `body`, pops them again.
+fn preserving(a: &mut dyn Asm, regs: &[Opnd], body: impl FnOnce(&mut dyn Asm) -> AsmResult) -> AsmResult {
+    for r in regs {
+        a.insn(Op::Push, std::slice::from_ref(r))?;
+    }
+    body(a)?;
+    for r in regs.iter().rev() {
+        a.insn(Op::Pop, std::slice::from_ref(r))?;
+    }
+    Ok(())
+}
+/// Runs `body`, which calls Windows API functions, preserving every register the calls may
+/// clobber. The stack alignment at a command is unknown (pushes and pops in the program), but
+/// the Windows API needs it 16-byte aligned: rsp is saved in rbx (callee-saved, so the calls
+/// keep it) and rounded down. The 48-byte frame holds the 32 bytes of shadow space plus room
+/// for a 5th argument at `[rsp + 32]`.
+fn windows_api_call(a: &mut dyn Asm, body: impl FnOnce(&mut dyn Asm) -> AsmResult) -> AsmResult {
+    preserving(a, &[RCX, RAX, RDX, R8, R9, R10, R11, RBX], |a| {
         a.insn(Op::Mov, &[RBX, RSP])?;
         a.insn(Op::And, &[RSP, dec(-16)])?;
         a.insn(Op::Sub, &[RSP, dec(48)])?;
-        a.insn(Op::Mov, &[RCX, dec(if read { -10 } else { -11 })])?;
-        a.call(b"GetStdHandle")?;
-        a.insn(Op::Mov, &[RCX, RAX])?;
-        a.insn(Op::Lea, &[RDX, rip(None, ".LCharacter")])?;
-        a.insn(Op::Mov, &[R8, dec(1)])?;
-        a.insn(Op::Lea, &[R9, rip(None, ".Ltmp64")])?;
-        a.insn(Op::Mov, &[stack(Some(Size::Qword), 32), dec(0)])?;
-        a.call(if read { b"ReadFile".as_slice() } else { b"WriteFile" })?;
-        a.insn(Op::Mov, &[RSP, RBX])?;
-        for r in saved.iter().rev() {
-            a.insn(Op::Pop, &[r.clone()])?;
-        }
-        return Ok(());
-    }
-    let linux = target == Target::Linux;
-    let saved = [RCX, R11, RAX, RDI, RSI, RDX];
-    for r in &saved {
-        a.insn(Op::Push, &[r.clone()])?;
-    }
-    a.insn(Op::Mov, &[RDX, dec(1)])?;
-    a.insn(Op::Lea, &[RSI, rip(None, ".LCharacter")])?;
-    a.insn(Op::Mov, &[RDI, dec(if read { 0 } else { 1 })])?;
-    let syscall = match (linux, read) {
-        (true, true) => dec(0),
-        (true, false) => dec(1),
-        (false, true) => hex(0x2000003),
-        (false, false) => hex(0x2000004),
-    };
-    a.insn(Op::Mov, &[RAX, syscall])?;
-    a.insn(Op::Syscall, &[])?;
-    for r in saved.iter().rev() {
-        a.insn(Op::Pop, &[r.clone()])?;
-    }
-    Ok(())
+        body(a)?;
+        a.insn(Op::Mov, &[RSP, RBX])
+    })
 }
 /// `guess I'll die`: crashes by loading from the unmapped absolute address 69.
 pub fn die(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
@@ -737,6 +803,15 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
         for name in ["GetStdHandle", "WriteFile", "ReadFile"] {
             a.extern_symbol(name);
         }
+        let allocates = state
+            .files
+            .iter()
+            .flat_map(|f| &f.functions)
+            .flat_map(|f| &f.commands)
+            .any(|cmd| cmd.opcode == Opcode::FreeRealEstate && is_translated(state, cmd));
+        if allocates {
+            a.extern_symbol("VirtualAlloc");
+        }
     }
 
     a.blank();
@@ -872,6 +947,24 @@ mod tests {
 
     fn decimal(value: i64) -> Option<Param> {
         Some(Param::Decimal { value, text: value.to_string().into_bytes() })
+    }
+
+    /// `.extern VirtualAlloc` is only declared for Windows programs that allocate memory.
+    #[test]
+    fn virtual_alloc_extern_only_when_used() {
+        let windows_text = |source: &str| {
+            let mut state = CompileState::new(Target::Windows);
+            let file = super::super::parser::parse_file(b"test.memeasm", source.as_bytes(), &mut state);
+            state.files.push(file);
+            super::super::analyser::analyse_commands(&mut state);
+            assert_eq!(state.compiler_errors, 0, "{source}");
+            String::from_utf8(super::super::asm_text::write_to_string(&state).unwrap()).unwrap()
+        };
+        let main = "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n";
+        let text = windows_text(&format!("{main}it's free real estate r12\nI see this as an absolute win\n"));
+        assert!(text.contains(".extern VirtualAlloc\n") && text.contains("call VirtualAlloc\n"), "{text}");
+        let text = windows_text(&format!("{main}I see this as an absolute win\n"));
+        assert!(!text.contains("VirtualAlloc"), "{text}");
     }
 
     #[test]

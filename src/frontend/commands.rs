@@ -123,6 +123,8 @@ commands! {
     // IO-Operations
     WriteChar => "what can I say except {p}", [PARAM_REG8 | PARAM_CHAR], tr::write_char;
     ReadChar => "let me in. LET ME IIIIIIIIN {p}", [PARAM_REG8], tr::read_char;
+    // Memory
+    FreeRealEstate => "it's free real estate {p}", [PARAM_REG64], tr::free_real_estate;
     // Random commands
     Die => "guess I'll die", [], tr::die;
     ConfusedStonks => "confused stonks", [], tr::confused_stonks;

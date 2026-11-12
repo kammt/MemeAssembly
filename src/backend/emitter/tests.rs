@@ -86,6 +86,12 @@ fn relaxation_boundaries() {
         (128, None, "e9 80 00 00 00"),
         (127, Some(Cond::Ge), "7d 7f"),
         (128, Some(Cond::Ge), "0f 8d 80 00 00 00"),
+        (127, Some(Cond::B), "72 7f"),
+        (128, Some(Cond::B), "0f 82 80 00 00 00"),
+        (127, Some(Cond::Ae), "73 7f"),
+        (128, Some(Cond::Ae), "0f 83 80 00 00 00"),
+        (127, Some(Cond::Ne), "75 7f"),
+        (128, Some(Cond::Ne), "0f 85 80 00 00 00"),
     ] {
         let mut em = Emitter::new(Target::Linux);
         em.jump(cond, sym("b")).unwrap();

@@ -416,7 +416,10 @@ impl BranchKind {
 /// A relative branch; `rel` is relative to the end of the instruction and must fit.
 pub(crate) fn branch(kind: BranchKind, long: bool, rel: i32) -> Vec<u8> {
     let cc = |c: Cond| match c {
+        Cond::B => 0x2,
+        Cond::Ae => 0x3,
         Cond::E | Cond::Z => 0x4,
+        Cond::Ne => 0x5,
         Cond::L => 0xc,
         Cond::Ge => 0xd,
         Cond::G => 0xf,
