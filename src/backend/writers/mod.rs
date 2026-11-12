@@ -29,7 +29,7 @@ mod macho;
 mod pe;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub fn write(module: &ObjModule, target: Target, kind: OutputKind) -> Result<Vec<u8>, String> {
     validate(module)?;

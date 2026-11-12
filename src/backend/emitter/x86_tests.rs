@@ -1,24 +1,23 @@
-//! Instruction encodings compared against a golden table produced by GNU as
-//! (`tests/emitter_golden.txt`).
+//! Instruction encodings compared against GNU as.
 //!
-//! Every case is an instruction given to the typed API together with its Intel-syntax text. To
-//! regenerate the table after changing the cases (needs `x86_64-linux-gnu-as` and `objdump`):
+//! Every case is an instruction given to the typed API together with its Intel-syntax text. The
+//! test writes all texts to a file and `tests/emitter_golden.py` assembles them with GNU as,
+//! giving a table of the expected encodings: `text<TAB>hex`, `text<TAB>hex<TAB>reloc
+//! offset<TAB>addend` for an instruction with a `[rip + sym]` operand (the disp32 field is
+//! zero, gas emits an R_X86_64_PC32 relocation), or `text<TAB>error` if gas rejects the line.
+//! The table is kept in the test's scratch directory (`golden.txt`) for inspection.
 //!
-//! ```sh
-//! EMITTER_GOLDEN_CASES=/tmp/cases.txt cargo test write_golden_cases -- --ignored
-//! python3 tests/emitter_golden.py /tmp/cases.txt > tests/emitter_golden.txt
-//! ```
-//!
-//! Each line of the table is `text<TAB>hex`, `text<TAB>hex<TAB>reloc offset<TAB>addend` for an
-//! instruction with a `[rip + sym]` operand (the disp32 field is zero, gas emits an
-//! R_X86_64_PC32 relocation), or `text<TAB>error` if gas rejects the line.
+//! Needs `python3` and x86-64 binutils (`x86_64-linux-gnu-as`/`objdump`, or the host's on
+//! x86-64 Linux); without them the test is skipped, as the writer tests are
+//! (`MEMEASM_REQUIRE_TOOLS=1` makes that a failure).
 
 use std::collections::HashMap;
+use std::path::Path;
+use std::process::Command;
 
 use super::x86;
 use super::{Base, Mem, Op, Operand, Reg, Size};
-
-const GOLDEN: &str = include_str!("../../../tests/emitter_golden.txt");
+use crate::backend::writers::tests::{host_x86_64, need, run_ok, scratch, tool};
 
 fn reg_name(r: Reg) -> String {
     super::regs::name(r)
@@ -240,9 +239,28 @@ struct Expect {
     reloc: Option<(usize, i64)>,
 }
 
-fn golden() -> HashMap<String, Option<Expect>> {
+/// The Intel-syntax texts of all cases, without duplicates, in case order.
+fn case_texts() -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    cases().iter().map(|(op, ops)| text(*op, ops)).filter(|t| seen.insert(t.clone())).collect()
+}
+
+/// The expected encoding of every case text, generated with GNU as (see the module docs).
+/// `None` if the tools are missing.
+fn golden() -> Option<HashMap<String, Option<Expect>>> {
+    let python = need(tool(&["python3"]), "python3")?;
+    let host = |name: &str| host_x86_64().then(|| tool(&[name])).flatten();
+    let gas = need(tool(&["x86_64-linux-gnu-as"]).or_else(|| host("as")), "x86-64 GNU as")?;
+    let objdump = need(tool(&["x86_64-linux-gnu-objdump"]).or_else(|| host("objdump")), "x86-64 objdump")?;
+    let dir = scratch("emitter_golden");
+    let cases_path = dir.join("cases.txt");
+    std::fs::write(&cases_path, case_texts().join("\n") + "\n").unwrap();
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/emitter_golden.py");
+    let out = run_ok(Command::new(python).arg("-I").arg(script).arg(&cases_path).env("AS", gas).env("OBJDUMP", objdump));
+    let table = String::from_utf8(out.stdout).unwrap();
+    std::fs::write(dir.join("golden.txt"), &table).unwrap();
     let mut g = HashMap::new();
-    for line in GOLDEN.lines() {
+    for line in table.lines() {
         let f: Vec<&str> = line.split('\t').collect();
         let e = match f[1] {
             "error" => None,
@@ -253,34 +271,24 @@ fn golden() -> HashMap<String, Option<Expect>> {
         };
         assert!(g.insert(f[0].to_string(), e).is_none(), "duplicate golden line {line}");
     }
-    g
+    Some(g)
 }
 
 fn hex(b: &[u8]) -> String {
     b.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The encoder under test: `(hex, Some((reloc offset, addend)))`, or `None` if rejected.
-pub(super) type Encoder = fn(Op, &[Operand]) -> Option<(String, Option<(usize, i64)>)>;
-
-fn new_encoder(op: Op, ops: &[Operand]) -> Option<(String, Option<(usize, i64)>)> {
-    let e = x86::encode(op, ops).ok()?;
-    let reloc = e.rip.map(|(field, _, disp)| (field, disp - (e.bytes.len() - field) as i64));
-    Some((hex(&e.bytes), reloc))
-}
-
-pub(super) fn check_against_golden(enc: Encoder) -> usize {
-    let g = golden();
-    let cases = cases();
-    let mut seen = std::collections::HashSet::new();
+#[test]
+fn encodings_match_gas() {
+    let Some(g) = golden() else { return };
     let mut failures = Vec::new();
-    for (op, ops) in &cases {
+    let mut checked = 0;
+    for (op, ops) in &cases() {
         let t = text(*op, ops);
-        if !seen.insert(t.clone()) {
-            continue;
-        }
-        let want = g.get(&t).unwrap_or_else(|| panic!("`{t}' missing in the golden table (regenerate it)"));
-        let got = enc(*op, ops);
+        let want = g.get(&t).unwrap_or_else(|| panic!("`{t}' missing in gas's output"));
+        let got = x86::encode(*op, ops)
+            .ok()
+            .map(|e| (hex(&e.bytes), e.rip.map(|(field, _, disp)| (field, disp - (e.bytes.len() - field) as i64))));
         let ok = match (want, &got) {
             (None, None) => true,
             (Some(w), Some((h, r))) => w.hex == *h && w.reloc == *r,
@@ -289,33 +297,10 @@ pub(super) fn check_against_golden(enc: Encoder) -> usize {
         if !ok {
             failures.push(format!("{t}: gas {:?}, emitter {got:?}", want.as_ref().map(|w| (&w.hex, w.reloc))));
         }
+        checked += 1;
     }
-    assert_eq!(seen.len(), g.len(), "the golden table has lines without a case (regenerate it)");
     assert!(failures.is_empty(), "{} mismatches:\n{}", failures.len(), failures.join("\n"));
-    seen.len()
-}
-
-#[test]
-fn encodings_match_gas() {
-    let n = check_against_golden(new_encoder);
-    assert!(n > 2000);
-}
-
-/// Writes the Intel-syntax text of every case to `$EMITTER_GOLDEN_CASES` (see the module docs).
-#[test]
-#[ignore]
-fn write_golden_cases() {
-    let path = std::env::var("EMITTER_GOLDEN_CASES").expect("EMITTER_GOLDEN_CASES not set");
-    let mut out = String::new();
-    let mut seen = std::collections::HashSet::new();
-    for (op, ops) in cases() {
-        let t = text(op, &ops);
-        if seen.insert(t.clone()) {
-            out.push_str(&t);
-            out.push('\n');
-        }
-    }
-    std::fs::write(path, out).unwrap();
+    assert!(g.len() > 2000 && g.values().any(Option::is_none), "only {} cases ({checked} checked)", g.len());
 }
 
 /// The writers' extra forms (`call`/`jmp` r/m64, indexed `lea`), checked against GNU as.

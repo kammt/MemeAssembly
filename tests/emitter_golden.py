@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Generate tests/emitter_golden.txt (expected instruction encodings) with GNU as.
+"""Expected instruction encodings, generated with GNU as.
 
-Input: one Intel-syntax instruction per line, as written by the ignored test
-`backend::emitter::x86_tests::write_golden_cases`:
+Run by the test `backend::emitter::x86_tests::encodings_match_gas`, which writes the input:
+one Intel-syntax instruction per line. By hand:
 
-    EMITTER_GOLDEN_CASES=/tmp/cases.txt cargo test write_golden_cases -- --ignored
-    python3 tests/emitter_golden.py /tmp/cases.txt > tests/emitter_golden.txt
+    python3 tests/emitter_golden.py cases.txt > golden.txt
 
 Output: `text<TAB>hex`, with `<TAB>reloc offset<TAB>addend` appended for an instruction with an
 R_X86_64_PC32 relocation, or `text<TAB>error` for a line gas rejects.
