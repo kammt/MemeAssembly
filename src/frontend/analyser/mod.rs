@@ -5,7 +5,7 @@ pub mod parameters;
 
 use super::commands::*;
 use super::random::Rng;
-use super::log::{print_debug, print_error, print_thanos_ascii, Arg};
+use super::log::{print_debug, print_error, print_thanos_ascii};
 use helper::{check_companion_command_existence, check_duplicate_definition};
 
 /// Runs the parameter checks on every command and then the analyses (in the C code's order:
@@ -39,7 +39,7 @@ pub fn analyse_commands(state: &mut CompileState) {
     set_confused_stonks_jump_label(state, &mut rng);
     choose_lines_to_be_deleted(list(Opcode::PerfectlyBalanced).len(), state, &mut rng);
 
-    print_debug(state.log_level, "Analysis done, freeing memory", &[]);
+    print_debug(state.log_level, "Analysis done, freeing memory");
 }
 
 /// Checks that no function name is used twice and that a main function exists for executables.
@@ -51,7 +51,7 @@ fn analyse_functions(definitions: &[CmdLoc], state: &mut CompileState) {
         && !main_function_exists(state)
     {
         let name = state.files[0].file_name.clone();
-        print_error(state, &name, 0, "unable to create an executable if no main-function was defined", 0, &[]);
+        print_error(state, &name, 0, "unable to create an executable if no main-function was defined");
     }
 }
 
@@ -63,29 +63,25 @@ pub fn main_function_exists(state: &CompileState) -> bool {
 }
 
 fn analyse_monke_markers(markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
-    print_debug(state.log_level, "Beginning Monke jump label validity check", &[]);
+    print_debug(state.log_level, "Beginning Monke jump label validity check");
     check_duplicate_definition(markers, state, false, 1, "monke jump marker");
     check_companion_command_existence(jumps, markers, state, 1, false, "monke jump marker");
 }
 
 fn analyse_jump_markers(opcode: Opcode, markers: &[CmdLoc], jumps: &[CmdLoc], state: &mut CompileState) {
-    print_debug(state.log_level, "Starting jump label validity check for opcode %u", &[Arg::U(opcode as u64)]);
+    print_debug(state.log_level, format!("Starting jump label validity check for opcode {}", opcode as u8));
     check_duplicate_definition(markers, state, true, 0, "jump marker");
     check_companion_command_existence(jumps, markers, state, 0, true, "jump marker");
 }
 
 fn analyse_who_would_win_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
-    print_debug(state.log_level, "Starting analysis for \"who would win?\" command", &[]);
+    print_debug(state.log_level, "Starting analysis for \"who would win?\" command");
     check_duplicate_definition(labels, state, true, 1, "comparison jump marker");
     check_companion_command_existence(comparisons, labels, state, 2, true, "comparison jump label");
 }
 
 fn analyse_theyre_the_same_picture_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
-    print_debug(
-        state.log_level,
-        "Starting analysis for \"corporate needs you to find the difference...\" command",
-        &[],
-    );
+    print_debug(state.log_level, "Starting analysis for \"corporate needs you to find the difference...\" command");
     check_duplicate_definition(labels, state, true, 0, "\"they're the same picture\"");
     check_companion_command_existence(comparisons, labels, state, 0, true, "\"they're the same picture\"");
 }
@@ -98,11 +94,7 @@ fn set_confused_stonks_jump_label(state: &mut CompileState, rng: &mut Rng) {
             continue;
         }
         state.files[i].random_index = rng.below(state.files[i].loc);
-        print_debug(
-            state.log_level,
-            "Chose random line for jump marker: %lu",
-            &[Arg::U(state.files[i].random_index as u64)],
-        );
+        print_debug(state.log_level, format!("Chose random line for jump marker: {}", state.files[i].random_index));
     }
 }
 
@@ -110,12 +102,8 @@ fn set_confused_stonks_jump_label(state: &mut CompileState, rng: &mut Rng) {
 /// should be" was used.
 fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut CompileState, rng: &mut Rng) {
     let ll = state.log_level;
-    print_debug(ll, "Starting analysis of the \"Perfectly balanced...\" command", &[]);
-    print_debug(
-        ll,
-        "\tamount of times perfectly balanced was used: %u",
-        &[Arg::U(perfectly_balanced_used as u64)],
-    );
+    print_debug(ll, "Starting analysis of the \"Perfectly balanced...\" command");
+    print_debug(ll, format!("\tamount of times perfectly balanced was used: {perfectly_balanced_used}"));
 
     let loc: usize = state.files.iter().map(|f| f.loc).sum();
     let mut lines_to_be_kept = loc;
@@ -128,7 +116,7 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
     // markers). The C loop then never found enough lines and hung; stop once every line is gone.
     let deletable = lines.iter().flatten().filter(|c| c.translate).count();
 
-    print_debug(ll, "\tamount of lines to be deleted: %lu", &[Arg::U(lines_to_be_deleted as u64)]);
+    print_debug(ll, format!("\tamount of lines to be deleted: {lines_to_be_deleted}"));
     if lines_to_be_deleted > 0 {
         print_thanos_ascii(lines_to_be_deleted);
 
@@ -142,19 +130,15 @@ fn choose_lines_to_be_deleted(perfectly_balanced_used: usize, state: &mut Compil
                 continue;
             }
             let random_line = rng.below(file_loc);
-            print_debug(
-                ll,
-                "\tGenerated random line %lu in file %u",
-                &[Arg::U(random_line as u64), Arg::U(random_file as u64)],
-            );
+            print_debug(ll, format!("\tGenerated random line {random_line} in file {random_file}"));
 
             let cmd = &mut lines[random_file][random_line];
             if !cmd.translate {
-                print_debug(ll, "\t\tLine was already generated", &[]);
+                print_debug(ll, "\t\tLine was already generated");
                 continue;
             }
             cmd.translate = false;
-            print_debug(ll, "\t\tLine was added to the list", &[]);
+            print_debug(ll, "\t\tLine was added to the list");
             selected_lines += 1;
         }
     }

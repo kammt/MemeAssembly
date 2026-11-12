@@ -62,7 +62,7 @@ pub fn compile(mut state: CompileState, output_file_name: &[u8]) -> ! {
         let asm = match asm_text::write_to_string(&state) {
             Ok(asm) => asm,
             Err(msg) => {
-                log::print_internal_compiler_error("%s", true, &[log::Arg::S(msg.as_bytes())]);
+                log::print_internal_compiler_error(&msg, true);
                 exit(1);
             }
         };

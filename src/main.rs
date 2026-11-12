@@ -12,7 +12,7 @@ use clap::Parser;
 
 use frontend::cli::{optimisation_level, target_name, Cli};
 use frontend::commands::{CompileMode, CompileState, LogLevel, OutputMode};
-use frontend::log::{err, err_str, out_str, print_debug, print_information_header, print_note, Arg};
+use frontend::log::{err, err_str, out_str, print_debug, print_information_header, print_note};
 use frontend::{bytes_to_path, compile, parser, print_explanation_message};
 use target::Target;
 
@@ -93,14 +93,14 @@ fn main() {
     if cli.debug_info {
         match target {
             //On Windows and MacOS, -g does not work - output a note, but don't do anything
-            Target::Windows => print_note("-g cannot be used on Windows-systems, this option will be ignored.", false, &[]),
-            Target::MacOS => print_note("-g cannot be used on MacOS-systems, this option will be ignored.", false, &[]),
+            Target::Windows => print_note("-g cannot be used on Windows-systems, this option will be ignored.", false),
+            Target::MacOS => print_note("-g cannot be used on MacOS-systems, this option will be ignored.", false),
             Target::Linux => state.use_debug_info = true,
         }
     }
 
     if state.use_debug_info && state.compile_mode == CompileMode::Bully {
-        print_note("-g cannot be used in bully mode, this option will be ignored.", false, &[]);
+        print_note("-g cannot be used in bully mode, this option will be ignored.", false);
         state.use_debug_info = false;
     }
 
@@ -134,7 +134,7 @@ fn main() {
             exit(1);
         }
 
-        print_debug(state.log_level, "Opening file \"%s\" successful, parsing file...", &[Arg::S(&name)]);
+        print_debug(state.log_level, [&b"Opening file \""[..], &name, b"\" successful, parsing file..."].concat());
         let mut data = Vec::new();
         if let Err(e) = file.read_to_end(&mut data) {
             err_str(&format!("Failed to read input file: {}\n", frontend::log::io_error_message(&e)));
@@ -142,7 +142,7 @@ fn main() {
         }
         let parsed = parser::parse_file(&name, &data, &mut state);
         state.files.push(parsed);
-        print_debug(state.log_level, "File parsing done, closing file...", &[]);
+        print_debug(state.log_level, "File parsing done, closing file...");
     }
 
     compile(state, &output_file);

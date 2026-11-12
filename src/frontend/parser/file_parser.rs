@@ -1,7 +1,7 @@
 //! Port of compiler/parser/fileParser.c
 
 use crate::frontend::commands::*;
-use crate::frontend::log::{print_debug, print_error, Arg};
+use crate::frontend::log::{print_debug, print_error, print_error_with_key, ErrorKey};
 
 fn is_blank(b: &u8) -> bool {
     matches!(b, b' ' | b'\t')
@@ -74,12 +74,12 @@ fn parse_line(
         let mut line_token = next_token(&mut line_rest, b" \t");
 
         while let (Some(ct), Some(lt)) = (command_token, line_token) {
-            print_debug(log_level, "\tcomparing with %s", &[Arg::S(ct)]);
+            print_debug(log_level, [b"\tcomparing with ", ct].concat());
 
             // A parameter token of a pattern is "{p}" or "{p}:"
             if let Some(suffix) = ct.strip_prefix(b"{p}") {
                 if lt.ends_with(suffix) {
-                    print_debug(log_level, "\t\t%s contains a parameter", &[Arg::S(lt)]);
+                    print_debug(log_level, [&b"\t\t"[..], lt, b" contains a parameter"].concat());
                     let parameter_length = lt.len() - suffix.len();
                     // Function names (definitions and calls) get a `_` prefix on macOS
                     let mangle = matches!(command.opcode, Opcode::FuncDef | Opcode::Call);
@@ -87,30 +87,19 @@ fn parse_line(
 
                     // If the line after this parameter contains "do you know de wey", mark it as a pointer
                     if let Some(after_suffix) = line_rest.strip_prefix(POINTER_SUFFIX) {
-                        print_debug(
-                            log_level,
-                            "\t\t\t'do you know de wey' was found, interpreting as pointer",
-                            &[],
-                        );
+                        print_debug(log_level, "\t\t\t'do you know de wey' was found, interpreting as pointer");
                         if parsed.is_pointer != 0 && state.compile_mode != CompileMode::Bully {
-                            print_error(
-                                state,
-                                input_file_name,
-                                line_num as u64,
-                                "Only one parameter is allowed to be a pointer",
-                                0,
-                                &[],
-                            );
+                            print_error(state, input_file_name, line_num, "Only one parameter is allowed to be a pointer");
                         }
                         parsed.is_pointer = parameters.len() as u8;
                         line_rest = after_suffix;
                     }
                 } else {
-                    print_debug(log_level, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command", &[]);
+                    print_debug(log_level, "\t\tMatching failed - chars before or after {p} mismatching, attempting to match next command");
                     continue 'commands;
                 }
             } else if ct != lt {
-                print_debug(log_level, "\t\tMatching failed, attempting to match next command", &[]);
+                print_debug(log_level, "\t\tMatching failed, attempting to match next command");
                 continue 'commands;
             }
 
@@ -127,11 +116,11 @@ fn parse_line(
                 return parsed;
             }
             (Some(_), None) => {
-                print_debug(log_level, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command", &[]);
+                print_debug(log_level, "\t\tMatching failed, lineToken is NULL while commandToken is not. Attempting to match next command");
             }
             (None, Some(lt)) => {
                 if lt == OR_DRAW_25_START && line_rest == OR_DRAW_25_END {
-                    print_debug(log_level, "\t\t'or draw 25' was found, replacing opcode", &[]);
+                    print_debug(log_level, "\t\t'or draw 25' was found, replacing opcode");
                     parsed.opcode = Opcode::OrDraw25;
                     return parsed;
                 }
@@ -166,7 +155,8 @@ fn parse_line(
         }
     } else {
         parsed.opcode = Opcode::Invalid;
-        print_error(state, input_file_name, line_num as u64, "Invalid command: \"%s\"", 1, &[Arg::S(line)]);
+        let message = [&b"Invalid command: \""[..], line, b"\""].concat();
+        print_error_with_key(state, input_file_name, line_num, ErrorKey::new("Invalid command: \"%s\"", 1), &message);
     }
     parsed
 }
@@ -174,21 +164,21 @@ fn parse_line(
 /// Parses an input file line by line and returns the parsed commands (one per line of interest).
 pub fn parse_commands(data: &[u8], input_file_name: &[u8], state: &mut CompileState) -> Vec<ParsedCommand> {
     let lines = lines_of_interest(data);
-    print_debug(state.log_level, "The number of lines are %lu", &[Arg::U(lines.len() as u64)]);
+    print_debug(state.log_level, format!("The number of lines are {}", lines.len()));
 
     if lines.is_empty() {
         if state.compile_mode != CompileMode::Bully {
-            print_error(state, input_file_name, 0, "file does not contain any commands", 0, &[]);
+            print_error(state, input_file_name, 0, "file does not contain any commands");
         }
         return Vec::new();
     }
-    print_debug(state.log_level, "Struct array was created successfully", &[]);
+    print_debug(state.log_level, "Struct array was created successfully");
 
     lines
         .into_iter()
         .map(|(line_num, line)| {
             let line = line_text(line);
-            print_debug(state.log_level, "Parsing line: %s", &[Arg::S(line)]);
+            print_debug(state.log_level, [b"Parsing line: ", line].concat());
             parse_line(input_file_name, line_num, line, state)
         })
         .collect()

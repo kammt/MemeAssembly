@@ -621,7 +621,7 @@ fn translate_command(
     let command = cmd.opcode.command();
     let is_def = command.command_type == COMMAND_TYPE_FUNC_DEF;
     if !is_def && state.optimisation_level == OPT_69420 {
-        print_debug(state.log_level, "\tCommand is not a function declaration, abort.", &[]);
+        print_debug(state.log_level, "\tCommand is not a function declaration, abort.");
         return Ok(());
     }
 

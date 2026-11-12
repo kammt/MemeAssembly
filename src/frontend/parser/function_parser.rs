@@ -1,7 +1,7 @@
 //! Port of compiler/parser/functionParser.c
 
 use crate::frontend::commands::*;
-use crate::frontend::log::{print_debug, print_error, Arg};
+use crate::frontend::log::{print_debug, print_error};
 
 fn command_type(cmd: &ParsedCommand) -> u8 {
     cmd.opcode.command().command_type
@@ -19,7 +19,7 @@ fn parse_function(
     let function_start = &commands[function_start_at_index];
     let start_line = function_start.line_num;
 
-    print_debug(state.log_level, "\tParsing function:", &[]);
+    print_debug(state.log_level, "\tParsing function:");
 
     let mut index = 1;
     // Points to the last found return-statement and is 0 if none was found until now
@@ -33,14 +33,7 @@ fn parse_function(
             if function_end_index != function_start_at_index + index - 1
                 && state.compile_mode != CompileMode::Bully
             {
-                print_error(
-                    state,
-                    input_file_name,
-                    parsed.line_num as u64,
-                    "expected a return statement, but got a new function definition",
-                    0,
-                    &[],
-                );
+                print_error(state, input_file_name, parsed.line_num, "expected a return statement, but got a new function definition");
             }
             break;
         } else if ty == COMMAND_TYPE_FUNC_RETURN {
@@ -48,10 +41,10 @@ fn parse_function(
         }
         index += 1;
     }
-    print_debug(state.log_level, "\t\tIteration stopped at index %lu", &[Arg::U(index as u64)]);
+    print_debug(state.log_level, format!("\t\tIteration stopped at index {index}"));
 
     if function_end_index == 0 && state.compile_mode != CompileMode::Bully {
-        print_error(state, input_file_name, start_line as u64, "function does not return", 0, &[]);
+        print_error(state, input_file_name, start_line, "function does not return");
     }
 
     if function_end_index != 0 {
@@ -70,7 +63,7 @@ pub fn parse_functions(
 ) -> (Vec<Function>, Vec<ParsedCommand>) {
     let function_definitions =
         commands.iter().filter(|c| command_type(c) == COMMAND_TYPE_FUNC_DEF).count();
-    print_debug(state.log_level, "Number of functions: %lu", &[Arg::U(function_definitions as u64)]);
+    print_debug(state.log_level, format!("Number of functions: {function_definitions}"));
 
     // The file is a sequence of runs: (is a function, number of commands)
     let mut runs = Vec::new();
@@ -79,8 +72,8 @@ pub fn parse_functions(
         let start_index = index;
         while index < commands.len() && command_type(&commands[index]) != COMMAND_TYPE_FUNC_DEF {
             if state.compile_mode != CompileMode::Bully {
-                let line = commands[index].line_num as u64;
-                print_error(state, file_name, line, "command does not belong to any function", 0, &[]);
+                let line = commands[index].line_num;
+                print_error(state, file_name, line, "command does not belong to any function");
             }
             index += 1;
         }

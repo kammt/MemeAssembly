@@ -61,59 +61,6 @@ pub fn err_str(s: &str) {
     err(s.as_bytes());
 }
 
-/// An argument for [`cformat`].
-#[derive(Clone, Copy)]
-pub enum Arg<'a> {
-    S(&'a [u8]),
-    U(u64),
-}
-
-impl<'a> From<&'a [u8]> for Arg<'a> {
-    fn from(s: &'a [u8]) -> Arg<'a> {
-        Arg::S(s)
-    }
-}
-
-impl<'a> From<&'a str> for Arg<'a> {
-    fn from(s: &'a str) -> Arg<'a> {
-        Arg::S(s.as_bytes())
-    }
-}
-
-/// Minimal `printf` supporting the conversions used by the compiler's messages
-/// (`%s %u %lu %d %llX %%`).
-pub fn cformat(fmt: &str, args: &[Arg]) -> Vec<u8> {
-    let f = fmt.as_bytes();
-    let mut res = Vec::with_capacity(f.len() + 16);
-    let mut args = args.iter();
-    let mut i = 0;
-    while i < f.len() {
-        if f[i] != b'%' {
-            res.push(f[i]);
-            i += 1;
-            continue;
-        }
-        i += 1;
-        while i < f.len() && (f[i] == b'l' || f[i] == b'h' || f[i] == b'z') {
-            i += 1;
-        }
-        let conv = f.get(i).copied().unwrap_or(b'%');
-        i += 1;
-        if conv == b'%' {
-            res.push(b'%');
-            continue;
-        }
-        let arg = args.next().copied().unwrap_or(Arg::S(b"(null)"));
-        match (conv, arg) {
-            (b's', Arg::S(s)) => res.extend_from_slice(s),
-            (b'X', Arg::U(n)) => res.extend_from_slice(format!("{n:X}").as_bytes()),
-            (_, Arg::U(n)) => res.extend_from_slice(n.to_string().as_bytes()),
-            (_, Arg::S(s)) => res.extend_from_slice(s),
-        }
-    }
-    res
-}
-
 fn platform_suffix(target: Target) -> &'static str {
     match target {
         Target::Windows => "Windows",
@@ -224,24 +171,45 @@ pub fn print_nice_ascii() {
     out_str(&format!("\x1B[38;5;199m |_| \\_|_|\\___\\___|\n\n{RESET}"));
 }
 
-/// `printDebugMessage`.
-pub fn print_debug(log_level: LogLevel, fmt: &str, args: &[Arg]) {
+/// `printDebugMessage`: prints `message` (raw bytes: file names and parameters need not be
+/// UTF-8) if `-d` was given.
+pub fn print_debug(log_level: LogLevel, message: impl AsRef<[u8]>) {
     if log_level == LogLevel::Debug {
-        let mut m = cformat(fmt, args);
-        m.push(b'\n');
-        out(&m);
+        out(&[message.as_ref(), b"\n"].concat());
     }
 }
 
-/// `printError`. `fmt` is the C format string (its bytes feed the obfuscated-mode message
-/// selection), `var_arg_num` the `varArgNum` the C call site passed.
-pub fn print_error(
+/// Selects the fake message that obfuscated mode shows instead of an error. The C code summed
+/// the bytes of the error's format string and added the number of its arguments (`varArgNum`),
+/// so the key of an error with parameters is made from its C format string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorKey(u64);
+
+impl ErrorKey {
+    pub const fn new(c_format: &str, argument_count: u64) -> ErrorKey {
+        let bytes = c_format.as_bytes();
+        let mut sum = argument_count;
+        let mut i = 0;
+        while i < bytes.len() {
+            sum += bytes[i] as u64;
+            i += 1;
+        }
+        ErrorKey(sum)
+    }
+}
+
+/// `printError` for an error without parameters (its text is its C format string).
+pub fn print_error(state: &mut CompileState, input_file_name: &[u8], line_num: usize, message: &str) {
+    print_error_with_key(state, input_file_name, line_num, ErrorKey::new(message, 0), message.as_bytes());
+}
+
+/// `printError` for an error message that contains parameters (see [`ErrorKey`]).
+pub fn print_error_with_key(
     state: &mut CompileState,
     input_file_name: &[u8],
-    line_num: u64,
-    fmt: &str,
-    var_arg_num: u32,
-    args: &[Arg],
+    line_num: usize,
+    key: ErrorKey,
+    message: &[u8],
 ) {
     state.compiler_errors += 1;
     let line_num = line_num as u32;
@@ -250,16 +218,13 @@ pub fn print_error(
     m.extend_from_slice(format!(":{line_num}: {RED}error: {RESET}").as_bytes());
 
     if state.compile_mode != CompileMode::Obfuscated {
-        m.extend_from_slice(&cformat(fmt, args));
+        m.extend_from_slice(message);
     } else {
-        let mut computed_index = line_num as u64;
+        let mut computed_index = u64::from(line_num);
         for &b in input_file_name {
             computed_index = computed_index.wrapping_add(u64::from(b));
         }
-        for &b in fmt.as_bytes() {
-            computed_index = computed_index.wrapping_add(u64::from(b));
-        }
-        computed_index = computed_index.wrapping_add(var_arg_num as u64);
+        computed_index = computed_index.wrapping_add(key.0);
         let idx = (computed_index % RANDOM_ERROR_MESSAGES.len() as u64) as usize;
         m.extend_from_slice(RANDOM_ERROR_MESSAGES[idx].as_bytes());
     }
@@ -268,24 +233,16 @@ pub fn print_error(
 }
 
 /// `printNote`.
-pub fn print_note(fmt: &str, indent: bool, args: &[Arg]) {
-    let mut m = Vec::new();
-    if indent {
-        m.push(b'\t');
-    }
-    m.extend_from_slice(format!("{MAG}note: {RESET}").as_bytes());
-    m.extend_from_slice(&cformat(fmt, args));
-    m.push(b'\n');
-    out(&m);
+pub fn print_note(message: &str, indent: bool) {
+    let tab = if indent { "\t" } else { "" };
+    out_str(&format!("{tab}{MAG}note: {RESET}{message}\n"));
 }
 
 /// `printInternalCompilerError`.
-pub fn print_internal_compiler_error(fmt: &str, report: bool, args: &[Arg]) {
-    let mut m = format!("{RED}Internal compiler error: {RESET}").into_bytes();
-    m.extend_from_slice(&cformat(fmt, args));
-    m.push(b'\n');
+pub fn print_internal_compiler_error(message: &str, report: bool) {
+    let mut m = format!("{RED}Internal compiler error: {RESET}{message}\n");
     if report {
-        m.extend_from_slice(b"Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
+        m.push_str("Please report this error at https://github.com/kammt/MemeAssembly/issues/new");
     }
-    err(&m);
+    err_str(&m);
 }
