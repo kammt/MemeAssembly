@@ -61,7 +61,7 @@ pub fn main_function_exists(state: &CompileState) -> bool {
     let main_name = state.main_function_name();
     (0..state.files.len()).any(|file| {
         (0..state.files[file].functions.len())
-            .any(|func| state.function_commands(file, func)[0].param(0) == main_name)
+            .any(|func| *state.function_commands(file, func)[0].param_text(0, state.target) == *main_name)
     })
 }
 

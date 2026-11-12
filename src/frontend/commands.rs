@@ -1,6 +1,9 @@
 //! Port of compiler/commands.h and the command table of compiler/compiler.c.
 
-use super::encoder::{self as enc, Encode};
+use super::translator::{self as tr, CodeGen};
+use crate::backend::emitter::Reg;
+use std::borrow::Cow;
+
 use crate::target::Target;
 
 pub const NUMBER_OF_COMMANDS: usize = 46;
@@ -53,11 +56,8 @@ pub struct Command {
     pub used_parameters: u8,
     pub allowed_param_types: [u8; 2],
     pub analysis: Option<Analysis>,
-    /// Assembly text for `-S` (`{0}`/`{1}` = parameters, `{F}` = file number).
-    pub translation_pattern: &'static str,
-    /// Issues the same instructions as `translation_pattern` directly to the backend's emitter
-    /// (object files and executables).
-    pub encode: Encode,
+    /// Generates the command's code (for `-S` text and object code alike).
+    pub code: CodeGen,
 }
 
 const fn cmd(
@@ -66,166 +66,70 @@ const fn cmd(
     used_parameters: u8,
     allowed_param_types: [u8; 2],
     analysis: Option<Analysis>,
-    translation_pattern: &'static str,
+    code: CodeGen,
 ) -> Command {
-    Command {
-        pattern,
-        command_type,
-        used_parameters,
-        allowed_param_types,
-        analysis,
-        translation_pattern,
-        encode: enc::invalid,
-    }
-}
-
-impl Command {
-    const fn encode(self, encode: Encode) -> Command {
-        Command { encode, ..self }
-    }
+    Command { pattern, command_type, used_parameters, allowed_param_types, analysis, code }
 }
 
 const N: u8 = COMMAND_TYPE_NONE;
 
 pub static COMMAND_LIST: [Command; NUMBER_OF_COMMANDS] = [
     // Functions
-    cmd("I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}", COMMAND_TYPE_FUNC_DEF, 1, [PARAM_FUNC_NAME, 0], Some(Analysis::Functions), "{0}:").encode(enc::func_def),
-    cmd("right back at ya, buckaroo", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, "ret").encode(enc::ret),
-    cmd("no, I don't think I will", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, "mov rax, 1\n\tret").encode(enc::ret_one),
-    cmd("I see this as an absolute win", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, "xor rax, rax\n\tret").encode(enc::ret_zero),
-    cmd("{p}: whomst has summoned the almighty one", COMMAND_TYPE_FUNC_CALL, 1, [PARAM_FUNC_NAME, 0], Some(Analysis::Call), "call {0}").encode(enc::call),
+    cmd("I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun {p}", COMMAND_TYPE_FUNC_DEF, 1, [PARAM_FUNC_NAME, 0], Some(Analysis::Functions), tr::func_def),
+    cmd("right back at ya, buckaroo", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, tr::ret),
+    cmd("no, I don't think I will", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, tr::ret_one),
+    cmd("I see this as an absolute win", COMMAND_TYPE_FUNC_RETURN, 0, [0, 0], None, tr::ret_zero),
+    cmd("{p}: whomst has summoned the almighty one", COMMAND_TYPE_FUNC_CALL, 1, [PARAM_FUNC_NAME, 0], Some(Analysis::Call), tr::call),
     // Stack operations
-    cmd("stonks {p}", N, 1, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, 0], None, "push {0}").encode(enc::push),
-    cmd("not stonks {p}", N, 1, [PARAM_REG64, 0], None, "pop {0}").encode(enc::pop),
+    cmd("stonks {p}", N, 1, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, 0], None, tr::push),
+    cmd("not stonks {p}", N, 1, [PARAM_REG64, 0], None, tr::pop),
     // Logical Operations
-    cmd("bitconneeeeeeect {p} {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, "and {0}, {1}").encode(enc::and),
-    cmd("{p} \\s", N, 1, [PARAM_REG, 0], None, "not {0}").encode(enc::not),
+    cmd("bitconneeeeeeect {p} {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, tr::and),
+    cmd("{p} \\s", N, 1, [PARAM_REG, 0], None, tr::not),
     // Register Manipulation
-    cmd("sneak 100 {p}", N, 1, [PARAM_REG, 0], None, "xor {0}, {0}").encode(enc::zero),
-    cmd("{p} is brilliant, but I like {p}", COMMAND_TYPE_MOV, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, "mov {0}, {1}").encode(enc::mov),
+    cmd("sneak 100 {p}", N, 1, [PARAM_REG, 0], None, tr::zero),
+    cmd("{p} is brilliant, but I like {p}", COMMAND_TYPE_MOV, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, tr::mov),
     // Arithmetic operations
-    cmd("upvote {p}", N, 1, [PARAM_REG, 0], None, "add {0}, 1").encode(enc::upvote),
-    cmd("downvote {p}", N, 1, [PARAM_REG, 0], None, "sub {0}, 1").encode(enc::downvote),
-    cmd("parry {p} you filthy casual {p}", N, 2, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG], None, "sub {1}, {0}").encode(enc::parry),
-    cmd("{p} units are ready, with {p} more well on the way", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, "add {0}, {1}").encode(enc::add),
-    cmd("upgrades, people. Upgrades {p}", N, 1, [PARAM_REG, 0], None, "shl {0}, 1").encode(enc::shl),
-    cmd("they had us in the first half, not gonna lie {p}", N, 1, [PARAM_REG, 0], None, "shr {0}, 1").encode(enc::shr),
-    cmd("{p} is getting out of hand, now there are {p} of them", N, 2, [PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR], None, "imul {0}, {1}").encode(enc::imul),
-    cmd(
-        "look at what {p} needs to mimic a fraction of {p}",
-        N,
-        2,
-        [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64],
-        None,
-        // The C pattern ran `cqo` before loading the dividend into rax (sign-extending the old
-        // rax). The dividend is now pushed first and read back from the stack, so every
-        // combination with rax/rdx/rsp as either operand works.
-        "mov QWORD PTR [rip + .Ltmp64], {0}\n\t\
-         push {1}\n\t\
-         push rdx\n\t\
-         push rax\n\t\
-         mov rax, QWORD PTR [rsp + 16]\n\t\
-         cqo\n\t\
-         idiv QWORD PTR [rip + .Ltmp64]\n\t\
-         mov QWORD PTR [rsp + 16], rax\n\t\
-         pop rax\n\t\
-         pop rdx\n\t\
-         pop {1}\n\t",
-    ).encode(enc::divide),
-    cmd(
-        "{p} UNLIMITED POWER {p}",
-        N,
-        2,
-        [PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR],
-        None,
-        // Square-and-multiply. The C pattern looped ~2^64 times for the exponents 1 and < 0.
-        // Negative exponents: 1 for a base of 1, ±1 for -1 (by parity), 0 otherwise.
-        "mov QWORD PTR [rip + .Ltmp64], {1}\n\t\
-         push {0}\n\t\
-         mov {0}, 1\n\t\
-         cmp QWORD PTR [rip + .Ltmp64], 0\n\t\
-         jge 2f\n\t\
-         and QWORD PTR [rip + .Ltmp64], 1\n\t\
-         cmp QWORD PTR [rsp], 1\n\t\
-         je 2f\n\t\
-         cmp QWORD PTR [rsp], -1\n\t\
-         je 2f\n\t\
-         xor {0}, {0}\n\t\
-         jmp 3f\n\t\
-         2: test QWORD PTR [rip + .Ltmp64], 1\n\t\
-         jz 1f\n\t\
-         imul {0}, QWORD PTR [rsp]\n\t\
-         1: shr QWORD PTR [rip + .Ltmp64], 1\n\t\
-         jz 3f\n\t\
-         push rax\n\t\
-         mov rax, QWORD PTR [rsp + 8]\n\t\
-         imul rax, rax\n\t\
-         mov QWORD PTR [rsp + 8], rax\n\t\
-         pop rax\n\t\
-         jmp 2b\n\t\
-         3: add rsp, 8\n\t",
-    ).encode(enc::power),
+    cmd("upvote {p}", N, 1, [PARAM_REG, 0], None, tr::upvote),
+    cmd("downvote {p}", N, 1, [PARAM_REG, 0], None, tr::downvote),
+    cmd("parry {p} you filthy casual {p}", N, 2, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG], None, tr::parry),
+    cmd("{p} units are ready, with {p} more well on the way", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], None, tr::add),
+    cmd("upgrades, people. Upgrades {p}", N, 1, [PARAM_REG, 0], None, tr::shl),
+    cmd("they had us in the first half, not gonna lie {p}", N, 1, [PARAM_REG, 0], None, tr::shr),
+    cmd("{p} is getting out of hand, now there are {p} of them", N, 2, [PARAM_REG64 | PARAM_REG32, PARAM_REG64 | PARAM_REG32 | PARAM_DECIMAL | PARAM_CHAR], None, tr::imul),
+    cmd("look at what {p} needs to mimic a fraction of {p}", N, 2, [PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR, PARAM_REG64], None, tr::divide),
+    cmd("{p} UNLIMITED POWER {p}", N, 2, [PARAM_REG64, PARAM_REG64 | PARAM_DECIMAL | PARAM_CHAR], None, tr::power),
     // Jumps and Jump Markers
-    cmd("upgrade", N, 0, [0, 0], Some(Analysis::JumpMarkers), ".LUpgradeMarker_{F}:").encode(enc::upgrade_label),
-    cmd("fuck go back", N, 0, [0, 0], None, "jmp .LUpgradeMarker_{F}").encode(enc::upgrade_jump),
-    cmd("banana", N, 0, [0, 0], Some(Analysis::JumpMarkers), ".LBananaMarker_{F}:").encode(enc::banana_label),
-    cmd("where banana", N, 0, [0, 0], None, "jmp .LBananaMarker_{F}").encode(enc::banana_jump),
-    cmd("monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], Some(Analysis::MonkeMarkers), ".L{0}:").encode(enc::monke_label),
-    cmd("return to monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], None, "jmp .L{0}").encode(enc::monke_jump),
-    cmd("who would win? {p} or {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], Some(Analysis::WhoWouldWin), "cmp {0}, {1}\n\tjg .L{0}Wins_{F}\n\tjl .L{1}Wins_{F}").encode(enc::who_would_win),
-    cmd("{p} wins", N, 1, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, 0], None, ".L{0}Wins_{F}:").encode(enc::wins_label),
-    cmd("corporate needs you to find the difference between {p} and {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], Some(Analysis::TheyreTheSamePicture), "cmp {0}, {1}\n\tje .LSamePicture_{F}").encode(enc::find_difference),
-    cmd("they're the same picture", N, 0, [0, 0], None, ".LSamePicture_{F}:").encode(enc::same_picture_label),
+    cmd("upgrade", N, 0, [0, 0], Some(Analysis::JumpMarkers), tr::upgrade_label),
+    cmd("fuck go back", N, 0, [0, 0], None, tr::upgrade_jump),
+    cmd("banana", N, 0, [0, 0], Some(Analysis::JumpMarkers), tr::banana_label),
+    cmd("where banana", N, 0, [0, 0], None, tr::banana_jump),
+    cmd("monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], Some(Analysis::MonkeMarkers), tr::monke_label),
+    cmd("return to monke {p}", N, 1, [PARAM_MONKE_LABEL, 0], None, tr::monke_jump),
+    cmd("who would win? {p} or {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], Some(Analysis::WhoWouldWin), tr::who_would_win),
+    cmd("{p} wins", N, 1, [PARAM_REG | PARAM_DECIMAL | PARAM_CHAR, 0], None, tr::wins_label),
+    cmd("corporate needs you to find the difference between {p} and {p}", N, 2, [PARAM_REG, PARAM_REG | PARAM_DECIMAL | PARAM_CHAR], Some(Analysis::TheyreTheSamePicture), tr::find_difference),
+    cmd("they're the same picture", N, 0, [0, 0], None, tr::same_picture_label),
     // IO-Operations
-    cmd(
-        "what can I say except {p}",
-        N,
-        1,
-        [PARAM_REG8 | PARAM_CHAR, 0],
-        None,
-        "mov BYTE PTR [rip + .LCharacter], {0}\n\t\
-         test rsp, 0xF\n\t\
-         jz 1f\n\t\
-         sub rsp, 8\n\t\
-         call writechar\n\t\
-         add rsp, 8\n\t\
-         jmp 2f\n\t\
-         1: call writechar\n\t\
-         2:\n\t",
-    ).encode(enc::write_char),
-    cmd(
-        "let me in. LET ME IIIIIIIIN {p}",
-        N,
-        1,
-        [PARAM_REG8, 0],
-        None,
-        "test rsp, 0xF\n\t\
-         jz 1f\n\t\
-         sub rsp, 8\n\t\
-         call readchar\n\t\
-         add rsp, 8\n\t\
-         jmp 2f\n\t\
-         1: call readchar\n\t\
-         2:\n\t\
-         mov {0}, BYTE PTR [rip + .LCharacter]\n\t",
-    ).encode(enc::read_char),
+    cmd("what can I say except {p}", N, 1, [PARAM_REG8 | PARAM_CHAR, 0], None, tr::write_char),
+    cmd("let me in. LET ME IIIIIIIIN {p}", N, 1, [PARAM_REG8, 0], None, tr::read_char),
     // Random commands
-    cmd("guess I'll die", N, 0, [0, 0], None, "mov rax, [69]").encode(enc::die),
-    cmd("confused stonks", N, 0, [0, 0], Some(Analysis::ConfusedStonks), "jmp .LConfusedStonks_{F}").encode(enc::confused_stonks),
-    cmd("perfectly balanced as all things should be", N, 0, [0, 0], Some(Analysis::PerfectlyBalanced), "").encode(enc::perfectly_balanced),
-    cmd("wait, that's illegal", N, 0, [0, 0], None, "xor rbx, rbx\n\txor rbp, rbp\n\txor r12, r12\n\txor r13, r13").encode(enc::illegal),
-    cmd("oh no! anyway", N, 0, [0, 0], None, "nop").encode(enc::oh_no),
-    cmd("it's over 9000 {p}", N, 1, [PARAM_REG, 0], None, "cmp {0}, 9000\n\tjg 1f\n\thlt\n\t1:").encode(enc::over_9000),
-    cmd("refuses to elaborate and leaves", N, 0, [0, 0], None, "mov rbp, rsp\n\tpop rsp").encode(enc::refuses_to_elaborate),
-    cmd("you shall not pass!", N, 0, [0, 0], None, "1: xor rax, rax\n\tjmp 1b").encode(enc::shall_not_pass),
-    cmd("Houston, we have a problem", N, 0, [0, 0], None, "xor rsp, rsp").encode(enc::houston),
-    cmd("it's dangerous to go alone, take {p}", N, 1, [PARAM_REG64 | PARAM_REG32 | PARAM_REG16, 0], None, "rdrand {0}").encode(enc::rdrand),
-    cmd("we need air support", N, 0, [0, 0], None, "syscall").encode(enc::air_support),
+    cmd("guess I'll die", N, 0, [0, 0], None, tr::die),
+    cmd("confused stonks", N, 0, [0, 0], Some(Analysis::ConfusedStonks), tr::confused_stonks),
+    cmd("perfectly balanced as all things should be", N, 0, [0, 0], Some(Analysis::PerfectlyBalanced), tr::perfectly_balanced),
+    cmd("wait, that's illegal", N, 0, [0, 0], None, tr::illegal),
+    cmd("oh no! anyway", N, 0, [0, 0], None, tr::oh_no),
+    cmd("it's over 9000 {p}", N, 1, [PARAM_REG, 0], None, tr::over_9000),
+    cmd("refuses to elaborate and leaves", N, 0, [0, 0], None, tr::refuses_to_elaborate),
+    cmd("you shall not pass!", N, 0, [0, 0], None, tr::shall_not_pass),
+    cmd("Houston, we have a problem", N, 0, [0, 0], None, tr::houston),
+    cmd("it's dangerous to go alone, take {p}", N, 1, [PARAM_REG64 | PARAM_REG32 | PARAM_REG16, 0], None, tr::rdrand),
+    cmd("we need air support", N, 0, [0, 0], None, tr::air_support),
     // Debug commands
-    cmd("it's a trap", N, 0, [0, 0], None, "int3").encode(enc::trap),
+    cmd("it's a trap", N, 0, [0, 0], None, tr::trap),
     //Insert commands above this one
-    cmd("or draw 25", N, 0, [0, 0], None, "add eax, 25").encode(enc::draw_25),
-    cmd("", N, 0, [0, 0], None, "0").encode(enc::invalid),
+    cmd("or draw 25", N, 0, [0, 0], None, tr::draw_25),
+    cmd("", N, 0, [0, 0], None, tr::invalid),
 ];
 
 /// Function names used for bully-mode replacements.
@@ -234,12 +138,63 @@ pub const FUNCTION_NAMES: [&str; 16] = [
     "memeify", "uwufy", "test", "helloWorld", "snake_case_sucks", "gets", "uwu", "skillIssue",
 ];
 
+/// A command parameter. The parser stores the text (`Raw`), the analyser classifies it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Param {
+    /// Unclassified text: what the parser read, or an invalid parameter. `mangle`: the
+    /// parameter of a function definition or call, which gets a `_` prefix on macOS.
+    Raw { text: Vec<u8>, mangle: bool },
+    Reg(Reg),
+    /// A decimal number and its source text (shown in diagnostics; bully mode cuts digits off).
+    Decimal { value: i64, text: Vec<u8> },
+    /// A character with its value and C text (`'a'`, `'\n'`, `' '` or an ASCII code like `65`).
+    /// `verbatim`: gas reads `text` as `value` (not so for `'\v'`, `'\'` and ASCII codes with
+    /// leading zeros, which gas reads as octal), so the `-S` text can show it.
+    Char { value: u8, text: Vec<u8>, verbatim: bool },
+    MonkeLabel(Vec<u8>),
+    FuncName { name: Vec<u8>, mangle: bool },
+}
+
+impl Param {
+    /// The parameter as the C code had it in its string: shown in diagnostics and compared by
+    /// the analyser (function names with their `_` prefix on macOS).
+    pub fn text(&self, target: Target) -> Cow<'_, [u8]> {
+        match self {
+            Param::Raw { text, mangle } | Param::FuncName { name: text, mangle } => {
+                if *mangle && target == Target::MacOS {
+                    Cow::Owned([b"_", &text[..]].concat())
+                } else {
+                    Cow::Borrowed(text)
+                }
+            }
+            Param::Reg(r) => Cow::Owned(r.name().into_bytes()),
+            Param::Decimal { text, .. } | Param::Char { text, .. } | Param::MonkeLabel(text) => {
+                Cow::Borrowed(text)
+            }
+        }
+    }
+
+    /// The `PARAM_*` type (0 = not classified / invalid).
+    pub fn param_type(&self) -> u8 {
+        match self {
+            Param::Raw { .. } | Param::Reg(Reg::Xmm(_)) => 0,
+            Param::Reg(Reg::R64(_)) => PARAM_REG64,
+            Param::Reg(Reg::R32(_)) => PARAM_REG32,
+            Param::Reg(Reg::R16(_)) => PARAM_REG16,
+            Param::Reg(Reg::R8(_) | Reg::R8H(_)) => PARAM_REG8,
+            Param::Decimal { .. } => PARAM_DECIMAL,
+            Param::Char { .. } => PARAM_CHAR,
+            Param::MonkeLabel(_) => PARAM_MONKE_LABEL,
+            Param::FuncName { .. } => PARAM_FUNC_NAME,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ParsedCommand {
     pub opcode: u8,
     /// `None` stands for a parameter slot the C code never initialised for this command.
-    pub parameters: [Option<Vec<u8>>; 2],
-    pub param_types: [u8; 2],
+    pub parameters: [Option<Param>; 2],
     /// 0 = no pointer, 1 = first parameter, 2 = second parameter
     pub is_pointer: u8,
     pub line_num: usize,
@@ -249,19 +204,21 @@ pub struct ParsedCommand {
 
 impl ParsedCommand {
     pub fn new(line_num: usize) -> ParsedCommand {
-        ParsedCommand {
-            opcode: 0,
-            parameters: [None, None],
-            param_types: [0, 0],
-            is_pointer: 0,
-            line_num,
-            translate: true,
+        ParsedCommand { opcode: 0, parameters: [None, None], is_pointer: 0, line_num, translate: true }
+    }
+
+    /// The text of parameter `i` (see [`Param::text`]; an uninitialised slot reads as an empty
+    /// string).
+    pub fn param_text(&self, i: usize, target: Target) -> Cow<'_, [u8]> {
+        match &self.parameters[i] {
+            Some(p) => p.text(target),
+            None => Cow::Borrowed(b""),
         }
     }
 
-    /// Parameter `i` as a C string (an uninitialised slot reads as an empty string).
-    pub fn param(&self, i: usize) -> &[u8] {
-        self.parameters[i].as_deref().unwrap_or(b"")
+    /// The `PARAM_*` type of parameter `i`.
+    pub fn param_type(&self, i: usize) -> u8 {
+        self.parameters[i].as_ref().map_or(0, Param::param_type)
     }
 
     /// In bully mode, a pointer operand gets a (random) operand size if nothing else determines
@@ -272,14 +229,14 @@ impl ParsedCommand {
     /// the array for the second parameter); this is the intended `(index + 1) % 2`.
     pub fn bully_pointer_needs_size(&self, index: usize) -> bool {
         match pointer_use(self.opcode, index) {
-            PointerUse::Sized => !param_is_reg(self.param_types[(index + 1) % 2]),
+            PointerUse::Sized => !param_is_reg(self.param_type((index + 1) % 2)),
             PointerUse::NeedsSize => true,
             PointerUse::Implicit | PointerUse::Unsupported => false,
         }
     }
 }
 
-/// How a translation pattern uses parameter `index` when it is a pointer (`[reg]`).
+/// How the generated code uses parameter `index` when it is a pointer (`[reg]`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerUse {
     /// The other operand (a register) gives the operand size, e.g. `mov [rax], bl`.
@@ -295,7 +252,6 @@ pub enum PointerUse {
 }
 
 // Opcodes (indices into COMMAND_LIST) referred to by the analyser and translator.
-pub const OP_CALL: u8 = 4;
 pub const OP_PUSH: u8 = 5;
 pub const OP_POP: u8 = 6;
 pub const OP_AND: u8 = 7;
@@ -310,6 +266,7 @@ pub const OP_SHR: u8 = 16;
 pub const OP_IMUL: u8 = 17;
 pub const OP_DIVIDE: u8 = 18;
 pub const OP_FIND_DIFFERENCE: u8 = 28;
+pub const OP_CONFUSED_STONKS: u8 = 33;
 pub const OP_OVER_9000: u8 = 37;
 
 pub fn pointer_use(opcode: u8, index: usize) -> PointerUse {
@@ -461,26 +418,40 @@ mod tests {
     #[test]
     fn opcode_constants_match_command_list() {
         let expect = [
-            (OP_CALL, "call {0}"),
-            (OP_PUSH, "push {0}"),
-            (OP_POP, "pop {0}"),
-            (OP_AND, "and {0}, {1}"),
-            (OP_NOT, "not {0}"),
-            (OP_MOV, "mov {0}, {1}"),
-            (OP_UPVOTE, "add {0}, 1"),
-            (OP_DOWNVOTE, "sub {0}, 1"),
-            (OP_PARRY, "sub {1}, {0}"),
-            (OP_ADD, "add {0}, {1}"),
-            (OP_SHL, "shl {0}, 1"),
-            (OP_SHR, "shr {0}, 1"),
-            (OP_IMUL, "imul {0}, {1}"),
-            (OP_DIVIDE, "mov QWORD PTR [rip + .Ltmp64], {0}"),
-            (OP_FIND_DIFFERENCE, "cmp {0}, {1}\n\tje .LSamePicture"),
-            (OP_OVER_9000, "cmp {0}, 9000"),
+            (OP_PUSH, "stonks {p}"),
+            (OP_POP, "not stonks {p}"),
+            (OP_AND, "bitconneeeeeeect"),
+            (OP_NOT, "{p} \\s"),
+            (OP_MOV, "{p} is brilliant"),
+            (OP_UPVOTE, "upvote"),
+            (OP_DOWNVOTE, "downvote"),
+            (OP_PARRY, "parry"),
+            (OP_ADD, "{p} units are ready"),
+            (OP_SHL, "upgrades, people"),
+            (OP_SHR, "they had us in the first half"),
+            (OP_IMUL, "{p} is getting out of hand"),
+            (OP_DIVIDE, "look at what {p} needs"),
+            (OP_FIND_DIFFERENCE, "corporate needs you"),
+            (OP_CONFUSED_STONKS, "confused stonks"),
+            (OP_OVER_9000, "it's over 9000"),
         ];
         for (op, start) in expect {
-            let t = COMMAND_LIST[op as usize].translation_pattern;
-            assert!(t.starts_with(start), "opcode {op}: {t:?}");
+            let p = COMMAND_LIST[op as usize].pattern;
+            assert!(p.starts_with(start), "opcode {op}: {p:?}");
         }
+    }
+
+    #[test]
+    fn parameter_text_and_type() {
+        let f = Param::FuncName { name: b"main".to_vec(), mangle: true };
+        assert_eq!(&*f.text(Target::MacOS), b"_main");
+        assert_eq!(&*f.text(Target::Linux), b"main");
+        let f = Param::FuncName { name: b"kill".to_vec(), mangle: false };
+        assert_eq!(&*f.text(Target::MacOS), b"kill");
+        assert_eq!(&*Param::Reg(Reg::R8H(0)).text(Target::Linux), b"ah");
+        assert_eq!(Param::Reg(Reg::R8H(0)).param_type(), PARAM_REG8);
+        let c = Param::Char { value: 10, text: b"'\\n'".to_vec(), verbatim: true };
+        assert_eq!((&*c.text(Target::Linux), c.param_type()), (&b"'\\n'"[..], PARAM_CHAR));
+        assert_eq!(Param::Raw { text: b"x".to_vec(), mangle: true }.param_type(), 0);
     }
 }
