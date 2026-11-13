@@ -137,6 +137,7 @@ commands! {
     Houston => "Houston, we have a problem", [], tr::houston;
     Rdrand => "it's dangerous to go alone, take {p}", [PARAM_REG64 | PARAM_REG32 | PARAM_REG16], tr::rdrand;
     AirSupport => "we need air support", [], tr::air_support;
+    Mainframe => "Alright. I've hacked into the mainframe and disabled their algorithms.", [], tr::mainframe;
     // Debug commands
     Trap => "it's a trap", [], tr::trap;
     //Insert commands above this one

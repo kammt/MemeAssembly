@@ -597,7 +597,7 @@ fn preserving(a: &mut dyn Asm, regs: &[Opnd], body: impl FnOnce(&mut dyn Asm) ->
 /// clobber. The stack alignment at a command is unknown (pushes and pops in the program), but
 /// the Windows API needs it 16-byte aligned: rsp is saved in rbx (callee-saved, so the calls
 /// keep it) and rounded down. The 48-byte frame holds the 32 bytes of shadow space plus room
-/// for a 5th argument at `[rsp + 32]`.
+/// for a 5th argument at `[rsp + 32]` and a spare qword at `[rsp + 40]`.
 fn windows_api_call(a: &mut dyn Asm, body: impl FnOnce(&mut dyn Asm) -> AsmResult) -> AsmResult {
     preserving(a, &[RCX, RAX, RDX, R8, R9, R10, R11, RBX], |a| {
         a.insn(Op::Mov, &[RBX, RSP])?;
@@ -662,6 +662,48 @@ pub fn rdrand(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
 }
 pub fn air_support(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
     a.insn(Op::Syscall, &[])
+}
+/// `Alright. I've hacked into the mainframe and disabled their algorithms.`: tries to kill
+/// init. Whether it worked is not checked, and every register is preserved.
+///
+/// Linux / macOS: `kill(1, SIGKILL)`. Linux never delivers SIGKILL to the init of the
+/// caller's PID namespace, and anyone but root gets EPERM.
+///
+/// Windows has no init with a fixed PID, so it goes for the System process (PID 4), the
+/// ancestor of the boot process tree: `OpenProcess(PROCESS_TERMINATE, FALSE, 4)`, and if that
+/// gives a handle, `TerminateProcess` with exit code 9 (like SIGKILL) and `CloseHandle`.
+/// System is a protected process, so opening it for termination is denied even to
+/// administrators.
+pub fn mainframe(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let target = c.state.target;
+    if target == Target::Windows {
+        return windows_api_call(a, |a| {
+            // PROCESS_TERMINATE, bInheritHandle = FALSE, PID 4
+            a.insn(Op::Mov, &[RCX, dec(1)])?;
+            a.insn(Op::Mov, &[RDX, dec(0)])?;
+            a.insn(Op::Mov, &[R8, dec(4)])?;
+            a.call(b"OpenProcess")?;
+            a.insn(Op::Test, &[RAX, RAX])?;
+            a.jump_local(Some(Cond::Z), 1, true)?;
+            // The handle survives TerminateProcess in the frame's spare slot
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 40), RAX])?;
+            a.insn(Op::Mov, &[RCX, RAX])?;
+            a.insn(Op::Mov, &[RDX, dec(9)])?;
+            a.call(b"TerminateProcess")?;
+            a.insn(Op::Mov, &[RCX, stack(Some(Size::Qword), 40)])?;
+            a.call(b"CloseHandle")?;
+            a.local_label(1);
+            Ok(())
+        });
+    }
+    let linux = target == Target::Linux;
+    // macOS returns a second value in rdx
+    preserving(a, &[RCX, R11, RAX, RDI, RSI, RDX], |a| {
+        a.insn(Op::Mov, &[RDI, dec(1)])?;
+        a.insn(Op::Mov, &[RSI, dec(9)])?;
+        a.insn(Op::Mov, &[RAX, if linux { dec(62) } else { hex(0x2000025) }])?;
+        a.insn(Op::Syscall, &[])
+    })
 }
 pub fn trap(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
     a.insn(Op::Int3, &[])
@@ -803,14 +845,21 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
         for name in ["GetStdHandle", "WriteFile", "ReadFile"] {
             a.extern_symbol(name);
         }
-        let allocates = state
-            .files
-            .iter()
-            .flat_map(|f| &f.functions)
-            .flat_map(|f| &f.commands)
-            .any(|cmd| cmd.opcode == Opcode::FreeRealEstate && is_translated(state, cmd));
-        if allocates {
+        let uses = |opcode: Opcode| {
+            state
+                .files
+                .iter()
+                .flat_map(|f| &f.functions)
+                .flat_map(|f| &f.commands)
+                .any(|cmd| cmd.opcode == opcode && is_translated(state, cmd))
+        };
+        if uses(Opcode::FreeRealEstate) {
             a.extern_symbol("VirtualAlloc");
+        }
+        if uses(Opcode::Mainframe) {
+            for name in ["OpenProcess", "TerminateProcess", "CloseHandle"] {
+                a.extern_symbol(name);
+            }
         }
     }
 
@@ -965,6 +1014,35 @@ mod tests {
         assert!(text.contains(".extern VirtualAlloc\n") && text.contains("call VirtualAlloc\n"), "{text}");
         let text = windows_text(&format!("{main}I see this as an absolute win\n"));
         assert!(!text.contains("VirtualAlloc"), "{text}");
+    }
+
+    /// The mainframe hack sends SIGKILL to PID 1 on Linux and macOS, and on Windows goes for
+    /// PID 4, declaring its three API functions only when it is used.
+    #[test]
+    fn mainframe_kills_init() {
+        let text = |target: Target, body: &str| {
+            let mut state = CompileState::new(target);
+            let source = format!(
+                "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n{body}I see this as an absolute win\n"
+            );
+            let file = super::super::parser::parse_file(b"test.memeasm", source.as_bytes(), &mut state);
+            state.files.push(file);
+            super::super::analyser::analyse_commands(&mut state);
+            assert_eq!(state.compiler_errors, 0, "{source}");
+            String::from_utf8(super::super::asm_text::write_to_string(&state).unwrap()).unwrap()
+        };
+        let hack = "Alright. I've hacked into the mainframe and disabled their algorithms.\n";
+        for (target, syscall) in [(Target::Linux, "mov rax, 62\n"), (Target::MacOS, "mov rax, 0x2000025\n")] {
+            let t = text(target, hack);
+            assert!(t.contains(&format!("\tmov rdi, 1\n\tmov rsi, 9\n\t{syscall}\tsyscall\n")), "{t}");
+        }
+        let t = text(Target::Windows, hack);
+        assert!(t.contains("\tmov r8, 4\n\tcall OpenProcess\n"), "{t}");
+        for name in ["OpenProcess", "TerminateProcess", "CloseHandle"] {
+            assert!(t.contains(&format!(".extern {name}\n")) && t.contains(&format!("call {name}\n")), "{t}");
+        }
+        let t = text(Target::Windows, "");
+        assert!(!t.contains("OpenProcess") && !t.contains("TerminateProcess") && !t.contains("CloseHandle"), "{t}");
     }
 
     #[test]
