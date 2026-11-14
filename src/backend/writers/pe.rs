@@ -42,11 +42,11 @@ const IMAGE_DIRECTORY_ENTRY_IAT: usize = 12;
 
 const KERNEL32: &str = "KERNEL32.dll";
 const MSVCRT: &str = "msvcrt.dll";
-/// Functions a module may import (MemeAssembly's Windows I/O, memory allocation and process
-/// killing) and the ones the stub needs.
-const KERNEL32_FUNCTIONS: [&str; 8] = [
-    "CloseHandle", "ExitProcess", "GetStdHandle", "OpenProcess", "ReadFile", "TerminateProcess", "VirtualAlloc",
-    "WriteFile",
+/// Functions a module may import (MemeAssembly's Windows I/O, memory allocation, process
+/// killing and self-deletion) and the ones the stub needs.
+const KERNEL32_FUNCTIONS: [&str; 10] = [
+    "CloseHandle", "CreateProcessW", "ExitProcess", "GetModuleFileNameW", "GetStdHandle", "OpenProcess", "ReadFile",
+    "TerminateProcess", "VirtualAlloc", "WriteFile",
 ];
 
 const DOS_HEADER_SIZE: u64 = 64;

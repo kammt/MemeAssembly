@@ -138,6 +138,7 @@ commands! {
     Rdrand => "it's dangerous to go alone, take {p}", [PARAM_REG64 | PARAM_REG32 | PARAM_REG16], tr::rdrand;
     AirSupport => "we need air support", [], tr::air_support;
     Mainframe => "Alright. I've hacked into the mainframe and disabled their algorithms.", [], tr::mainframe;
+    ReducedToAtoms => "gone. reduced to atoms", [], tr::reduced_to_atoms;
     // Debug commands
     Trap => "it's a trap", [], tr::trap;
     //Insert commands above this one

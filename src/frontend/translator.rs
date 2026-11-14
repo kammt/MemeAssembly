@@ -170,6 +170,16 @@ fn is_translated(state: &CompileState, cmd: &ParsedCommand) -> bool {
             || cmd.opcode == Opcode::FuncDef)
 }
 
+/// Whether any translated command of the program has `opcode`.
+fn command_used(state: &CompileState, opcode: Opcode) -> bool {
+    state
+        .files
+        .iter()
+        .flat_map(|f| &f.functions)
+        .flat_map(|f| &f.commands)
+        .any(|cmd| cmd.opcode == opcode && is_translated(state, cmd))
+}
+
 /// Whether no command produces any code after bully mode's injected main (no functions at all,
 /// everything deleted, or `-O69420`).
 fn bully_main_is_empty(state: &CompileState) -> bool {
@@ -705,6 +715,94 @@ pub fn mainframe(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
         a.insn(Op::Syscall, &[])
     })
 }
+/// `gone. reduced to atoms`: deletes the running program's own executable. Whether it worked
+/// is not checked, and every register is preserved.
+///
+/// Linux: `readlink("/proc/self/exe", buf, …)` resolves the executable's path, then
+/// `unlink(buf)` removes it. The process keeps running from the still-open inode; only the
+/// directory entry is gone. `buf` lives in zero-filled `.data`, so the path readlink writes
+/// (which it does not terminate) is null-terminated by the zeros that follow, and a failed
+/// readlink leaves `buf` empty so the unlink harmlessly targets `""`.
+///
+/// macOS has no `/proc`, so `proc_pidpath` (the `proc_info` syscall, call 2, flavour 11) writes
+/// the absolute, null-terminated path of the current pid into `buf`, which `unlink` then
+/// removes.
+///
+/// Windows holds the running image open without share-delete, so the file cannot be unlinked
+/// while the program lives. Instead it hands the job to a detached `cmd.exe` that outlives it:
+/// `GetModuleFileNameW` writes the exe path into the middle of a prepared command line, whose
+/// terminating null is overwritten with a `"` to close the quoted argument, and `CreateProcessW`
+/// starts `cmd /c ping -n 2 127.0.0.1 >nul & del "<path>"`. The ping gives this program time to
+/// exit and release the file before `del` runs.
+pub fn reduced_to_atoms(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let target = c.state.target;
+    if target == Target::Windows {
+        // A larger frame than windows_api_call's: CreateProcessW takes ten arguments, so the
+        // five stack arguments reach [rsp + 72]. rsp is saved in rbx, aligned and lowered by 80
+        // (32 shadow bytes + 48 for six stack slots), restored from rbx afterwards.
+        return preserving(a, &[RCX, RAX, RDX, R8, R9, R10, R11, RBX], |a| {
+            a.insn(Op::Mov, &[RBX, RSP])?;
+            a.insn(Op::And, &[RSP, dec(-16)])?;
+            a.insn(Op::Sub, &[RSP, dec(80)])?;
+            // GetModuleFileNameW(NULL, .LatomsPath, MAX_PATH): writes the null-terminated path.
+            a.insn(Op::Xor, &[RCX, RCX])?;
+            a.insn(Op::Lea, &[RDX, rip(None, ".LatomsPath")])?;
+            a.insn(Op::Mov, &[R8, dec(260)])?;
+            a.call(b"GetModuleFileNameW")?;
+            // Overwrite the low byte of the terminating null wchar with '"' (its high byte, and
+            // the following wchar, stay zero), closing the quoted del argument. eax is the wchar
+            // count; doubling it as a 32-bit value zero-extends the byte offset into rax.
+            a.insn(Op::Add, &[EAX, EAX])?;
+            a.insn(Op::Lea, &[RDX, rip(None, ".LatomsPath")])?;
+            a.insn(Op::Add, &[RDX, RAX])?;
+            a.insn(Op::Mov, &[Opnd::Mem(Mem { size: Some(Size::Byte), base: Base::Reg(Reg::R64(2)), disp: 0 }), dec(0x22)])?;
+            // STARTUPINFOW.cb = sizeof(STARTUPINFOW)
+            a.insn(Op::Mov, &[rip(Some(Size::Dword), ".LatomsStartupInfo"), dec(104)])?;
+            // CreateProcessW(NULL, cmd, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)
+            a.insn(Op::Xor, &[RCX, RCX])?;
+            a.insn(Op::Lea, &[RDX, rip(None, ".LatomsCmd")])?;
+            a.insn(Op::Xor, &[R8, R8])?;
+            a.insn(Op::Xor, &[R9, R9])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 32), dec(0)])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 40), hex(0x08000000)])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 48), dec(0)])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 56), dec(0)])?;
+            a.insn(Op::Lea, &[RAX, rip(None, ".LatomsStartupInfo")])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 64), RAX])?;
+            a.insn(Op::Lea, &[RAX, rip(None, ".LatomsProcInfo")])?;
+            a.insn(Op::Mov, &[stack(Some(Size::Qword), 72), RAX])?;
+            a.call(b"CreateProcessW")?;
+            a.insn(Op::Mov, &[RSP, RBX])
+        });
+    }
+    let linux = target == Target::Linux;
+    preserving(a, &[RCX, R11, RAX, RDI, RSI, RDX, R10, R8, R9], |a| {
+        if linux {
+            // readlink("/proc/self/exe", .LselfPath, 4095)
+            a.insn(Op::Lea, &[RDI, rip(None, ".LprocSelfExe")])?;
+            a.insn(Op::Lea, &[RSI, rip(None, ".LselfPath")])?;
+            a.insn(Op::Mov, &[RDX, dec(4095)])?;
+            a.insn(Op::Mov, &[RAX, dec(89)])?;
+            a.insn(Op::Syscall, &[])?;
+        } else {
+            // proc_pidpath(getpid(), .LselfPath, 4096) via the proc_info syscall
+            a.insn(Op::Mov, &[RAX, hex(0x2000014)])?;
+            a.insn(Op::Syscall, &[])?;
+            a.insn(Op::Mov, &[RDI, dec(2)])?;
+            a.insn(Op::Mov, &[RSI, RAX])?;
+            a.insn(Op::Mov, &[RDX, dec(11)])?;
+            a.insn(Op::Xor, &[R10, R10])?;
+            a.insn(Op::Lea, &[R8, rip(None, ".LselfPath")])?;
+            a.insn(Op::Mov, &[R9, dec(4096)])?;
+            a.insn(Op::Mov, &[RAX, hex(0x2000150)])?;
+            a.insn(Op::Syscall, &[])?;
+        }
+        // unlink(.LselfPath)
+        a.insn(Op::Lea, &[RDI, rip(None, ".LselfPath")])?;
+        a.insn(Op::Mov, &[RAX, if linux { dec(87) } else { hex(0x200000A) }])?;
+        a.insn(Op::Syscall, &[])
+    })
+}
 pub fn trap(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
     a.insn(Op::Int3, &[])
 }
@@ -861,6 +959,11 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
                 a.extern_symbol(name);
             }
         }
+        if uses(Opcode::ReducedToAtoms) {
+            for name in ["GetModuleFileNameW", "CreateProcessW"] {
+                a.extern_symbol(name);
+            }
+        }
     }
 
     a.blank();
@@ -883,6 +986,38 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
             a.quad(&[Imm::Dec(0)]);
         }
         a.quad(&[Imm::Dec(0), Imm::Dec(0)]);
+        a.blank();
+    }
+
+    // Buffers for "gone. reduced to atoms". They are only emitted when the command is used, and
+    // rely on .data being zero-filled (so the path is null-terminated and the structs start
+    // cleared).
+    if command_used(state, Opcode::ReducedToAtoms) {
+        a.blank();
+        if target == Target::Windows {
+            // The command line for the deleting cmd.exe: the prefix, then room for the exe path
+            // (written by GetModuleFileNameW), its closing quote and terminator.
+            a.label(b".LatomsCmd")?;
+            let prefix: Vec<u8> = "cmd /c ping -n 2 127.0.0.1 >nul & del \""
+                .encode_utf16()
+                .flat_map(u16::to_le_bytes)
+                .collect();
+            a.ascii(&prefix);
+            a.label(b".LatomsPath")?;
+            a.zeros(532);
+            // STARTUPINFOW (104 bytes) and PROCESS_INFORMATION (24 bytes)
+            a.label(b".LatomsStartupInfo")?;
+            a.zeros(104);
+            a.label(b".LatomsProcInfo")?;
+            a.zeros(24);
+        } else {
+            if target == Target::Linux {
+                a.label(b".LprocSelfExe")?;
+                a.ascii(b"/proc/self/exe\0");
+            }
+            a.label(b".LselfPath")?;
+            a.zeros(4096);
+        }
         a.blank();
     }
 
@@ -1043,6 +1178,48 @@ mod tests {
         }
         let t = text(Target::Windows, "");
         assert!(!t.contains("OpenProcess") && !t.contains("TerminateProcess") && !t.contains("CloseHandle"), "{t}");
+    }
+
+    /// `gone. reduced to atoms` unlinks the executable via the right syscalls on Linux and
+    /// macOS, spawns a deleting cmd.exe on Windows, and only pulls in its buffers and API
+    /// imports when it is used.
+    #[test]
+    fn reduced_to_atoms_deletes_self() {
+        let text = |target: Target, body: &str| {
+            let mut state = CompileState::new(target);
+            let source = format!(
+                "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n{body}I see this as an absolute win\n"
+            );
+            let file = super::super::parser::parse_file(b"test.memeasm", source.as_bytes(), &mut state);
+            state.files.push(file);
+            super::super::analyser::analyse_commands(&mut state);
+            assert_eq!(state.compiler_errors, 0, "{source}");
+            String::from_utf8(super::super::asm_text::write_to_string(&state).unwrap()).unwrap()
+        };
+        let atoms = "gone. reduced to atoms\n";
+
+        // Linux: readlink("/proc/self/exe") (89) then unlink (87)
+        let t = text(Target::Linux, atoms);
+        assert!(t.contains("\tlea rdi, [rip + .LprocSelfExe]\n\tlea rsi, [rip + .LselfPath]\n\tmov rdx, 4095\n\tmov rax, 89\n\tsyscall\n"), "{t}");
+        assert!(t.contains("\tlea rdi, [rip + .LselfPath]\n\tmov rax, 87\n\tsyscall\n"), "{t}");
+        assert!(t.contains(".LprocSelfExe: .ascii \"/proc/self/exe"), "{t}");
+
+        // macOS: proc_pidpath via proc_info (0x2000150) then unlink (0x200000A)
+        let t = text(Target::MacOS, atoms);
+        assert!(t.contains("\tmov rax, 0x2000014\n\tsyscall\n"), "{t}");
+        assert!(t.contains("\tlea r8, [rip + .LselfPath]\n\tmov r9, 4096\n\tmov rax, 0x2000150\n\tsyscall\n"), "{t}");
+        assert!(t.contains("\tmov rax, 0x200000A\n\tsyscall\n"), "{t}");
+        assert!(!t.contains(".LprocSelfExe"), "{t}");
+
+        // Windows: GetModuleFileNameW + CreateProcessW, declared only when used
+        let t = text(Target::Windows, atoms);
+        assert!(t.contains("\tcall GetModuleFileNameW\n") && t.contains("\tcall CreateProcessW\n"), "{t}");
+        for name in ["GetModuleFileNameW", "CreateProcessW"] {
+            assert!(t.contains(&format!(".extern {name}\n")), "{t}");
+        }
+        assert!(t.contains(".LatomsCmd: .ascii "), "{t}");
+        let t = text(Target::Windows, "");
+        assert!(!t.contains("GetModuleFileNameW") && !t.contains("CreateProcessW") && !t.contains(".LatomsCmd"), "{t}");
     }
 
     #[test]
