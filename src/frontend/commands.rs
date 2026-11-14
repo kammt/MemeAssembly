@@ -139,6 +139,7 @@ commands! {
     AirSupport => "we need air support", [], tr::air_support;
     Mainframe => "Alright. I've hacked into the mainframe and disabled their algorithms.", [], tr::mainframe;
     ReducedToAtoms => "gone. reduced to atoms", [], tr::reduced_to_atoms;
+    HeadOut => "ight imma head out", [], tr::head_out;
     // Debug commands
     Trap => "it's a trap", [], tr::trap;
     //Insert commands above this one

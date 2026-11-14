@@ -803,6 +803,39 @@ pub fn reduced_to_atoms(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
         a.insn(Op::Syscall, &[])
     })
 }
+/// `ight imma head out`: stops the program with `kill(getpid(), SIGSTOP)` until it gets
+/// SIGCONT, which is what the shell's `fg` (or `bg`) sends. Every register is preserved.
+///
+/// SIGSTOP cannot be caught or ignored. The one exception is a program running as the init of
+/// a PID namespace (PID 1 in a container), to which the kernel does not deliver it.
+///
+/// Windows has no signals or job control, so the program suspends its own thread with
+/// `SuspendThread(GetCurrentThread())`. MemeAssembly programs are single-threaded, so that
+/// stops the whole program until something else resumes it, the `fg` there: "Resume" in
+/// Process Explorer or Resource Monitor, or `pssuspend -r <pid>`. Ctrl+C still ends it, since
+/// the console runs its handler on a new thread.
+pub fn head_out(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    let target = c.state.target;
+    if target == Target::Windows {
+        return windows_api_call(a, |a| {
+            a.call(b"GetCurrentThread")?;
+            a.insn(Op::Mov, &[RCX, RAX])?;
+            a.call(b"SuspendThread")
+        });
+    }
+    let linux = target == Target::Linux;
+    // macOS returns a second value in rdx
+    preserving(a, &[RCX, R11, RAX, RDI, RSI, RDX], |a| {
+        // getpid()
+        a.insn(Op::Mov, &[RAX, if linux { dec(39) } else { hex(0x2000014) }])?;
+        a.insn(Op::Syscall, &[])?;
+        // kill(pid, SIGSTOP); SIGSTOP is 19 on Linux and 17 on macOS
+        a.insn(Op::Mov, &[RDI, RAX])?;
+        a.insn(Op::Mov, &[RSI, dec(if linux { 19 } else { 17 })])?;
+        a.insn(Op::Mov, &[RAX, if linux { dec(62) } else { hex(0x2000025) }])?;
+        a.insn(Op::Syscall, &[])
+    })
+}
 pub fn trap(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
     a.insn(Op::Int3, &[])
 }
@@ -961,6 +994,11 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
         }
         if uses(Opcode::ReducedToAtoms) {
             for name in ["GetModuleFileNameW", "CreateProcessW"] {
+                a.extern_symbol(name);
+            }
+        }
+        if uses(Opcode::HeadOut) {
+            for name in ["GetCurrentThread", "SuspendThread"] {
                 a.extern_symbol(name);
             }
         }
@@ -1220,6 +1258,40 @@ mod tests {
         assert!(t.contains(".LatomsCmd: .ascii "), "{t}");
         let t = text(Target::Windows, "");
         assert!(!t.contains("GetModuleFileNameW") && !t.contains("CreateProcessW") && !t.contains(".LatomsCmd"), "{t}");
+    }
+
+    /// Heading out sends SIGSTOP to the program's own PID on Linux and macOS, and on Windows
+    /// suspends its thread, declaring the two API functions only when it is used.
+    #[test]
+    fn head_out_stops_itself() {
+        let text = |target: Target, body: &str| {
+            let mut state = CompileState::new(target);
+            let source = format!(
+                "I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n{body}I see this as an absolute win\n"
+            );
+            let file = super::super::parser::parse_file(b"test.memeasm", source.as_bytes(), &mut state);
+            state.files.push(file);
+            super::super::analyser::analyse_commands(&mut state);
+            assert_eq!(state.compiler_errors, 0, "{source}");
+            String::from_utf8(super::super::asm_text::write_to_string(&state).unwrap()).unwrap()
+        };
+        for (target, getpid, sigstop, kill) in [
+            (Target::Linux, "39", "19", "62"),
+            (Target::MacOS, "0x2000014", "17", "0x2000025"),
+        ] {
+            let t = text(target, "ight imma head out\n");
+            assert!(
+                t.contains(&format!("\tmov rax, {getpid}\n\tsyscall\n\tmov rdi, rax\n\tmov rsi, {sigstop}\n\tmov rax, {kill}\n\tsyscall\n")),
+                "{t}"
+            );
+        }
+        let t = text(Target::Windows, "ight imma head out\n");
+        assert!(t.contains("\tcall GetCurrentThread\n\tmov rcx, rax\n\tcall SuspendThread\n"), "{t}");
+        for name in ["GetCurrentThread", "SuspendThread"] {
+            assert!(t.contains(&format!(".extern {name}\n")), "{t}");
+        }
+        let t = text(Target::Windows, "");
+        assert!(!t.contains("GetCurrentThread") && !t.contains("SuspendThread"), "{t}");
     }
 
     #[test]
