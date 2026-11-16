@@ -44,6 +44,8 @@ pub fn analyse_commands(state: &mut CompileState) {
     analyse_who_would_win_commands(list(Opcode::WhoWouldWin), list(Opcode::Wins), state);
     analyse_who_would_win_editions(list(Opcode::WhoWouldWinEdition), list(Opcode::EditionWins), state);
     analyse_theyre_the_same_picture_commands(list(Opcode::FindDifference), list(Opcode::SamePicture), state);
+    analyse_exception_labels(list(Opcode::InstructionsUnclear), "\"instructions unclear\"", state);
+    analyse_exception_labels(list(Opcode::TaskFailedSuccessfully), "\"task failed successfully\"", state);
     set_confused_stonks_jump_label(state, &mut rng);
     choose_lines_to_be_deleted(list(Opcode::PerfectlyBalanced).len(), state, &mut rng);
 }
@@ -103,6 +105,12 @@ fn analyse_who_would_win_editions(comparisons: &[CmdLoc], labels: &[CmdLoc], sta
 fn analyse_theyre_the_same_picture_commands(comparisons: &[CmdLoc], labels: &[CmdLoc], state: &mut CompileState) {
     check_duplicate_definition(labels, state, true, 0, "\"they're the same picture\"");
     check_companion_command_existence(comparisons, labels, state, 0, true, "\"they're the same picture\"");
+}
+
+/// The exception labels ("instructions unclear", "task failed successfully"): a signal has one
+/// handler per process, so each label is defined at most once in the whole program.
+fn analyse_exception_labels(labels: &[CmdLoc], item_name: &str, state: &mut CompileState) {
+    check_duplicate_definition(labels, state, false, 0, item_name);
 }
 
 /// Chooses a random line of code for each input file at which the "confused stonks" jump
@@ -182,5 +190,27 @@ mod tests {
         assert_eq!((functions.len(), functions[0].injected, functions[0].commands.len()), (1, true, 6));
         // 4 lines, half of them deleted
         assert_eq!(functions[0].commands.iter().filter(|c| !c.translate).count(), 2);
+    }
+
+    /// Each exception label is defined once in the whole program, not once per file.
+    #[test]
+    fn exception_labels_once_per_program() {
+        let errors = |files: &[&str]| {
+            let mut state = CompileState::new(Target::Linux);
+            for (i, body) in files.iter().enumerate() {
+                let src = format!("I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun f{i}\n{body}right back at ya, buckaroo\n");
+                let file = parse_file(format!("f{i}.memeasm").as_bytes(), src.as_bytes(), &mut state);
+                state.files.push(file);
+            }
+            state.output_mode = OutputMode::AssemblyFile;
+            analyse_commands(&mut state);
+            state.compiler_errors
+        };
+        assert_eq!(errors(&["task failed successfully\ninstructions unclear\n"]), 0);
+        assert_eq!(errors(&["task failed successfully\n", "instructions unclear\n"]), 0);
+        assert_eq!(errors(&["task failed successfully\ntask failed successfully\n"]), 1);
+        assert_eq!(errors(&["instructions unclear\n", "instructions unclear\n"]), 1);
+        // `this is fine` needs no label
+        assert_eq!(errors(&["this is fine\n"]), 0);
     }
 }

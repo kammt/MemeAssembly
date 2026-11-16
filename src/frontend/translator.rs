@@ -836,6 +836,25 @@ pub fn head_out(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
         a.insn(Op::Syscall, &[])
     })
 }
+/// `this is fine`: installs the exception handlers ([`install_exception_handlers`]). Main
+/// already does this at its start, so it's only needed for code that runs without a
+/// MemeAssembly main (an object file linked into another program). Without an exception label
+/// in the program it does nothing.
+pub fn this_is_fine(a: &mut dyn Asm, c: &Ctx) -> AsmResult {
+    if exception_landings(c.state).is_empty() {
+        a.gap();
+        return Ok(());
+    }
+    install_exception_handlers(a, c.state)
+}
+/// `instructions unclear`: where the program continues after an illegal instruction.
+pub fn instructions_unclear_label(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.label(INSTRUCTIONS_UNCLEAR.label.as_bytes())
+}
+/// `task failed successfully`: where the program continues after a segfault.
+pub fn task_failed_successfully_label(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
+    a.label(TASK_FAILED_SUCCESSFULLY.label.as_bytes())
+}
 pub fn trap(a: &mut dyn Asm, _: &Ctx) -> AsmResult {
     a.insn(Op::Int3, &[])
 }
@@ -908,6 +927,270 @@ fn kill_parent(a: &mut dyn Asm, target: Target) -> AsmResult {
     Ok(())
 }
 
+// ---- exception handling ----
+//
+// "instructions unclear" and "task failed successfully" are labels where the program continues
+// after a fault: an illegal instruction (SIGILL) or a segfault (SIGSEGV). Every register keeps
+// the value it had at the faulting instruction, flags and SSE registers included; only rip is
+// changed. The handlers do this by rewriting rip in the context the kernel (or Windows) saved
+// and then letting it restore that context, rather than jumping to the label themselves.
+//
+// The handlers stay installed, so a fault after the label goes back to it again. A program
+// without these labels installs no handler for their faults, which then end it as usual.
+
+/// A label that faults continue at, with the signals (Linux, macOS) or exception codes
+/// (Windows) that go there.
+struct Landing {
+    /// The label's symbol.
+    label: &'static str,
+    /// The Linux signal handler that sends the signals to the label.
+    linux_handler: &'static str,
+    linux: &'static [i64],
+    macos: &'static [i64],
+    windows: &'static [i64],
+}
+
+impl Landing {
+    fn codes(&self, target: Target) -> &'static [i64] {
+        match target {
+            Target::Linux => self.linux,
+            Target::MacOS => self.macos,
+            Target::Windows => self.windows,
+        }
+    }
+}
+
+/// `instructions unclear`: SIGILL, or `EXCEPTION_ILLEGAL_INSTRUCTION`.
+const INSTRUCTIONS_UNCLEAR: Landing = Landing {
+    label: ".LInstructionsUnclear",
+    linux_handler: ".LInstructionsUnclearHandler",
+    linux: &[4],
+    macos: &[4],
+    windows: &[0xC000001D],
+};
+
+/// `task failed successfully`: SIGSEGV. macOS reports some bad memory accesses (such as page
+/// zero, which is mapped without access) as SIGBUS, so there it is both. Windows has no single
+/// code for what Linux turns into SIGSEGV: an access violation, a privileged instruction like
+/// `hlt` (a general protection fault, SIGSEGV on Linux) and a stack overflow.
+const TASK_FAILED_SUCCESSFULLY: Landing = Landing {
+    label: ".LTaskFailedSuccessfully",
+    linux_handler: ".LTaskFailedSuccessfullyHandler",
+    linux: &[11],
+    macos: &[11, 10],
+    windows: &[0xC0000005, 0xC0000096, 0xC00000FD],
+};
+
+/// The exception labels the program defines (and translates).
+fn exception_landings(state: &CompileState) -> Vec<&'static Landing> {
+    [(Opcode::InstructionsUnclear, &INSTRUCTIONS_UNCLEAR), (Opcode::TaskFailedSuccessfully, &TASK_FAILED_SUCCESSFULLY)]
+        .into_iter()
+        .filter(|(opcode, _)| command_used(state, *opcode))
+        .map(|(_, landing)| landing)
+        .collect()
+}
+
+/// Size of the alternate signal stack (Linux, macOS).
+const SIGNAL_STACK_SIZE: i64 = 0x10000;
+
+/// Installs a handler for the faults of every exception label of the program, once: later
+/// calls see `.LexceptionHandlersInstalled` set and skip it. Every register is preserved, the
+/// flags are not.
+///
+/// Linux / macOS: the handlers run on an alternate signal stack (64 KiB from `mmap`, set with
+/// `sigaltstack`), so a fault from a broken rsp (`Houston, we have a problem`) still reaches
+/// them. If the `mmap` fails, they run on the normal stack. Then `sigaction` for each signal,
+/// with `SA_SIGINFO | SA_ONSTACK`; the structs are built on the stack.
+///
+/// - Linux: `rt_sigaction` with the label's handler and `SA_RESTORER`, whose restorer is
+///   `.LsigreturnTrampoline` (`rt_sigreturn`, which the handler returns to).
+/// - macOS: the kernel calls the trampoline, `.LsignalTrampoline`, with the handler as its
+///   first argument, and the trampoline does the `sigreturn`. So the "handler" is the label
+///   itself and one trampoline serves every signal.
+///
+/// Windows: `AddVectoredExceptionHandler(1, .LexceptionFilter)`.
+fn install_exception_handlers(a: &mut dyn Asm, state: &CompileState) -> AsmResult {
+    let target = state.target;
+    let installed = || rip(Some(Size::Byte), ".LexceptionHandlersInstalled");
+    a.insn(Op::Cmp, &[installed(), dec(0)])?;
+    a.jump_local(Some(Cond::Ne), 1, true)?;
+    a.insn(Op::Mov, &[installed(), dec(1)])?;
+    if target == Target::Windows {
+        windows_api_call(a, |a| {
+            // First = 1: ahead of any handler added before
+            a.insn(Op::Mov, &[RCX, dec(1)])?;
+            a.insn(Op::Lea, &[RDX, rip(None, ".LexceptionFilter")])?;
+            a.call(b"AddVectoredExceptionHandler")
+        })?;
+    } else {
+        let linux = target == Target::Linux;
+        preserving(a, &[RCX, R11, RAX, RDI, RSI, RDX, R10, R8, R9], |a| {
+            // mmap(NULL, SIGNAL_STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)
+            a.insn(Op::Mov, &[RDI, dec(0)])?;
+            a.insn(Op::Mov, &[RSI, hex(SIGNAL_STACK_SIZE)])?;
+            a.insn(Op::Mov, &[RDX, dec(3)])?;
+            a.insn(Op::Mov, &[R10, hex(if linux { 0x22 } else { 0x1002 })])?;
+            a.insn(Op::Mov, &[R8, dec(-1)])?;
+            a.insn(Op::Mov, &[R9, dec(0)])?;
+            a.insn(Op::Mov, &[RAX, if linux { dec(9) } else { hex(0x20000C5) }])?;
+            a.insn(Op::Syscall, &[])?;
+            // On failure (Linux: -4095..-1, macOS: carry set), no alternate stack
+            if linux {
+                a.insn(Op::Cmp, &[RAX, dec(-4096)])?;
+                a.jump_local(Some(Cond::Ae), 2, true)?;
+            } else {
+                a.jump_local(Some(Cond::B), 2, true)?;
+            }
+            // sigaltstack(&stack, NULL); stack_t is { ss_sp, ss_flags, ss_size } on Linux and
+            // { ss_sp, ss_size, ss_flags } on macOS
+            if linux {
+                a.insn(Op::Push, &[hex(SIGNAL_STACK_SIZE)])?;
+                a.insn(Op::Push, &[dec(0)])?;
+            } else {
+                a.insn(Op::Push, &[dec(0)])?;
+                a.insn(Op::Push, &[hex(SIGNAL_STACK_SIZE)])?;
+            }
+            a.insn(Op::Push, &[RAX])?;
+            a.insn(Op::Mov, &[RDI, RSP])?;
+            a.insn(Op::Mov, &[RSI, dec(0)])?;
+            a.insn(Op::Mov, &[RAX, if linux { dec(131) } else { hex(0x2000035) }])?;
+            a.insn(Op::Syscall, &[])?;
+            a.insn(Op::Add, &[RSP, dec(24)])?;
+            a.local_label(2);
+
+            for landing in exception_landings(state) {
+                for &signal in landing.codes(target) {
+                    if linux {
+                        // rt_sigaction(signal, &action, NULL, 8) with the kernel's
+                        // { handler, flags, restorer, mask }; SA_RESTORER | SA_ONSTACK | SA_SIGINFO
+                        a.insn(Op::Push, &[dec(0)])?;
+                        a.insn(Op::Lea, &[RAX, rip(None, ".LsigreturnTrampoline")])?;
+                        a.insn(Op::Push, &[RAX])?;
+                        a.insn(Op::Push, &[hex(0x0C000004)])?;
+                        a.insn(Op::Lea, &[RAX, rip(None, landing.linux_handler)])?;
+                        a.insn(Op::Push, &[RAX])?;
+                        a.insn(Op::Mov, &[R10, dec(8)])?;
+                    } else {
+                        // sigaction(signal, &action, NULL) with { handler, trampoline, mask,
+                        // flags }: mask 0, SA_SIGINFO | SA_ONSTACK
+                        a.insn(Op::Mov, &[RAX, hex(0x41 << 32)])?;
+                        a.insn(Op::Push, &[RAX])?;
+                        a.insn(Op::Lea, &[RAX, rip(None, ".LsignalTrampoline")])?;
+                        a.insn(Op::Push, &[RAX])?;
+                        a.insn(Op::Lea, &[RAX, rip(None, landing.label)])?;
+                        a.insn(Op::Push, &[RAX])?;
+                    }
+                    a.insn(Op::Mov, &[RDI, dec(signal)])?;
+                    a.insn(Op::Mov, &[RSI, RSP])?;
+                    a.insn(Op::Mov, &[RDX, dec(0)])?;
+                    a.insn(Op::Mov, &[RAX, if linux { dec(13) } else { hex(0x200002E) }])?;
+                    a.insn(Op::Syscall, &[])?;
+                    a.insn(Op::Add, &[RSP, dec(if linux { 32 } else { 24 })])?;
+                }
+            }
+            Ok(())
+        })?;
+    }
+    a.local_label(1);
+    Ok(())
+}
+
+/// The code the installed handlers run, emitted once at the start of `.text` if the program has
+/// an exception label.
+///
+/// Linux: one handler per label, called with the signal, the `siginfo_t` and the `ucontext_t`
+/// (rdi, rsi, rdx). It sets the saved rip (`uc_mcontext.gregs[REG_RIP]`, offset 168) to the label
+/// and returns to `.LsigreturnTrampoline`, whose `rt_sigreturn` restores the context.
+///
+/// macOS: `.LsignalTrampoline`, called with the handler (here the label), the info style, the
+/// signal, the `siginfo_t`, the `ucontext_t` and the sigreturn token (rdi, rsi, rdx, rcx, r8,
+/// r9). It sets the saved rip (`uc_mcontext->__ss.__rip`, offset 144 from the `uc_mcontext`
+/// pointer at offset 48) to the label and calls `sigreturn(uctx, infostyle, token)`, which
+/// does not return unless it fails; then the program exits with status 1.
+///
+/// Windows: `.LexceptionFilter`, the vectored handler, called with an `EXCEPTION_POINTERS`. For an
+/// exception code of a label it sets `ContextRecord->Rip` (offset 0xF8) to the label and returns
+/// `EXCEPTION_CONTINUE_EXECUTION` (-1), so Windows restores the context; for any other code
+/// `EXCEPTION_CONTINUE_SEARCH` (0).
+fn exception_handlers(a: &mut dyn Asm, state: &CompileState) -> AsmResult {
+    let landings = exception_landings(state);
+    if landings.is_empty() {
+        return Ok(());
+    }
+    let at = |reg: u8, disp: i64| Opnd::Mem(Mem { size: None, base: Base::Reg(Reg::R64(reg)), disp });
+    match state.target {
+        Target::Linux => {
+            for landing in &landings {
+                a.indent("");
+                a.label(landing.linux_handler.as_bytes())?;
+                a.indent("    ");
+                a.insn(Op::Lea, &[RAX, rip(None, landing.label)])?;
+                a.insn(Op::Mov, &[at(2, 168), RAX])?;
+                a.insn(Op::Ret, &[])?;
+                a.blank();
+            }
+            a.indent("");
+            a.label(b".LsigreturnTrampoline")?;
+            a.indent("    ");
+            a.insn(Op::Mov, &[RAX, dec(15)])?;
+            a.insn(Op::Syscall, &[])?;
+        }
+        Target::MacOS => {
+            a.indent("");
+            a.label(b".LsignalTrampoline")?;
+            a.indent("    ");
+            a.insn(Op::Mov, &[RAX, at(8, 48)])?;
+            a.insn(Op::Mov, &[at(0, 144), RDI])?;
+            a.insn(Op::Mov, &[RDI, R8])?;
+            a.insn(Op::Mov, &[RDX, R9])?;
+            a.insn(Op::Mov, &[RAX, hex(0x20000B8)])?;
+            a.insn(Op::Syscall, &[])?;
+            a.insn(Op::Mov, &[RDI, dec(1)])?;
+            a.insn(Op::Mov, &[RAX, hex(0x2000001)])?;
+            a.insn(Op::Syscall, &[])?;
+        }
+        Target::Windows => {
+            a.indent("");
+            a.label(b".LexceptionFilter")?;
+            a.indent("    ");
+            // eax = ExceptionRecord->ExceptionCode, rdx = ContextRecord
+            a.insn(Op::Mov, &[RAX, at(1, 0)])?;
+            a.insn(Op::Mov, &[EAX, at(0, 0)])?;
+            a.insn(Op::Mov, &[RDX, at(1, 8)])?;
+            for (n, landing) in landings.iter().enumerate() {
+                for &code in landing.codes(Target::Windows) {
+                    a.insn(Op::Cmp, &[EAX, hex(code)])?;
+                    a.jump_local(Some(Cond::E), n as u32 + 1, true)?;
+                }
+            }
+            a.insn(Op::Xor, &[EAX, EAX])?;
+            a.insn(Op::Ret, &[])?;
+            for (n, landing) in landings.iter().enumerate() {
+                a.indent("");
+                a.local_label(n as u32 + 1);
+                a.indent("    ");
+                a.insn(Op::Lea, &[RAX, rip(None, landing.label)])?;
+                a.insn(Op::Mov, &[at(2, 0xF8), RAX])?;
+                a.insn(Op::Mov, &[EAX, dec(-1)])?;
+                a.insn(Op::Ret, &[])?;
+            }
+        }
+    }
+    a.blank();
+    Ok(())
+}
+
+/// Installs the exception handlers at the start of main, if the program has an exception label.
+fn exception_prologue(a: &mut dyn Asm, state: &CompileState) -> AsmResult {
+    if exception_landings(state).is_empty() {
+        return Ok(());
+    }
+    a.indent("    ");
+    install_exception_handlers(a, state)?;
+    a.blank();
+    Ok(())
+}
+
 /// Translates one command: its line-table row, its code and the filler instructions of the
 /// optimisation level (`-O69420` translates only function definitions, as `return 0`).
 fn translate_command(
@@ -956,8 +1239,8 @@ fn translate_command(
 }
 
 /// Generates the whole program: the global function symbols, `.data` (the I/O byte, a scratch
-/// qword and the martyrdom `sigaction` struct), `killParent`, bully mode's injected main, the
-/// commands of every file. Windows gets no `sigaction` struct or `killParent`: martyrdom is not
+/// qword and the martyrdom `sigaction` struct), `killParent`, the exception handlers, bully
+/// mode's injected main, the commands of every file. Windows gets no `sigaction` struct or `killParent`: martyrdom is not
 /// implemented there.
 pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     let target = state.target;
@@ -1002,6 +1285,9 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
                 a.extern_symbol(name);
             }
         }
+        if !exception_landings(state).is_empty() {
+            a.extern_symbol("AddVectoredExceptionHandler");
+        }
     }
 
     a.blank();
@@ -1011,6 +1297,11 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     a.ascii(b"a");
     a.label(b".Ltmp64")?;
     a.zeros(8);
+    // Set once the exception handlers are installed
+    if !exception_landings(state).is_empty() {
+        a.label(b".LexceptionHandlersInstalled")?;
+        a.zeros(1);
+    }
     // Struct for martyrdom command
     if target != Target::Windows {
         a.label(b".LsigStruct")?;
@@ -1071,6 +1362,7 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
     if target != Target::Windows {
         kill_parent(a, target)?;
     }
+    exception_handlers(a, state)?;
 
     // In bully mode, a missing main function is "fixed" by making the code at the start main
     // (only for executables, so never part of the -S text).
@@ -1086,6 +1378,7 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
         if target != Target::Windows {
             martyrdom_code(a, target)?;
         }
+        exception_prologue(a, state)?;
         // Without any code to fall into, main would run off the end of the text section:
         // return 0 instead.
         if bully_main_is_empty(state) {
@@ -1114,8 +1407,11 @@ pub fn translate(state: &CompileState, a: &mut dyn Asm) -> AsmResult {
             }
 
             for (k, current_command) in commands.iter().enumerate() {
-                if target != Target::Windows && state.martyrdom && k == 1 && *function_name == *main_name {
-                    martyrdom_code(a, target)?;
+                if k == 1 && *function_name == *main_name {
+                    if target != Target::Windows && state.martyrdom {
+                        martyrdom_code(a, target)?;
+                    }
+                    exception_prologue(a, state)?;
                 }
 
                 // Place the confused stonks label now if it should be at this position
@@ -1292,6 +1588,64 @@ mod tests {
         }
         let t = text(Target::Windows, "");
         assert!(!t.contains("GetCurrentThread") && !t.contains("SuspendThread"), "{t}");
+    }
+
+    /// The `-S` text of a program whose main has `body`, tabs replaced with four spaces.
+    fn program_text(target: Target, body: &str) -> String {
+        let mut state = CompileState::new(target);
+        let source = format!("I like to have fun, fun, fun, fun, fun, fun, fun, fun, fun, fun main\n{body}I see this as an absolute win\n");
+        let file = super::super::parser::parse_file(b"test.memeasm", source.as_bytes(), &mut state);
+        state.files.push(file);
+        super::super::analyser::analyse_commands(&mut state);
+        assert_eq!(state.compiler_errors, 0, "{source}");
+        // main's prologue is indented with spaces, the commands with tabs
+        String::from_utf8(super::super::asm_text::write_to_string(&state).unwrap()).unwrap().replace('\t', "    ")
+    }
+
+    /// Main installs a handler for the faults of each exception label the program defines, and
+    /// for nothing else; `this is fine` installs them again (guarded by the flag).
+    #[test]
+    fn exception_handlers_follow_the_labels() {
+        let segv = "task failed successfully\n";
+        let ill = "instructions unclear\n";
+        let sigaction = |sig: i64, syscall: &str| format!("    mov rdi, {sig}\n    mov rsi, rsp\n    mov rdx, 0\n    mov rax, {syscall}\n    syscall\n");
+
+        // Linux: rt_sigaction with the label's handler, SIGSEGV = 11, SIGILL = 4
+        let t = program_text(Target::Linux, segv);
+        assert!(t.contains(&sigaction(11, "13")) && !t.contains(&sigaction(4, "13")), "{t}");
+        assert!(t.contains("    lea rax, [rip + .LTaskFailedSuccessfullyHandler]\n"), "{t}");
+        assert!(t.contains(".LTaskFailedSuccessfullyHandler:\n    lea rax, [rip + .LTaskFailedSuccessfully]\n    mov [rdx + 168], rax\n    ret\n"), "{t}");
+        assert!(t.contains(".LsigreturnTrampoline:\n    mov rax, 15\n    syscall\n"), "{t}");
+        // the alternate signal stack
+        assert!(t.contains("    mov rax, 131\n    syscall\n"), "{t}");
+        let t = program_text(Target::Linux, &format!("{ill}{segv}"));
+        assert!(t.contains(&sigaction(11, "13")) && t.contains(&sigaction(4, "13")), "{t}");
+
+        // macOS: sigaction with the label as handler and the shared trampoline; SIGBUS = 10 too
+        let t = program_text(Target::MacOS, segv);
+        assert!(t.contains(&sigaction(11, "0x200002E")) && t.contains(&sigaction(10, "0x200002E")), "{t}");
+        assert!(!t.contains(&sigaction(4, "0x200002E")), "{t}");
+        assert!(t.contains("    lea rax, [rip + .LTaskFailedSuccessfully]\n    push rax\n"), "{t}");
+        assert!(t.contains("    mov [rax + 144], rdi\n") && t.contains("    mov rax, 0x20000B8\n    syscall\n"), "{t}");
+
+        // Windows: one vectored handler for the labels' exception codes
+        let t = program_text(Target::Windows, ill);
+        assert!(t.contains(".extern AddVectoredExceptionHandler\n"), "{t}");
+        assert!(t.contains("    lea rdx, [rip + .LexceptionFilter]\n    call AddVectoredExceptionHandler\n"), "{t}");
+        assert!(t.contains("    cmp eax, 0xC000001D\n") && !t.contains("0xC0000005"), "{t}");
+        assert!(t.contains("    mov [rdx + 248], rax\n    mov eax, -1\n    ret\n"), "{t}");
+
+        // `this is fine` installs the handlers like main does
+        let t = program_text(Target::Linux, &format!("this is fine\n{segv}"));
+        assert_eq!(t.matches("    cmp BYTE PTR [rip + .LexceptionHandlersInstalled], 0\n").count(), 2, "{t}");
+
+        // Without an exception label nothing is installed, not even by `this is fine`
+        for target in [Target::Linux, Target::MacOS, Target::Windows] {
+            let t = program_text(target, "this is fine\n");
+            for name in ["exceptionHandlersInstalled", "AddVectoredExceptionHandler", "Trampoline", "exceptionFilter"] {
+                assert!(!t.contains(name), "{target:?}: {t}");
+            }
+        }
     }
 
     #[test]

@@ -140,6 +140,13 @@ commands! {
     Mainframe => "Alright. I've hacked into the mainframe and disabled their algorithms.", [], tr::mainframe;
     ReducedToAtoms => "gone. reduced to atoms", [], tr::reduced_to_atoms;
     HeadOut => "ight imma head out", [], tr::head_out;
+    // Exception handling
+    /// Installs the handlers of the two labels below (main does it on its own)
+    ThisIsFine => "this is fine", [], tr::this_is_fine;
+    /// Where an illegal instruction (SIGILL) continues, with the registers it had
+    InstructionsUnclear => "instructions unclear", [], tr::instructions_unclear_label;
+    /// Where a segfault (SIGSEGV) continues, with the registers it had
+    TaskFailedSuccessfully => "task failed successfully", [], tr::task_failed_successfully_label;
     // Debug commands
     Trap => "it's a trap", [], tr::trap;
     //Insert commands above this one
